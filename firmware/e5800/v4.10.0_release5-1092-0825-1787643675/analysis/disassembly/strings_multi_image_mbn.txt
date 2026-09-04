@@ -1,0 +1,60 @@
+MULT
+^As}
+N&G:
+ut&12F
+Jws"
+"-)X
+zp:\>
+?cCc
+D803
+t8Un
+US1,0*
+#SECTOOLS SECP384R1 CURVE TEST ROOT01
+	San Diego1
+QUALCOMM1
+CDMA Technologies1200
+)General Use Test Key 0 (for testing only)0
+260724115240Z
+460719115240Z0f1
+California1
+SecTools Test User1
+SecTools1
+	San Diego0v0
+o0m0
+u>R0
+--u7gR
+[l-)
+ ~q0
+US1+0)
+"SECTOOLS SECP384R1 CURVE TEST ROOT1
+	San Diego1
+QUALCOMM1
+CDMA Technologies100.
+'General Use Test Key (for testing only)0
+160321215215Z
+360316215215Z0
+US1,0*
+#SECTOOLS SECP384R1 CURVE TEST ROOT01
+	San Diego1
+QUALCOMM1
+CDMA Technologies1200
+)General Use Test Key 0 (for testing only)0v0
+I/C#
+`0^0
+Wzcv
+US1+0)
+"SECTOOLS SECP384R1 CURVE TEST ROOT1
+	San Diego1
+QUALCOMM1
+CDMA Technologies100.
+'General Use Test Key (for testing only)0
+160321215211Z
+360316215211Z0
+US1+0)
+"SECTOOLS SECP384R1 CURVE TEST ROOT1
+	San Diego1
+QUALCOMM1
+CDMA Technologies100.
+'General Use Test Key (for testing only)0v0
+<0:0
+#8o&&
