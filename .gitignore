@@ -10,6 +10,8 @@
 *.cpio
 *.yaffs
 *.raw
+
+# Secrets scan (committed separately if needed)
 gitleaks-results.json
 
 # Ghidra projects
@@ -17,9 +19,5 @@ ghidra_project/
 ghidra-project/
 __pycache__/
 
-# Glinet repos (large)
-gl_openwrt/
-gl_feeds/
-
-# Boot extraction (large)
+# Boot extraction (large binary blobs)
 firmware/*/boot_extraction/_boot.img.extracted/
