@@ -1,0 +1,64 @@
+============================================================
+Ghidra Analysis Summary - E5800 Firmware Binaries
+============================================================
+
+=== uefi.elf ===
+  ERROR: analysis file not found or failed
+
+=== tz.mbn ===
+  ERROR: analysis file not found or failed
+
+=== xbl_s.melf ===
+  ERROR: analysis file not found or failed
+
+=== km41.mbn ===
+=== Functions in km41.mbn ===
+Language: AARCH64:LE:64:v8A
+Image Base: 00100000
+
+0x100000: FUN_00100000 (size: 20)
+...
+  Total functions: 728
+
+  First 10 functions:
+0x100000: FUN_00100000 (size: 20)
+0x100020: qsee_log (size: 16)
+0x100030: qsee_get_uptime (size: 16)
+0x100040: qsee_open_singleton (size: 16)
+0x100050: qsee_SW_GENERIC_ECC_init (size: 16)
+0x100060: qsee_SW_GENERIC_ECC_binary_to_bigval (size: 16)
+0x100070: time_getutcsec (size: 16)
+0x100080: qsee_prng_getdata (size: 16)
+0x100090: qsee_SW_Cipher_Init (size: 16)
+0x1000a0: qsee_SW_CipherData (size: 16)
+
+=== cmnlib64.mbn ===
+  ERROR: analysis file not found or failed
+
+=== hypvm.mbn ===
+  ERROR: analysis file not found or failed
+
+=== abl.elf ===
+  ERROR: analysis file not found or failed
+
+=== aop.mbn ===
+  ERROR: analysis file not found or failed
+
+=== aop_devcfg.mbn ===
+  ERROR: analysis file not found or failed
+
+=== shrm.elf ===
+  ERROR: analysis file not found or failed
+
+=== cpucp.elf ===
+  ERROR: analysis file not found or failed
+
+=== fw_ipa_gsi_6.0_p.elf ===
+  ERROR: analysis file not found or failed
+
+=== qupv3fw.elf ===
+  ERROR: analysis file not found or failed
+
+=== devcfg.mbn ===
+  ERROR: analysis file not found or failed
+
