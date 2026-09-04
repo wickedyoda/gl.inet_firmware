@@ -1,3 +1,4 @@
+# Firmware binaries (stored locally only)
 *.bin
 *.dat
 *.img
@@ -10,8 +11,15 @@
 *.yaffs
 *.raw
 gitleaks-results.json
+
+# Ghidra projects
+ghidra_project/
+ghidra-project/
+__pycache__/
+
+# Glinet repos (large)
 gl_openwrt/
 gl_feeds/
-ghidra_project/
-boot_extraction/_boot.img.extracted/
-__pycache__/
+
+# Boot extraction (large)
+firmware/*/boot_extraction/_boot.img.extracted/
