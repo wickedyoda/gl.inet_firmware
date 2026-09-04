@@ -1,0 +1,451 @@
+=== Functions in procd ===
+Language: AARCH64:LE:64:v8A
+Image Base: 00100000
+
+Total functions: 341
+First 100 functions:
+0x105898: _init (size: 16)
+0x1058b0: __PLT_HEAD (size: 20)
+0x105910: _INIT_1 (size: 72)
+0x105958: FUN_00105958 (size: 764)
+0x105c54: entry (size: 76)
+0x105ca0: _FINI_0 (size: 100)
+0x105d04: _INIT_0 (size: 36)
+0x105d28: FUN_00105d28 (size: 56)
+0x105d60: FUN_00105d60 (size: 12)
+0x105d6c: FUN_00105d6c (size: 20)
+0x105d80: FUN_00105d80 (size: 68)
+0x105dc4: FUN_00105dc4 (size: 28)
+0x105de0: FUN_00105de0 (size: 36)
+0x105e04: FUN_00105e04 (size: 16)
+0x105e1c: FUN_00105e1c (size: 28)
+0x105e4c: FUN_00105e4c (size: 32)
+0x105e74: FUN_00105e74 (size: 24)
+0x105e8c: FUN_00105e8c (size: 92)
+0x105ee8: FUN_00105ee8 (size: 352)
+0x106048: FUN_00106048 (size: 80)
+0x106098: avl_find (size: 12)
+0x1060c0: FUN_001060c0 (size: 236)
+0x1061ac: FUN_001061ac (size: 108)
+0x106218: FUN_00106218 (size: 100)
+0x10627c: FUN_0010627c (size: 76)
+0x106304: FUN_00106304 (size: 64)
+0x106344: FUN_00106344 (size: 100)
+0x1063a8: FUN_001063a8 (size: 52)
+0x1063dc: FUN_001063dc (size: 48)
+0x10640c: FUN_0010640c (size: 88)
+0x106464: FUN_00106464 (size: 92)
+0x1064c0: FUN_001064c0 (size: 328)
+0x106608: FUN_00106608 (size: 108)
+0x106674: FUN_00106674 (size: 80)
+0x1066c4: FUN_001066c4 (size: 80)
+0x106714: FUN_00106714 (size: 80)
+0x106764: FUN_00106764 (size: 88)
+0x1067bc: FUN_001067bc (size: 112)
+0x10682c: FUN_0010682c (size: 108)
+0x10689c: FUN_0010689c (size: 204)
+0x106968: FUN_00106968 (size: 72)
+0x1069b0: FUN_001069b0 (size: 60)
+0x1069ec: FUN_001069ec (size: 124)
+0x106a68: FUN_00106a68 (size: 156)
+0x106b04: FUN_00106b04 (size: 104)
+0x106b6c: FUN_00106b6c (size: 168)
+0x106c14: FUN_00106c14 (size: 164)
+0x106cb8: FUN_00106cb8 (size: 248)
+0x106db0: FUN_00106db0 (size: 304)
+0x106ee0: FUN_00106ee0 (size: 124)
+0x106f5c: FUN_00106f5c (size: 240)
+0x10704c: FUN_0010704c (size: 624)
+0x1072bc: FUN_001072bc (size: 164)
+0x107728: FUN_00107728 (size: 448)
+0x107958: FUN_00107958 (size: 652)
+0x107be4: FUN_00107be4 (size: 88)
+0x107c3c: FUN_00107c3c (size: 204)
+0x107d08: FUN_00107d08 (size: 140)
+0x107d94: FUN_00107d94 (size: 16)
+0x107da4: FUN_00107da4 (size: 432)
+0x107f54: FUN_00107f54 (size: 48)
+0x107f84: FUN_00107f84 (size: 152)
+0x10801c: FUN_0010801c (size: 212)
+0x1080f0: FUN_001080f0 (size: 48)
+0x108120: FUN_00108120 (size: 144)
+0x1081b0: FUN_001081b0 (size: 572)
+0x1083ec: FUN_001083ec (size: 292)
+0x108510: FUN_00108510 (size: 376)
+0x108688: FUN_00108688 (size: 208)
+0x108758: FUN_00108758 (size: 168)
+0x108800: FUN_00108800 (size: 148)
+0x108894: FUN_00108894 (size: 676)
+0x108b38: FUN_00108b38 (size: 308)
+0x108ca4: FUN_00108ca4 (size: 92)
+0x108d00: FUN_00108d00 (size: 216)
+0x108dd8: FUN_00108dd8 (size: 500)
+0x108fcc: FUN_00108fcc (size: 80)
+0x10901c: FUN_0010901c (size: 128)
+0x10909c: FUN_0010909c (size: 80)
+0x1090ec: FUN_001090ec (size: 324)
+0x10924c: FUN_0010924c (size: 156)
+0x1092d8: FUN_001092d8 (size: 48)
+0x109308: FUN_00109308 (size: 284)
+0x109424: FUN_00109424 (size: 180)
+0x1094d8: FUN_001094d8 (size: 3044)
+0x10a0bc: FUN_0010a0bc (size: 160)
+0x10a15c: FUN_0010a15c (size: 172)
+0x10a208: FUN_0010a208 (size: 160)
+0x10a2a8: FUN_0010a2a8 (size: 312)
+0x10a3f8: FUN_0010a3f8 (size: 360)
+0x10a560: FUN_0010a560 (size: 220)
+0x10a63c: FUN_0010a63c (size: 292)
+0x10a760: FUN_0010a760 (size: 180)
+0x10a814: FUN_0010a814 (size: 312)
+0x10a94c: FUN_0010a94c (size: 2100)
+0x10b180: FUN_0010b180 (size: 192)
+0x10b240: FUN_0010b240 (size: 292)
+0x10b364: FUN_0010b364 (size: 44)
+0x10b390: FUN_0010b390 (size: 872)
+0x10b770: FUN_0010b770 (size: 276)
+... and 241 more functions
+
+
+=== All Functions ===
+0x105898: _init
+0x1058b0: __PLT_HEAD
+0x105910: _INIT_1
+0x105958: FUN_00105958
+0x105c54: entry
+0x105ca0: _FINI_0
+0x105d04: _INIT_0
+0x105d28: FUN_00105d28
+0x105d60: FUN_00105d60
+0x105d6c: FUN_00105d6c
+0x105d80: FUN_00105d80
+0x105dc4: FUN_00105dc4
+0x105de0: FUN_00105de0
+0x105e04: FUN_00105e04
+0x105e1c: FUN_00105e1c
+0x105e4c: FUN_00105e4c
+0x105e74: FUN_00105e74
+0x105e8c: FUN_00105e8c
+0x105ee8: FUN_00105ee8
+0x106048: FUN_00106048
+0x106098: avl_find
+0x1060c0: FUN_001060c0
+0x1061ac: FUN_001061ac
+0x106218: FUN_00106218
+0x10627c: FUN_0010627c
+0x106304: FUN_00106304
+0x106344: FUN_00106344
+0x1063a8: FUN_001063a8
+0x1063dc: FUN_001063dc
+0x10640c: FUN_0010640c
+0x106464: FUN_00106464
+0x1064c0: FUN_001064c0
+0x106608: FUN_00106608
+0x106674: FUN_00106674
+0x1066c4: FUN_001066c4
+0x106714: FUN_00106714
+0x106764: FUN_00106764
+0x1067bc: FUN_001067bc
+0x10682c: FUN_0010682c
+0x10689c: FUN_0010689c
+0x106968: FUN_00106968
+0x1069b0: FUN_001069b0
+0x1069ec: FUN_001069ec
+0x106a68: FUN_00106a68
+0x106b04: FUN_00106b04
+0x106b6c: FUN_00106b6c
+0x106c14: FUN_00106c14
+0x106cb8: FUN_00106cb8
+0x106db0: FUN_00106db0
+0x106ee0: FUN_00106ee0
+0x106f5c: FUN_00106f5c
+0x10704c: FUN_0010704c
+0x1072bc: FUN_001072bc
+0x107728: FUN_00107728
+0x107958: FUN_00107958
+0x107be4: FUN_00107be4
+0x107c3c: FUN_00107c3c
+0x107d08: FUN_00107d08
+0x107d94: FUN_00107d94
+0x107da4: FUN_00107da4
+0x107f54: FUN_00107f54
+0x107f84: FUN_00107f84
+0x10801c: FUN_0010801c
+0x1080f0: FUN_001080f0
+0x108120: FUN_00108120
+0x1081b0: FUN_001081b0
+0x1083ec: FUN_001083ec
+0x108510: FUN_00108510
+0x108688: FUN_00108688
+0x108758: FUN_00108758
+0x108800: FUN_00108800
+0x108894: FUN_00108894
+0x108b38: FUN_00108b38
+0x108ca4: FUN_00108ca4
+0x108d00: FUN_00108d00
+0x108dd8: FUN_00108dd8
+0x108fcc: FUN_00108fcc
+0x10901c: FUN_0010901c
+0x10909c: FUN_0010909c
+0x1090ec: FUN_001090ec
+0x10924c: FUN_0010924c
+0x1092d8: FUN_001092d8
+0x109308: FUN_00109308
+0x109424: FUN_00109424
+0x1094d8: FUN_001094d8
+0x10a0bc: FUN_0010a0bc
+0x10a15c: FUN_0010a15c
+0x10a208: FUN_0010a208
+0x10a2a8: FUN_0010a2a8
+0x10a3f8: FUN_0010a3f8
+0x10a560: FUN_0010a560
+0x10a63c: FUN_0010a63c
+0x10a760: FUN_0010a760
+0x10a814: FUN_0010a814
+0x10a94c: FUN_0010a94c
+0x10b180: FUN_0010b180
+0x10b240: FUN_0010b240
+0x10b364: FUN_0010b364
+0x10b390: FUN_0010b390
+0x10b770: FUN_0010b770
+0x10b884: FUN_0010b884
+0x10b920: FUN_0010b920
+0x10b980: FUN_0010b980
+0x10ba0c: FUN_0010ba0c
+0x10bc24: FUN_0010bc24
+0x10be10: FUN_0010be10
+0x10c0a4: FUN_0010c0a4
+0x10c9ec: FUN_0010c9ec
+0x10cd6c: FUN_0010cd6c
+0x10cff8: FUN_0010cff8
+0x10d0ec: FUN_0010d0ec
+0x10d49c: FUN_0010d49c
+0x10d960: FUN_0010d960
+0x10da3c: FUN_0010da3c
+0x10de38: FUN_0010de38
+0x10e324: FUN_0010e324
+0x10eddc: FUN_0010eddc
+0x10ee9c: FUN_0010ee9c
+0x10eef4: FUN_0010eef4
+0x10ef34: FUN_0010ef34
+0x10f1f0: FUN_0010f1f0
+0x10f818: FUN_0010f818
+0x10fa58: FUN_0010fa58
+0x10fe8c: FUN_0010fe8c
+0x11003c: FUN_0011003c
+0x110350: FUN_00110350
+0x1103d0: FUN_001103d0
+0x11065c: FUN_0011065c
+0x110748: FUN_00110748
+0x110858: FUN_00110858
+0x110940: FUN_00110940
+0x110a38: FUN_00110a38
+0x110b0c: FUN_00110b0c
+0x110c08: FUN_00110c08
+0x11160c: FUN_0011160c
+0x111668: FUN_00111668
+0x111760: FUN_00111760
+0x1117c0: FUN_001117c0
+0x11181c: FUN_0011181c
+0x111b7c: FUN_00111b7c
+0x111c38: FUN_00111c38
+0x111cb8: _fini
+0x12b000: ubus_add_object
+0x12b008: clock_gettime
+0x12b010: json_script_init
+0x12b018: strcpy
+0x12b020: chroot
+0x12b028: json_object_object_add
+0x12b030: json_tokener_free
+0x12b038: unsetenv
+0x12b040: inotify_init1
+0x12b048: getrlimit
+0x12b050: ioctl
+0x12b058: strtok_r
+0x12b060: runqueue_task_add
+0x12b068: printf
+0x12b078: recv
+0x12b080: md5_end
+0x12b088: strerror
+0x12b090: blobmsg_alloc_string_buffer
+0x12b098: json_tokener_new
+0x12b0a0: snprintf
+0x12b0b0: ulog
+0x12b0b8: mknod
+0x12b0c0: ubus_reconnect
+0x12b0c8: getenv
+0x12b0d0: runqueue_init
+0x12b0d8: __register_frame_info
+0x12b0e0: setpriority
+0x12b0e8: ubus_notify
+0x12b0f0: uloop_timeout_remaining
+0x12b0f8: execve
+0x12b100: getpid
+0x12b108: fgets
+0x12b110: dirname
+0x12b118: vlist_delete
+0x12b120: memcpy
+0x12b128: uloop_done
+0x12b130: ulog_threshold
+0x12b138: execl
+0x12b140: uloop_fd_add
+0x12b148: glob
+0x12b150: __cxa_finalize
+0x12b158: dup2
+0x12b160: ustream_free
+0x12b168: avl_find
+0x12b170: malloc
+0x12b178: blob_buf_init
+0x12b180: sleep
+0x12b190: sysinfo
+0x12b198: vsnprintf
+0x12b1a0: ubus_subscribe
+0x12b1a8: blob_attr_equal
+0x12b1b0: strtoul
+0x12b1b8: socket
+0x12b1c0: readdir
+0x12b1c8: fflush
+0x12b1d0: ubus_strerror
+0x12b1d8: json_object_new_string
+0x12b1e0: ubus_lookup_id
+0x12b1f0: chown
+0x12b1f8: avl_delete
+0x12b200: mkdir_p
+0x12b208: __stack_chk_fail
+0x12b210: vlist_flush_all
+0x12b218: blobmsg_parse
+0x12b220: json_script_free
+0x12b228: pipe
+0x12b230: json_script_file_from_blobmsg
+0x12b238: strnlen
+0x12b240: blobmsg_add_field
+0x12b248: uname
+0x12b250: blobmsg_format_json_with_cb
+0x12b258: avl_strcmp
+0x12b260: strrchr
+0x12b268: basename
+0x12b270: runqueue_process_kill_cb
+0x12b278: calloc
+0x12b280: setrlimit
+0x12b288: avl_init
+0x12b290: __deregister_frame_info
+0x12b298: write
+0x12b2a8: fprintf
+0x12b2b0: uloop_timeout_cancel
+0x12b2b8: kill
+0x12b2c0: ubus_remove_object
+0x12b2c8: strcat
+0x12b2d0: bind
+0x12b2d8: umount2
+0x12b2e0: if_nametoindex
+0x12b2e8: reboot
+0x12b2f0: chdir
+0x12b2f8: initgroups
+0x12b300: ubus_register_event_handler
+0x12b308: json_object_get_type
+0x12b310: setsockopt
+0x12b318: __calloc_a
+0x12b320: blobmsg_add_json_element
+0x12b328: memchr
+0x12b338: umask
+0x12b340: dprintf
+0x12b348: strstr
+0x12b350: avl_insert
+0x12b358: blobmsg_check_attr_list
+0x12b360: setgid
+0x12b368: signal
+0x12b370: read
+0x12b378: strncmp
+0x12b380: uloop_process_add
+0x12b388: blob_memdup
+0x12b390: strncpy
+0x12b398: unlink
+0x12b3a0: setenv
+0x12b3a8: sync
+0x12b3b0: strcasecmp
+0x12b3b8: ubus_register_subscriber
+0x12b3c0: strtok
+0x12b3c8: memcmp
+0x12b3d0: blobmsg_check_attr
+0x12b3d8: fork
+0x12b3e0: sscanf
+0x12b3e8: execlp
+0x12b3f0: sigaction
+0x12b3f8: ubus_connect
+0x12b400: ustream_write
+0x12b408: ustream_get_read_buf
+0x12b410: strdup
+0x12b418: md5_hash
+0x12b420: regcomp
+0x12b428: symlink
+0x12b430: fopen
+0x12b438: getopt
+0x12b440: localtime
+0x12b448: memset
+0x12b450: runqueue_process_add
+0x12b458: ustream_consume
+0x12b460: fclose
+0x12b468: regexec
+0x12b470: time
+0x12b478: opendir
+0x12b480: vlist_flush
+0x12b488: json_object_new_object
+0x12b490: isalnum
+0x12b498: json_tokener_error_desc
+0x12b4a0: mount
+0x12b4a8: uloop_run_timeout
+0x12b4b0: strcmp
+0x12b4b8: json_object_from_file
+0x12b4c0: getpwnam
+0x12b4c8: sprintf
+0x12b4d0: asprintf
+0x12b4d8: blobmsg_parse_array
+0x12b4e0: json_tokener_get_error
+0x12b4f0: json_script_find_var
+0x12b4f8: vfork
+0x12b500: ulog_open
+0x12b508: json_object_put
+0x12b510: inotify_add_watch
+0x12b518: globfree
+0x12b520: md5_begin
+0x12b528: stat
+0x12b530: uloop_timeout_set
+0x12b538: freopen
+0x12b540: uloop_init
+0x12b548: __errno_location
+0x12b550: json_script_run
+0x12b558: exit
+0x12b560: ustream_fd_init
+0x12b568: getgrnam
+0x12b570: json_object_object_get_ex
+0x12b578: vlist_init
+0x12b580: avl_blobcmp
+0x12b588: atoi
+0x12b590: openat
+0x12b598: runqueue_process_cancel_cb
+0x12b5a0: _exit
+0x12b5a8: __libc_start_main
+0x12b5b0: strlen
+0x12b5b8: open
+0x12b5c0: toupper
+0x12b5c8: uloop_process_delete
+0x12b5d0: atoll
+0x12b5d8: regfree
+0x12b5e0: blobmsg_open_nested
+0x12b5e8: strchr
+0x12b5f0: fputs
+0x12b5f8: execvp
+0x12b600: vlist_add
+0x12b608: setsid
+0x12b610: ubus_send_reply
+0x12b618: closedir
+0x12b620: blobmsg_add_object
+0x12b628: fcntl
+0x12b630: blob_nest_end
+0x12b638: setuid
+0x12b640: mkdir
+0x12b648: close
+0x12b650: blobmsg_add_string_buffer
+0x12b658: json_tokener_parse_ex
+0x12b660: tcsetpgrp
+0x12b668: free
