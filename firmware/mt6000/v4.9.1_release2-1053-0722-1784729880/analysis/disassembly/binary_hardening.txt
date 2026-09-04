@@ -1,0 +1,26 @@
+=== MT6000 (Flint 3) Binary Hardening Report ===
+Date: 2026-09-04
+Architecture: AArch64 (ARM Cortex-A53, MediaTek MT7986A)
+Image Type: OpenWrt sysupgrade (kernel only, 3.7MB FIT image)
+
+Kernel Analysis:
+- FIT image wrapping LZMA-compressed Linux kernel
+- LZMA props: 6d00008000 (dictionary size: 8MB)
+- Decompressed kernel: 11,335,688 bytes
+- Linux kernel 5.4.238
+- Built: Tue Aug 4 06:28:05 2026
+- Compiler: gcc 8.4.0 (OpenWrt GCC 8.4.0 r15812+1092)
+
+Kernel Drivers (Mediated):
+- ata/libahci, ata/libata (SATA)
+- bluetooth/hci_serdev (Bluetooth)
+- crypto/ (Crypto API)
+- net/ethernet/mediatek/mtk_eth_soc (Ethernet)
+- net/wireless/ (WiFi)
+- soc/mediatek/mtk-* (System-on-Chip)
+- spi/ (SPI bus)
+- tty/serdev (Serial)
+- usb/ (USB host/device)
+
+No root filesystem - sysupgrade kernel only image
+No user-space binaries to analyze for hardening

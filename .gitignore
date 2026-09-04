@@ -11,7 +11,11 @@
 *.yaffs
 *.raw
 
-# Secrets scan (committed separately if needed)
+# Decompressed kernel images (large raw binaries, generated)
+kernel_decompressed
+kernel_lzma.bin
+
+# Secrets scan
 gitleaks-results.json
 
 # Ghidra projects
