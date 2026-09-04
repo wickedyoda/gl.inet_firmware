@@ -25,3 +25,6 @@ __pycache__/
 
 # Boot extraction (large binary blobs)
 firmware/*/boot_extraction/_boot.img.extracted/
+
+# MT6000 kernel (large binary)
+mt6000/*/analysis/disassembly/kernel_decompressed

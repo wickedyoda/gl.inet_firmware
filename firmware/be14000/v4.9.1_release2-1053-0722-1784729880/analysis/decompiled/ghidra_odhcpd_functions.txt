@@ -1,0 +1,391 @@
+=== Functions in odhcpd ===
+Language: AARCH64:LE:64:v8A
+Image Base: 00100000
+
+Total functions: 281
+First 100 functions:
+0x103d78: _init (size: 16)
+0x103dc0: FUN_00103dc0 (size: 604)
+0x10401c: entry (size: 76)
+0x104068: _FINI_0 (size: 100)
+0x1040cc: _INIT_0 (size: 36)
+0x104490: FUN_00104490 (size: 224)
+0x104570: FUN_00104570 (size: 188)
+0x10462c: FUN_0010462c (size: 384)
+0x1047ac: FUN_001047ac (size: 56)
+0x1047e4: FUN_001047e4 (size: 40)
+0x10480c: FUN_0010480c (size: 16)
+0x104824: FUN_00104824 (size: 44)
+0x104850: FUN_00104850 (size: 40)
+0x104878: FUN_00104878 (size: 620)
+0x104ae4: FUN_00104ae4 (size: 136)
+0x104b6c: FUN_00104b6c (size: 80)
+0x104bbc: FUN_00104bbc (size: 172)
+0x104c68: FUN_00104c68 (size: 104)
+0x104cd0: FUN_00104cd0 (size: 120)
+0x104d48: FUN_00104d48 (size: 128)
+0x104dc8: FUN_00104dc8 (size: 156)
+0x104e64: FUN_00104e64 (size: 248)
+0x104f5c: FUN_00104f5c (size: 16)
+0x104f6c: FUN_00104f6c (size: 20)
+0x104f80: FUN_00104f80 (size: 28)
+0x104f9c: FUN_00104f9c (size: 56)
+0x104fd4: FUN_00104fd4 (size: 68)
+0x105018: FUN_00105018 (size: 32)
+0x105038: FUN_00105038 (size: 28)
+0x105054: FUN_00105054 (size: 12)
+0x105060: FUN_00105060 (size: 52)
+0x105094: FUN_00105094 (size: 228)
+0x105178: FUN_00105178 (size: 76)
+0x1051c4: FUN_001051c4 (size: 136)
+0x105264: FUN_00105264 (size: 96)
+0x1052c4: FUN_001052c4 (size: 104)
+0x10532c: FUN_0010532c (size: 108)
+0x105558: FUN_00105558 (size: 240)
+0x105648: FUN_00105648 (size: 160)
+0x1056e8: FUN_001056e8 (size: 544)
+0x105908: FUN_00105908 (size: 4104)
+0x106910: FUN_00106910 (size: 132)
+0x106994: FUN_00106994 (size: 104)
+0x1069fc: FUN_001069fc (size: 56)
+0x106a6c: FUN_00106a6c (size: 1600)
+0x107120: FUN_00107120 (size: 196)
+0x1071e4: FUN_001071e4 (size: 244)
+0x1072d8: FUN_001072d8 (size: 3456)
+0x108058: FUN_00108058 (size: 76)
+0x1081c4: FUN_001081c4 (size: 928)
+0x108564: FUN_00108564 (size: 160)
+0x108604: FUN_00108604 (size: 1140)
+0x108a78: FUN_00108a78 (size: 2348)
+0x1093a4: FUN_001093a4 (size: 140)
+0x109430: FUN_00109430 (size: 1240)
+0x109908: thunk_FUN_0010c3fc (size: 12)
+0x109914: FUN_00109914 (size: 892)
+0x109c90: FUN_00109c90 (size: 344)
+0x109de8: FUN_00109de8 (size: 1212)
+0x10a2a4: FUN_0010a2a4 (size: 264)
+0x10a3ac: FUN_0010a3ac (size: 304)
+0x10a4dc: FUN_0010a4dc (size: 80)
+0x10a52c: FUN_0010a52c (size: 1084)
+0x10a968: FUN_0010a968 (size: 68)
+0x10a9ac: FUN_0010a9ac (size: 156)
+0x10aa48: FUN_0010aa48 (size: 228)
+0x10ab2c: FUN_0010ab2c (size: 716)
+0x10adf8: FUN_0010adf8 (size: 52)
+0x10ae2c: FUN_0010ae2c (size: 180)
+0x10aee0: FUN_0010aee0 (size: 440)
+0x10b098: FUN_0010b098 (size: 300)
+0x10b1c4: FUN_0010b1c4 (size: 504)
+0x10b3bc: FUN_0010b3bc (size: 104)
+0x10b424: FUN_0010b424 (size: 652)
+0x10b6b0: FUN_0010b6b0 (size: 188)
+0x10b76c: FUN_0010b76c (size: 2196)
+0x10c000: FUN_0010c000 (size: 120)
+0x10c078: FUN_0010c078 (size: 44)
+0x10c0a4: FUN_0010c0a4 (size: 712)
+0x10c36c: FUN_0010c36c (size: 144)
+0x10c3fc: FUN_0010c3fc (size: 72)
+0x10c444: FUN_0010c444 (size: 180)
+0x10c4f8: FUN_0010c4f8 (size: 568)
+0x10c730: FUN_0010c730 (size: 1704)
+0x10cdd8: FUN_0010cdd8 (size: 564)
+0x10d00c: FUN_0010d00c (size: 3764)
+0x10dec0: FUN_0010dec0 (size: 88)
+0x10df58: FUN_0010df58 (size: 304)
+0x10e09c: FUN_0010e09c (size: 160)
+0x10e13c: FUN_0010e13c (size: 72)
+0x10e184: FUN_0010e184 (size: 352)
+0x10e2e4: FUN_0010e2e4 (size: 368)
+0x10e4e8: FUN_0010e4e8 (size: 88)
+0x10e5fc: FUN_0010e5fc (size: 332)
+0x10e748: FUN_0010e748 (size: 48)
+0x10e778: FUN_0010e778 (size: 568)
+0x10e9b0: FUN_0010e9b0 (size: 1776)
+0x10f0a0: FUN_0010f0a0 (size: 408)
+0x10f238: FUN_0010f238 (size: 384)
+0x10f3b8: FUN_0010f3b8 (size: 244)
+... and 181 more functions
+
+
+=== All Functions ===
+0x103d78: _init
+0x103dc0: FUN_00103dc0
+0x10401c: entry
+0x104068: _FINI_0
+0x1040cc: _INIT_0
+0x104490: FUN_00104490
+0x104570: FUN_00104570
+0x10462c: FUN_0010462c
+0x1047ac: FUN_001047ac
+0x1047e4: FUN_001047e4
+0x10480c: FUN_0010480c
+0x104824: FUN_00104824
+0x104850: FUN_00104850
+0x104878: FUN_00104878
+0x104ae4: FUN_00104ae4
+0x104b6c: FUN_00104b6c
+0x104bbc: FUN_00104bbc
+0x104c68: FUN_00104c68
+0x104cd0: FUN_00104cd0
+0x104d48: FUN_00104d48
+0x104dc8: FUN_00104dc8
+0x104e64: FUN_00104e64
+0x104f5c: FUN_00104f5c
+0x104f6c: FUN_00104f6c
+0x104f80: FUN_00104f80
+0x104f9c: FUN_00104f9c
+0x104fd4: FUN_00104fd4
+0x105018: FUN_00105018
+0x105038: FUN_00105038
+0x105054: FUN_00105054
+0x105060: FUN_00105060
+0x105094: FUN_00105094
+0x105178: FUN_00105178
+0x1051c4: FUN_001051c4
+0x105264: FUN_00105264
+0x1052c4: FUN_001052c4
+0x10532c: FUN_0010532c
+0x105558: FUN_00105558
+0x105648: FUN_00105648
+0x1056e8: FUN_001056e8
+0x105908: FUN_00105908
+0x106910: FUN_00106910
+0x106994: FUN_00106994
+0x1069fc: FUN_001069fc
+0x106a6c: FUN_00106a6c
+0x107120: FUN_00107120
+0x1071e4: FUN_001071e4
+0x1072d8: FUN_001072d8
+0x108058: FUN_00108058
+0x1081c4: FUN_001081c4
+0x108564: FUN_00108564
+0x108604: FUN_00108604
+0x108a78: FUN_00108a78
+0x1093a4: FUN_001093a4
+0x109430: FUN_00109430
+0x109908: thunk_FUN_0010c3fc
+0x109914: FUN_00109914
+0x109c90: FUN_00109c90
+0x109de8: FUN_00109de8
+0x10a2a4: FUN_0010a2a4
+0x10a3ac: FUN_0010a3ac
+0x10a4dc: FUN_0010a4dc
+0x10a52c: FUN_0010a52c
+0x10a968: FUN_0010a968
+0x10a9ac: FUN_0010a9ac
+0x10aa48: FUN_0010aa48
+0x10ab2c: FUN_0010ab2c
+0x10adf8: FUN_0010adf8
+0x10ae2c: FUN_0010ae2c
+0x10aee0: FUN_0010aee0
+0x10b098: FUN_0010b098
+0x10b1c4: FUN_0010b1c4
+0x10b3bc: FUN_0010b3bc
+0x10b424: FUN_0010b424
+0x10b6b0: FUN_0010b6b0
+0x10b76c: FUN_0010b76c
+0x10c000: FUN_0010c000
+0x10c078: FUN_0010c078
+0x10c0a4: FUN_0010c0a4
+0x10c36c: FUN_0010c36c
+0x10c3fc: FUN_0010c3fc
+0x10c444: FUN_0010c444
+0x10c4f8: FUN_0010c4f8
+0x10c730: FUN_0010c730
+0x10cdd8: FUN_0010cdd8
+0x10d00c: FUN_0010d00c
+0x10dec0: FUN_0010dec0
+0x10df58: FUN_0010df58
+0x10e09c: FUN_0010e09c
+0x10e13c: FUN_0010e13c
+0x10e184: FUN_0010e184
+0x10e2e4: FUN_0010e2e4
+0x10e4e8: FUN_0010e4e8
+0x10e5fc: FUN_0010e5fc
+0x10e748: FUN_0010e748
+0x10e778: FUN_0010e778
+0x10e9b0: FUN_0010e9b0
+0x10f0a0: FUN_0010f0a0
+0x10f238: FUN_0010f238
+0x10f3b8: FUN_0010f3b8
+0x10f4ac: FUN_0010f4ac
+0x10f690: FUN_0010f690
+0x10f724: FUN_0010f724
+0x10f7b0: FUN_0010f7b0
+0x10f81c: FUN_0010f81c
+0x10f830: FUN_0010f830
+0x10f84c: FUN_0010f84c
+0x10f884: FUN_0010f884
+0x10f8c8: FUN_0010f8c8
+0x10f8d4: FUN_0010f8d4
+0x10f900: FUN_0010f900
+0x10f980: FUN_0010f980
+0x10fa44: FUN_0010fa44
+0x10fad8: FUN_0010fad8
+0x10fb94: FUN_0010fb94
+0x10fbe8: FUN_0010fbe8
+0x10fc28: FUN_0010fc28
+0x10fd24: FUN_0010fd24
+0x1100fc: FUN_001100fc
+0x110478: FUN_00110478
+0x110690: FUN_00110690
+0x1107b8: FUN_001107b8
+0x1108b8: FUN_001108b8
+0x110a48: FUN_00110a48
+0x110b44: _fini
+0x126000: ubus_add_object
+0x126008: clock_gettime
+0x126010: strcpy
+0x126018: ioctl
+0x126020: strtok_r
+0x126028: printf
+0x126030: nl_socket_free
+0x126038: connect
+0x126040: md5_end
+0x126048: blobmsg_alloc_string_buffer
+0x126050: inet_pton
+0x126058: nlmsg_alloc_simple
+0x126060: snprintf
+0x126070: __register_frame_info
+0x126078: memmem
+0x126080: ubus_notify
+0x126088: qsort
+0x126090: fgets
+0x126098: dirname
+0x1260a0: memcpy
+0x1260a8: execl
+0x1260b0: uloop_fd_add
+0x1260b8: perror
+0x1260c0: __cxa_finalize
+0x1260c8: ustream_free
+0x1260d0: getuid
+0x1260d8: avl_find
+0x1260e0: malloc
+0x1260e8: blob_buf_init
+0x1260f0: sleep
+0x126108: ubus_subscribe
+0x126110: strtoul
+0x126118: res_init
+0x126120: socket
+0x126128: nl_socket_alloc
+0x126130: ftruncate
+0x126138: ubus_lookup_id
+0x126140: avl_delete
+0x126148: mkdir_p
+0x126150: nl_socket_set_buffer_size
+0x126158: __stack_chk_fail
+0x126160: uci_free_context
+0x126168: blobmsg_parse
+0x126170: blobmsg_add_field
+0x126178: rename
+0x126180: avl_strcmp
+0x126188: calloc
+0x126190: strtod
+0x126198: __deregister_frame_info
+0x1261a0: write
+0x1261a8: fprintf
+0x1261b0: uloop_timeout_cancel
+0x1261b8: bind
+0x1261c0: nl_recvmsgs
+0x1261c8: ntohl
+0x1261d0: if_nametoindex
+0x1261d8: ubus_register_event_handler
+0x1261e0: nlmsg_parse
+0x1261e8: setsockopt
+0x1261f0: __calloc_a
+0x1261f8: nl_socket_disable_seq_check
+0x126200: uci_to_blob
+0x126208: avl_insert
+0x126210: nl_cb_alloc
+0x126218: rand
+0x126220: signal
+0x126228: read
+0x126230: openlog
+0x126238: ustream_write_pending
+0x126240: sendmsg
+0x126248: nl_cb_set
+0x126250: nla_put
+0x126258: blob_memdup
+0x126260: strncpy
+0x126268: setenv
+0x126270: htonl
+0x126278: realloc
+0x126280: ubus_register_subscriber
+0x126288: nla_find
+0x126290: ubus_invoke_async_fd
+0x126298: memcmp
+0x1262a0: blobmsg_check_attr
+0x1262a8: fdopen
+0x1262b0: fork
+0x1262b8: sscanf
+0x1262c0: execv
+0x1262c8: ubus_connect
+0x1262d0: nl_wait_for_ack
+0x1262d8: ustream_get_read_buf
+0x1262e0: strdup
+0x1262e8: md5_hash
+0x1262f0: uci_load
+0x1262f8: fopen
+0x126300: getopt
+0x126308: memset
+0x126310: lockf
+0x126318: srand
+0x126320: ustream_consume
+0x126328: fclose
+0x126330: ntohs
+0x126338: inet_ntoa
+0x126340: time
+0x126348: vlist_flush
+0x126350: poll
+0x126358: pipe2
+0x126360: syslog
+0x126368: uloop_run_timeout
+0x126370: nl_cb_err
+0x126378: strcmp
+0x126380: uloop_fd_delete
+0x126388: usock
+0x126390: nl_cb_put
+0x126398: __res_state
+0x1263a0: ether_aton_r
+0x1263a8: strcspn
+0x1263b8: vfork
+0x1263c0: setlogmask
+0x1263c8: getsockopt
+0x1263d0: ustream_printf
+0x1263d8: md5_begin
+0x1263e0: nlmsg_free
+0x1263e8: nl_send_auto_complete
+0x1263f0: uci_unload
+0x1263f8: fwrite
+0x126400: ubus_complete_request_async
+0x126408: htons
+0x126410: uloop_timeout_set
+0x126418: rewind
+0x126420: uloop_init
+0x126428: nl_socket_add_memberships
+0x126430: dn_expand
+0x126438: __errno_location
+0x126440: dn_comp
+0x126448: ubus_abort_request
+0x126450: ustream_fd_init
+0x126458: inet_ntop
+0x126460: nl_connect
+0x126468: atoi
+0x126470: _exit
+0x126478: __libc_start_main
+0x126480: strlen
+0x126488: open
+0x126490: nlmsg_append
+0x126498: blobmsg_open_nested
+0x1264a0: strchr
+0x1264a8: fputs
+0x1264b0: vlist_add
+0x1264b8: ubus_send_reply
+0x1264c0: recvmsg
+0x1264c8: fcntl
+0x1264d0: blob_nest_end
+0x1264d8: uci_alloc_context
+0x1264e0: close
+0x1264e8: blobmsg_add_string_buffer
+0x1264f0: free
+0x1264f8: getsockname

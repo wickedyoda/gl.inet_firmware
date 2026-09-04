@@ -1,0 +1,29 @@
+%s version %s (xinxing@gl-System-Product-Name) (gcc version 8.4.0 (OpenWrt GCC 8.4.0 r15812+1092-46b6ee7ffc)) %s
+GCC: (OpenWrt GCC 8.4.0 r15812+1092-46b6ee7ffc) 8.4.0
+Linux version %s (%s)
+Linux version 5.4.238 (xinxing@gl-System-Product-Name) (gcc version 8.4.0 (OpenWrt GCC 8.4.0 r15812+1092-46b6ee7ffc)) #0 SMP Tue Aug 4 06:28:05 2026
+MediaTek BTIF
+MediaTek HSDMA OF registration failed %d
+MediaTek HSDMA driver registered
+MediaTek SPI NAND interface probe failed %d
+Switch is MediaTek %s rev %d
+mediatek,mt7986-apmixedsys
+mediatek,mt7986-eth
+mediatek,mt7986-ethsys_ck
+mediatek,mt7986-i2c
+mediatek,mt7986-infracfg
+mediatek,mt7986-infracfg_ao
+mediatek,mt7986-mmc
+mediatek,mt7986-pcie
+mediatek,mt7986-pinctrl
+mediatek,mt7986-pwm
+mediatek,mt7986-rng
+mediatek,mt7986-sgmiisys_0
+mediatek,mt7986-sgmiisys_1
+mediatek,mt7986-snand
+mediatek,mt7986-thermal
+mediatek,mt7986-topckgen
+mediatek,mt7986-wdt
+mt7986-pinctrl
+tmt7986_pinctrl_init
+tmt7986_pinctrl_probe

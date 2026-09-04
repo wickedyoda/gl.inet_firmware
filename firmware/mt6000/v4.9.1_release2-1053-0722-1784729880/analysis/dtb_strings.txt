@@ -1,0 +1,10 @@
+glinet,gl-mt6000
+mediatek,mt7986a
+mediatek,mt7986-infracfg_ao
+mediatek,mt7986-infracfg
+mediatek,mt7986-topckgen
+mediatek,mt7986-apmixedsys
+mediatek,mt7986-wdt
+mediatek,mt7986-pwm
+mediatek,mt7986-uart
+mediatek,mt7986-uart

@@ -1,0 +1,11 @@
+=== Functions in abl.elf ===
+Language: AARCH64:LE:64:v8A
+Image Base: 9fa00000
+
+Total functions: 1
+First 100 functions:
+0x9fa00000: entry (size: 4)
+
+
+=== All Functions ===
+0x9fa00000: entry
