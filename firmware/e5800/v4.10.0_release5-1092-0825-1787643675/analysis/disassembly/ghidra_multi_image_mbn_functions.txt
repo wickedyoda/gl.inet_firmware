@@ -1,0 +1,12 @@
+=== Functions in multi_image.mbn ===
+Language: AARCH64:LE:64:v8A
+Image Base: 149fd000
+
+Total functions: 0
+First 100 functions:
+
+
+=== Function Summary ===
+Total functions: 0
+Language: AARCH64:LE:64:v8A
+Image Base: 149fd000

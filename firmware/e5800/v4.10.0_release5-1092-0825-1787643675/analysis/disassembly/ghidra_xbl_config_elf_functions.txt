@@ -1,0 +1,13 @@
+=== Functions in xbl_config.elf ===
+Language: ARM:LE:32:v7
+Image Base: 1494e000
+
+Total functions: 1
+First 100 functions:
+0x1494e000: entry (size: 24)
+
+
+=== Function Summary ===
+Total functions: 1
+Language: ARM:LE:32:v7
+Image Base: 1494e000
