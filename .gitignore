@@ -1,0 +1,17 @@
+*.bin
+*.dat
+*.img
+*.mbn
+*.melf
+*.elf
+*.zip
+*.xz
+*.cpio
+*.yaffs
+*.raw
+gitleaks-results.json
+gl_openwrt/
+gl_feeds/
+ghidra_project/
+boot_extraction/_boot.img.extracted/
+__pycache__/

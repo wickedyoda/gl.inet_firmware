@@ -1,0 +1,84 @@
+=== abl.elf ===
+u$[4tZ1
+S^tZ=
+KGtZ
+0-GtTz
+NetZ
+=== uefi.elf ===
+TzFastcall() failed for TZ_IO_ACCESS_WRITE_ID, Status = (0x%x)
+DBI Dump table region assignment by TZ failed due to invalid argument or some other reason
+TZ SMC call Failed!
+/Qualcomm/xingduo.du/depot3/Qualcomm/SDX7X/MCU_R02_PCBA_GL_01/pinnacles_boot/boot_images/Build/PinnaclesLE/Core/RELEASE_CLANG160LINUX/AARCH64/QcomPkg/XBLCore/XBLCore/DEBUG/Sec.dll
+# EnableQseeLogsFlag = 0x100            i.e. 0b 00000001 00000000
+=== tz.mbn ===
+Tzs2
+Tz*@
+kB!Tz
+Tzn@
+tzbsp application rpmb version rollback label
+=== xbl_s.melf ===
+tme_tz
+Qualcomm Technologies, Inc.1*0(
+!Qualcomm Cryptographic Operations1301
+QUALCOMM1
+Qualcomm Technologies, Inc.1*0(
+=== cpucp.elf ===
+Qualcomm Technologies, Inc.1*0(
+!Qualcomm Cryptographic Operations1301
+QUALCOMM1
+Qualcomm Technologies, Inc.1*0(
+!Qualcomm Cryptographic Operations1+0)
+=== shrm.elf ===
+Qualcomm Technologies, Inc.1*0(
+!Qualcomm Cryptographic Operations1301
+QUALCOMM1
+Qualcomm Technologies, Inc.1*0(
+!Qualcomm Cryptographic Operations1+0)
+=== aop.mbn ===
+PM_PROP_RPMH_DRV_ID
+modem
+rpmh_sys
+Qualcomm Technologies, Inc.1*0(
+!Qualcomm Cryptographic Operations1301
+=== aop_devcfg.mbn ===
+QUALCOMM1
+QUALCOMM1
+QUALCOMM1
+QUALCOMM1
+QUALCOMM1
+=== devcfg.mbn ===
+is_ac_hlos_modem_supported
+is_ac_non_secure_modem_supported
+tz_ac_heap_size
+/ac/tz_heap
+Modem_cust_memory_donation
+=== km41.mbn ===
+Tzc@
+%s:%d: qsee_open_singleton failed: %d
+qsee_open singleton failed for strongbox, use default key derivation
+RPMB is full. Upgraded key will not be rollback protected.
+%s:%d: fbe_seed_read_rpmb_data failed: %d
+=== cmnlib64.mbn ===
+GPCrypto_AllocTEEBigIntFromQseeBigInt
+qsee_SW_Cipher_Init error
+qsee_SW_Cipher_DeInit failed
+qsee_SW_Cipher_DES_DeInit failed
+Error in qsee_SW_Cipher_Reset
+=== hypvm.mbn ===
+AC_HLOS_MODEM is not supported, redirecting to AC_HLOS
+AC_NON_SECURE_MODEM is not supported, redirecting to AC_NON_SECURE
+Failed to get TZ device secure state
+%s: PIL init image smc call 0x%x to tz failed for proc id %d as TZ is busy
+Failed to unmap qsee log buffer from EL2 0x%x:0x%x, return code: %d
+=== fw_ipa_gsi_6.0_p.elf ===
+QUALCOMM1
+QUALCOMM1
+QUALCOMM1
+QUALCOMM1
+QUALCOMM1
+=== qupv3fw.elf ===
+Qualcomm Technologies, Inc.1*0(
+!Qualcomm Cryptographic Operations1301
+QUALCOMM1
+Qualcomm Technologies, Inc.1*0(
+!Qualcomm Cryptographic Operations1+0)
