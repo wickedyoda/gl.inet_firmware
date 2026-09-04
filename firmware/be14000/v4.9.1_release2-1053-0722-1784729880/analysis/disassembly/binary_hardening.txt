@@ -1,0 +1,36 @@
+=== Be14000 (Flint 4) Binary Hardening Report ===
+Date: 2026-09-04
+Architecture: AArch64 (ARM Cortex-A73, MediaTek MT7988A)
+Root Filesystem: SquashFS (316MB extracted)
+
+Binary Inventory:
+- Total ELF files: 643
+- Executable (non-PIE): 198
+- Dynamic (PIE): 445
+
+Stack Canary:
+- 559 binaries have stack canary (__stack_chk_fail)
+- 84 binaries lack stack canary
+
+RELRO:
+- AdGuardHome: Full RELRO + BIND_NOW
+- mkfs.exfat: Full RELRO + BIND_NOW
+- gl-p2p-daemon: GNU_STACK only (no RELRO)
+
+Key Binaries:
+- AdGuardHome: ELF64, AArch64, EXEC, Full RELRO, BIND_NOW, stack canary
+- gl-p2p-daemon: ELF64, AArch64, EXEC, GNU_STACK only, no RELRO
+- QFirehose: ELF64, AArch64, EXEC, BIND_NOW
+- 1905ctrl: ELF64, AArch64, EXEC, BIND_NOW
+- ControlAppC: ELF64, AArch64, EXEC (no bind)
+
+Credential Check:
+- /etc/passwd: root:x:0:0:root:/root:/bin/ash (no hardcoded passwords)
+- Dropbear: No SSH host keys (generated at first boot)
+- Wireless: wireless_cert* files are ASCII text certificates (not credentials)
+- No hardcoded WiFi passwords or tokens found
+
+Packages:
+- Total packages: 592
+- GL.iNet SDK4 packages: 122 gl-sdk4/gl-* packages
+- OpenWrt 21.02-SNAPSHOT, target mediatek/mt7988
