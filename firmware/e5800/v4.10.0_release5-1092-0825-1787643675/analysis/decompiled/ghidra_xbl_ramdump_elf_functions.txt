@@ -1,0 +1,11 @@
+=== Functions in xbl_ramdump.elf ===
+Language: ARM:LE:32:v7
+Image Base: 87a00000
+
+Total functions: 1
+First 100 functions:
+0x87a00000: entry (size: 84)
+
+
+=== All Functions ===
+0x87a00000: entry

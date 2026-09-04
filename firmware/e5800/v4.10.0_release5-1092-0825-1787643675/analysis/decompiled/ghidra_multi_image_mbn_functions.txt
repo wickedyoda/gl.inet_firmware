@@ -1,0 +1,9 @@
+=== Functions in multi_image.mbn ===
+Language: ARM:LE:32:v7
+Image Base: 149fd000
+
+Total functions: 0
+First 100 functions:
+
+
+=== All Functions ===
