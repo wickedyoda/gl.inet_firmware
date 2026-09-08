@@ -1,17 +1,10 @@
-# Firmware binaries (stored locally only)
-*.bin
-*.dat
-*.img
-*.mbn
-*.melf
-*.elf
-*.zip
-*.xz
-*.cpio
-*.yaffs
-*.raw
+# Firmware binaries - store large ones externally, but allow small partition binaries in repo
+# Excluded: system.new.dat (545MB), boot.img (41MB), boot_kernel.bin (37MB), NON-HLOS (199-214MB each)
 
-# Decompressed kernel images (large raw binaries, generated)
+# Boot extraction (large binary blobs)
+firmware/*/boot_extraction/_boot.img.extracted/
+
+# Decompressed/generated files
 kernel_decompressed
 kernel_lzma.bin
 
@@ -28,15 +21,3 @@ pip-audit.json
 ghidra_project/
 ghidra-project/
 __pycache__/
-
-# Boot extraction (large binary blobs)
-firmware/*/boot_extraction/_boot.img.extracted/
-
-# MT6000 kernel (large binary)
-mt6000/*/analysis/disassembly/kernel_decompressed
-
-# Exceed GitHub 100MB file limit - actual firmware binaries too large
-firmware/e5800/*/partitions/system.new.dat
-firmware/e5800/*/partitions/NON-HLOS_*.bin
-firmware/e5800/*/partitions/boot.img
-firmware/e5800/*/partitions/boot_kernel.bin
