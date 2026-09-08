@@ -1,0 +1,13 @@
+Package: lua-eco-http
+Version: 3.16.0-0
+Depends: libc, lua-eco, lua-eco-dns, lua-eco-ssl, lua-eco-base64, lua-eco-log
+Source: feeds/gl_feed_common/lua-eco
+SourceName: lua-eco-http
+License: MIT
+LicenseFiles: LICENSE
+Section: lang
+SourceDateEpoch: 1774447581
+Maintainer: Jianhui Zhao <zhaojh329@gmail.com>
+Architecture: aarch64_cortex-a53
+Installed-Size: 10047
+Description:  http/https support for lua-eco

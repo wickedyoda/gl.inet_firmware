@@ -1,0 +1,21 @@
+#!/bin/sh
+
+inited=$(uci -q get glconfig.general.inited)
+if [ "$inited" != "1" ];then
+    exit 0
+fi
+
+timer_screen_enable=$(uci -q get gl_timer.screen.enable)
+if [ "$timer_screen_enable" != "" ];then
+    exit 0
+fi
+
+uci set gl_timer.screen="timer"
+uci set gl_timer.screen.enable="0"
+uci set gl_timer.screen.turnon_hour="07"
+uci set gl_timer.screen.turnon_min="00"
+uci set gl_timer.screen.turnoff_hour="22"
+uci set gl_timer.screen.turnoff_min="00"
+uci set gl_timer.screen.week="0 1 2 3 4 5 6"
+uci commit gl_timer
+sync

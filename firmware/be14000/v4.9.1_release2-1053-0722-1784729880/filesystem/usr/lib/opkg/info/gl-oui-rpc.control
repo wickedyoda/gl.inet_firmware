@@ -1,0 +1,10 @@
+Package: gl-oui-rpc
+Version: git-2026.129.44266-40672cc-1
+Depends: libc, libuci-lua, jansson4, lsqlite3, libiwinfo-lua, libubus-lua, luabitop, openssl-util, gl-sdk4-log, lua-cjson, fcgi, nginx-ssl, lua-eco-socket, lua-eco-ubus, libuci-lua54, lsqlite3-lua5.4, lua-eco-md5, lua-cjson-lua5.4, lua-eco-http, gl-sdk4-utils, lua-eco-sha256, lua-eco-termios, lua-eco-dns
+Source: feeds/glinet/gl-oui/gl-oui-rpc
+SourceName: gl-oui-rpc
+Section: oui
+SourceDateEpoch: 1778329066
+Architecture: aarch64_cortex-a53
+Installed-Size: 87113
+Description:  Oui rpc backend

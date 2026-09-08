@@ -1,0 +1,5 @@
+/usr/lib/oui-httpd/rpc/netmode
+/etc/uci-defaults/13-fix-netmode-config
+/etc/gl-reset-network.d/00-reset-netmode
+/etc/udhcpc.user.d/99_reget_lan_ip
+/usr/share/gl-validator.d/netmode.lua

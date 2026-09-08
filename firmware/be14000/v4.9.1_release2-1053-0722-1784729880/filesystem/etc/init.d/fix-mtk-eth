@@ -1,0 +1,37 @@
+#!/bin/sh /etc/rc.common
+
+START=99
+
+fix_eth() {
+    sleep 10
+
+    for ifname in $*
+    do
+        ethtool $ifname | grep -q 'Link detected: yes' && {
+            rx0=$(cat /sys/class/net/$ifname/statistics/rx_packets)
+            sleep 3
+            rx1=$(cat /sys/class/net/$ifname/statistics/rx_packets)
+
+            [ $rx0 -eq $rx1 ] && {
+                logger "mtk-eth halted detected, now reset it..."
+                echo 1 > /sys/kernel/debug/mtketh/reset
+                ifconfig "$ifname" down
+                sleep 1
+                ifconfig "$ifname" up
+                return
+            }
+        }
+    done
+}
+
+start() {
+    [ -f /sys/kernel/debug/mtketh/reset ] || exit 0
+
+    model=$(cat /proc/gl-hw-info/model)
+
+    case $model in
+    mt6000)
+        fix_eth eth0 eth1 lan1 lan2 lan3 lan4 lan5 &
+        ;;
+    esac
+}

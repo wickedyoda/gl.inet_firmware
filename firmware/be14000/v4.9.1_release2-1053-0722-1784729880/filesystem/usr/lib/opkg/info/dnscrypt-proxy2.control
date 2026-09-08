@@ -1,0 +1,15 @@
+Package: dnscrypt-proxy2
+Version: 2.1.5-1
+Depends: libc, ca-bundle
+Conflicts: dnscrypt-proxy
+Source: feeds/gl_feed_common/dnscrypt-proxy2
+SourceName: dnscrypt-proxy2
+License: ISC
+LicenseFiles: LICENSE
+Section: net
+SourceDateEpoch: 1773304824
+Maintainer: Josef Schlehofer <josef.schlehofer@nic.cz>
+Architecture: aarch64_cortex-a53
+Installed-Size: 4470675
+Description:  A flexible DNS proxy, with support for modern encrypted DNS protocols
+ such as DNSCrypt v2 and DNS-over-HTTPS.

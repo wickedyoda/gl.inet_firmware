@@ -1,0 +1,44 @@
+sync_mac_to_ethernet()
+{
+    mac=$2
+    [ "$1" = "1" ] && mode="c" || mode="r"
+
+    interface=$(uci -q get network.wan.device)
+    if [ -n "$interface" ]; then
+        wan_num=$(uci -q show network | grep ".name='$interface'" | awk -F'[][]' '{print $2}')
+        if [ -n "$wan_num" ]; then
+            uci -q set network.@device[$wan_num].macaddr="$mac"
+            uci -q set network.@device[$wan_num].mac_mode="$mode"
+        else
+            uci -q set network.wan.macaddr="$mac"
+            uci -q set network.wan.mac_mode="$mode"
+        fi
+    elif [ -n "$(uci -q get network.wan.ifname)" ]; then
+        uci -q set network.wan_dev.macaddr="$mac"
+        uci -q set network.wan_dev.mac_mode="$mode"
+    fi
+
+    lan2wan=$(uci -q get glconfig.general.lan2wan)
+    secondwan_interface=$(uci -q get network.secondwan.device)
+    [ -n "$secondwan_interface" ] && [ "$lan2wan" = "1" ] && {
+        secondwan_num=$(uci -q show network | grep ".name='$secondwan_interface'" | awk -F'[][]' '{print $2}')
+        uci -q set network.@device[$secondwan_num].macaddr="$mac"
+        uci -q set network.@device[$secondwan_num].mac_mode="$mode"
+    }
+}
+
+version=$(cat /etc/glversion | awk -F"-" '{print $1}')
+[ $(echo "$version" | tr -d ".") -lt $(echo "4.7.0" | tr -d ".") ] && exit 0
+
+old_mode=$(uci -q get gl_macclone.macclone.mode)
+macclone_addr=$(uci -q get glconfig.general.macclone_addr)
+
+[ $(echo "$macclone_addr" | grep -oE '([0-9A-Fa-f]{2}[:-]){5}([0-9A-Fa-f]{2})') ] && ([ "$old_mode" = "1" ] || [ "$old_mode" = "2" ]) && {
+    sync_mac_to_ethernet $old_mode $macclone_addr
+    uci -q delete glconfig.general.macclone_addr
+    uci -q delete glconfig.general.macclone
+}
+
+uci commit
+
+rm -f /etc/config/gl_macclone

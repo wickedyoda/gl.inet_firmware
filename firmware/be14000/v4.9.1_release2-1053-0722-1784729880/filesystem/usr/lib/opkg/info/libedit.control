@@ -1,0 +1,12 @@
+Package: libedit
+Version: 20210419-3.1-1
+Depends: libc, libncurses6
+Source: feeds/packages/libs/libedit
+SourceName: libedit
+License: BSD-3-Clause
+Section: libs
+SourceDateEpoch: 1620428954
+Maintainer: Daniel Salzman <daniel.salzman@nic.cz>
+Architecture: aarch64_cortex-a53
+Installed-Size: 77101
+Description:  Generic line editing, history, and tokenization functions similar to GNU Readline.

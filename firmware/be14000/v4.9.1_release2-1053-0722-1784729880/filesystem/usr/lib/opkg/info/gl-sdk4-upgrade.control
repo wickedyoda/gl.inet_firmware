@@ -1,0 +1,10 @@
+Package: gl-sdk4-upgrade
+Version: git-2026.128.10617-978cf4b-1
+Depends: libc, jansson4, gl-sdk4-uci, gl-sdk4-log, gl-sdk4-utils, coreutils, coreutils-timeout
+Source: feeds/glinet/gl-sdk4-upgrade
+SourceName: gl-sdk4-upgrade
+Section: base
+SourceDateEpoch: 1778209017
+Architecture: aarch64_cortex-a53
+Installed-Size: 26385
+Description:  Oui Support for upgrade

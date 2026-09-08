@@ -1,0 +1,8 @@
+TIMEVALIDFILE="/var/state/ntp-valid"
+
+[ "$ACTION" = "stratum" ] || exit 0
+
+[ -f "$TIMEVALIDFILE" ] || {
+    echo "ntpd says time is valid" >$TIMEVALIDFILE
+    ubus send ntp.valid
+}

@@ -1,0 +1,12 @@
+#!/bin/sh
+[ -n "$IPKG_INSTROOT" ] || {
+	if [ -f "/etc/init.d/port_forward" ]; then
+		/etc/init.d/port_forward stop 2>/dev/null || true
+		/etc/init.d/port_forward disable 2>/dev/null || true
+	fi
+
+	if lsmod | grep -q port_forward; then
+		rmmod port_forward 2>/dev/null || true
+	fi
+}
+exit 0

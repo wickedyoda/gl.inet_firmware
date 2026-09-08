@@ -1,0 +1,45 @@
+#!/bin/sh
+. /lib/functions/system.sh
+. /usr/share/libubox/jshn.sh
+
+set_wireless_config() {
+    if [ ! -f /etc/config/wireless ]; then
+        return 1
+    fi
+
+    set_iface_rsnxe(){
+        local section="$1"
+        local sae
+
+        config_get encryption "$section" encryption
+        config_get sae "$section" sae
+
+        [ "${encryption:0:3}" = "sae" ] && sae=1
+
+        if [ -z "$sae" ]; then
+            uci set wireless."$section".no_beacon_rsnxe=1
+        elif [ "$sae" = "0" ]; then
+            uci set wireless."$section".no_beacon_rsnxe=1
+        elif [ "$sae" = "1" ]; then
+            uci set wireless."$section".no_beacon_rsnxe=0
+        fi
+    }
+
+    config_load wireless
+    config_foreach set_iface_rsnxe wifi-iface
+    uci commit wireless
+}
+
+main() {
+    model=$(cat /proc/gl-hw-info/model 2>/dev/null)
+
+    case $model in
+        "be3600" |\
+        "be6500" |\
+        "be9300")
+            set_wireless_config
+        ;;
+    esac
+}
+
+main

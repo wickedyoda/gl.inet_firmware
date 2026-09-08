@@ -1,0 +1,14 @@
+Package: libexpat
+Version: 2.2.10-2
+Depends: libc
+Source: feeds/packages/libs/expat
+SourceName: libexpat
+License: MIT
+LicenseFiles: COPYING
+Section: libs
+SourceDateEpoch: 1645664409
+CPE-ID: cpe:/a:libexpat:expat
+Maintainer: Ted Hess <thess@kitschensync.net>
+Architecture: aarch64_cortex-a53
+Installed-Size: 45580
+Description:  A fast, non-validating, stream-oriented XML parsing library.

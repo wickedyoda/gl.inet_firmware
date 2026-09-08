@@ -1,0 +1,445 @@
+--[[otstrapped
+    @object-name: tor
+    @object-desc: tor settings
+--]]
+
+local M = {}
+
+local uci = require "uci"
+local lnet = require "oui.network"
+local fs = require "oui.fs"
+local rpc = require "oui.rpc"
+local validator = require "gl.validator"
+local kmwan = require "gl.kmwan"
+local ubus = require "oui.ubus"
+
+local function replace_ip()
+    local c = uci.cursor()
+    local org_ip = io.popen("cat /etc/tor/torrc | grep TransPort|awk -F '[ :]' '{print $2}'")
+    local res_org_ip = org_ip:read()
+    org_ip:close()
+    if res_org_ip then
+        local new_ip = c:get("network", "lan", "ipaddr")
+        if res_org_ip ~= new_ip then
+            local cmd = "sed -i -e \"s/" .. res_org_ip .. "/" .. new_ip .. "/g\" /etc/tor/torrc"
+            os.execute(cmd)
+            return 1
+        end
+    end
+    return 0
+end
+
+local function replace_country()
+    local c = uci.cursor()
+    local country = c:get("tor", "global", "countries")
+    local manual = c:get("tor", "global", "manual") or 0
+    if tonumber(manual) == 0 then
+        os.execute("sed -i 's/GeoIPFile/#GeoIPFile/' /etc/tor/torrc")
+        os.execute("sed  -i  \"/StrictNodes/d;/ExitNodes/d\" /etc/tor/torrc")
+    else
+        os.execute("sed -i 's/.*GeoIPFile/GeoIPFile/' /etc/tor/torrc")
+        os.execute("sed  -i  \"/StrictNodes/d;/ExitNodes/d\" /etc/tor/torrc")
+        os.execute("echo \"StrictNodes 1\" >> /etc/tor/torrc")
+        local result = country:gsub(" ", "},{")
+        local countries = "{" .. result .. "}"
+        os.execute("echo \"ExitNodes " .. countries .. "\" >> /etc/tor/torrc")
+    end
+end
+
+local function tor_on()
+    local c = uci.cursor()
+    c:delete("firewall", "tor_dhcp")
+    c:set("firewall", "tor_dhcp", "rule")
+    c:set("firewall", "tor_dhcp", "name", "Allow-Tor-DHCP")
+    c:set("firewall", "tor_dhcp", "src", "lan")
+    c:set("firewall", "tor_dhcp", "proto", "udp")
+    c:set("firewall", "tor_dhcp", "dest_port", "67")
+    c:set("firewall", "tor_dhcp", "family", "ipv4")
+    c:set("firewall", "tor_dhcp", "target", "ACCEPT")
+
+    c:delete("firewall", "tor_dns")
+    c:set("firewall", "tor_dns", "rule")
+    c:set("firewall", "tor_dns", "name", "Allow-Tor-DNS")
+    c:set("firewall", "tor_dns", "src", "lan")
+    c:set("firewall", "tor_dns", "proto", "udp")
+    c:set("firewall", "tor_dns", "dest_port", "9053")
+    c:set("firewall", "tor_dns", "family", "any")
+    c:set("firewall", "tor_dns", "target", "ACCEPT")
+
+    c:delete("firewall", "tor_tras")
+    c:set("firewall", "tor_tras", "rule")
+    c:set("firewall", "tor_tras", "name", "Allow-Tor-Transparent")
+    c:set("firewall", "tor_tras", "src", "lan")
+    c:set("firewall", "tor_tras", "proto", "tcp")
+    c:set("firewall", "tor_tras", "dest_port", "9040")
+    c:set("firewall", "tor_tras", "family", "ipv4")
+    c:set("firewall", "tor_tras", "target", "ACCEPT")
+
+    c:delete("firewall", "tor_socks")
+    c:set("firewall", "tor_socks", "rule")
+    c:set("firewall", "tor_socks", "name", "Allow-Tor-SOCKS")
+    c:set("firewall", "tor_socks", "src", "lan")
+    c:set("firewall", "tor_socks", "proto", "tcp")
+    c:set("firewall", "tor_socks", "dest_port", "9050")
+    c:set("firewall", "tor_socks", "family", "ipv4")
+    c:set("firewall", "tor_socks", "target", "ACCEPT")
+
+    local lan_ip = c:get("network", "lan", "ipaddr")
+    local lan_mask = c:get("network", "lan", "netmask")
+    local lan_info = lnet.ipcalc({lan_ip,lan_mask})
+    local src_ip = lan_ip .. "/" .. lan_info.prefix
+    if lan_ip and src_ip then
+        local http_port = c:get("gl_ddns", "ddns", "http_port") or "80"
+        c:delete("firewall", "tor_allow_http")
+        c:set("firewall", "tor_allow_http", "redirect")
+        c:set("firewall", "tor_allow_http", "name", "Allow access http")
+        c:set("firewall", "tor_allow_http", "src", "lan")
+        c:set("firewall", "tor_allow_http", "src_ip", src_ip)
+        c:set("firewall", "tor_allow_http", "src_dip", lan_ip)
+        c:set("firewall", "tor_allow_http", "src_dport", http_port)
+        c:set("firewall", "tor_allow_http", "family", "ipv4")
+        c:set("firewall", "tor_allow_http", "proto", "tcp")
+        c:set("firewall", "tor_allow_http", "target", "ACCEPT")
+
+        local luci_listen_http = c:get("uhttpd", "main", "listen_http")
+        local luci_http_port
+        if type(luci_listen_http) == "string" then
+            luci_http_port = luci_listen_http:match(":(%d+)") or "8080"
+        elseif type(luci_listen_http) == "table" and type(luci_listen_http[1]) == "string" then
+            luci_http_port = luci_listen_http[1]:match(":(%d+)") or "8080"
+        else
+            luci_http_port = "8080"
+        end
+        c:delete("firewall", "tor_allow_luci_http")
+        c:set("firewall", "tor_allow_luci_http", "redirect")
+        c:set("firewall", "tor_allow_luci_http", "name", "Allow access luci http")
+        c:set("firewall", "tor_allow_luci_http", "src", "lan")
+        c:set("firewall", "tor_allow_luci_http", "src_ip", src_ip)
+        c:set("firewall", "tor_allow_luci_http", "src_dip", lan_ip)
+        c:set("firewall", "tor_allow_luci_http", "src_dport", luci_http_port)
+        c:set("firewall", "tor_allow_luci_http", "family", "ipv4")
+        c:set("firewall", "tor_allow_luci_http", "proto", "tcp")
+        c:set("firewall", "tor_allow_luci_http", "target", "ACCEPT")
+
+        local luci_listen_https = c:get("uhttpd", "main", "listen_https")
+        local luci_https_port
+        if type(luci_listen_https) == "string" then
+            luci_https_port = luci_listen_https:match(":(%d+)") or "8443"
+        elseif type(luci_listen_http) == "table" and type(luci_listen_http[1]) == "string" then
+            luci_https_port = luci_listen_https[1]:match(":(%d+)") or "8443"
+        else
+            luci_https_port = "8443"
+        end
+        c:delete("firewall", "tor_allow_luci_https")
+        c:set("firewall", "tor_allow_luci_https", "redirect")
+        c:set("firewall", "tor_allow_luci_https", "name", "Allow access luci https")
+        c:set("firewall", "tor_allow_luci_https", "src", "lan")
+        c:set("firewall", "tor_allow_luci_https", "src_ip", src_ip)
+        c:set("firewall", "tor_allow_luci_https", "src_dip", lan_ip)
+        c:set("firewall", "tor_allow_luci_https", "src_dport", luci_https_port)
+        c:set("firewall", "tor_allow_luci_https", "family", "ipv4")
+        c:set("firewall", "tor_allow_luci_https", "proto", "tcp")
+        c:set("firewall", "tor_allow_luci_https", "target", "ACCEPT")
+
+        local adg_port = "3000"
+        c:delete("firewall", "tor_allow_adguardhome")
+        c:set("firewall", "tor_allow_adguardhome", "redirect")
+        c:set("firewall", "tor_allow_adguardhome", "name", "Allow access adguardhome")
+        c:set("firewall", "tor_allow_adguardhome", "src", "lan")
+        c:set("firewall", "tor_allow_adguardhome", "src_ip", src_ip)
+        c:set("firewall", "tor_allow_adguardhome", "src_dip", lan_ip)
+        c:set("firewall", "tor_allow_adguardhome", "src_dport", adg_port)
+        c:set("firewall", "tor_allow_adguardhome", "family", "ipv4")
+        c:set("firewall", "tor_allow_adguardhome", "proto", "tcp")
+        c:set("firewall", "tor_allow_adguardhome", "target", "ACCEPT")
+
+        local https_port = c:get("gl_ddns", "ddns", "https_port") or "443"
+        c:delete("firewall", "tor_allow_https")
+        c:set("firewall", "tor_allow_https", "redirect")
+        c:set("firewall", "tor_allow_https", "name", "Allow access https")
+        c:set("firewall", "tor_allow_https", "src", "lan")
+        c:set("firewall", "tor_allow_https", "src_ip", src_ip)
+        c:set("firewall", "tor_allow_https", "src_dip", lan_ip)
+        c:set("firewall", "tor_allow_https", "src_dport", https_port)
+        c:set("firewall", "tor_allow_https", "family", "ipv4")
+        c:set("firewall", "tor_allow_https", "proto", "tcp")
+        c:set("firewall", "tor_allow_https", "target", "ACCEPT")
+
+        local ssh_port = c:get("dropbear", "@dropbear[0]", "Port") or "22"
+        c:delete("firewall", "tor_allow_ssh")
+        c:set("firewall", "tor_allow_ssh", "redirect")
+        c:set("firewall", "tor_allow_ssh", "name", "Allow access ssh")
+        c:set("firewall", "tor_allow_ssh", "src", "lan")
+        c:set("firewall", "tor_allow_ssh", "src_ip", src_ip)
+        c:set("firewall", "tor_allow_ssh", "src_dip", lan_ip)
+        c:set("firewall", "tor_allow_ssh", "src_dport", ssh_port)
+        c:set("firewall", "tor_allow_ssh", "family", "ipv4")
+        c:set("firewall", "tor_allow_ssh", "proto", "tcp")
+        c:set("firewall", "tor_allow_ssh", "target", "ACCEPT")
+    end
+
+    c:delete("firewall", "tor_allow")
+    c:set("firewall", "tor_allow", "redirect")
+    c:set("firewall", "tor_allow", "name", "Allow access tor domain")
+    c:set("firewall", "tor_allow", "src", "lan")
+    c:set("firewall", "tor_allow", "src_dport", "9050")
+    c:set("firewall", "tor_allow", "family", "ipv4")
+    c:set("firewall", "tor_allow", "proto", "tcp")
+    c:set("firewall", "tor_allow", "target", "ACCEPT")
+
+    c:delete("firewall", "dns_int")
+    c:set("firewall", "dns_int", "redirect")
+    c:set("firewall", "dns_int", "name", "Intercept-DNS")
+    c:set("firewall", "dns_int", "src", "lan")
+    c:set("firewall", "dns_int", "src_dport", "53")
+    c:set("firewall", "dns_int", "dest_port", "9053")
+    c:set("firewall", "dns_int", "family", "any")
+    c:set("firewall", "dns_int", "proto", "udp")
+    c:set("firewall", "dns_int", "target", "DNAT")
+
+    c:delete("firewall", "tcp_int")
+    if fs.access("/sbin/fw4") then
+        c:set("firewall", "tcp_int", "include")
+        c:set("firewall", "tcp_int", "type", "nftables")
+        c:set("firewall", "tcp_int", "path", "/etc/firewall.tor.nft")
+        c:set("firewall", "tcp_int", "position", "table-post")
+    else
+        c:set("firewall", "tcp_int", "redirect")
+        c:set("firewall", "tcp_int", "name", "Intercept-TCP")
+        c:set("firewall", "tcp_int", "src", "lan")
+        c:set("firewall", "tcp_int", "dest_port", "9040")
+        c:set("firewall", "tcp_int", "family", "any")
+        c:set("firewall", "tcp_int", "proto", "tcp")
+        c:set("firewall", "tcp_int", "extra", "--syn")
+        c:set("firewall", "tcp_int", "target", "DNAT")
+    end
+
+    c:set("firewall", "@forwarding[0]", "enabled", "0")
+    c:set("firewall", "guestzone_fwd", "enabled", "0")
+
+    c:set("tor", "global", "enable", "1")
+    c:commit("firewall")
+    c:commit("tor")
+    ngx.pipe.spawn({"/etc/init.d/firewall", "reload"}):wait()
+
+    local replace_ip_status = replace_ip()
+    local run = ngx.pipe.spawn("ps | grep /usr/sbin/tor | grep -v grep")
+    local run_data = run:stdout_read_all()
+    if run_data == "" or replace_ip_status == 1 then
+        replace_country()
+
+        fs.sync()
+
+        ngx.pipe.spawn({"/etc/init.d/tor", "enable"}):wait()
+        ngx.pipe.spawn({"/etc/init.d/tor", "restart"}):wait()
+    end
+    os.execute("/usr/bin/clean_client_conntrack")
+end
+
+local function tor_exit()
+    local c = uci.cursor()
+    c:delete("firewall", "tor_dhcp")
+    c:delete("firewall", "tor_dns")
+    c:delete("firewall", "tor_tras")
+    c:delete("firewall", "tor_socks")
+    c:delete("firewall", "tor_allow_http")
+    c:delete("firewall", "tor_allow_https")
+    c:delete("firewall", "tor_allow_luci_http")
+    c:delete("firewall", "tor_allow_luci_https")
+    c:delete("firewall", "tor_allow_adguardhome")
+    c:delete("firewall", "tor_allow_ssh")
+    c:delete("firewall", "tor_allow")
+    c:delete("firewall", "dns_int")
+    c:delete("firewall", "tcp_int")
+
+    c:set("firewall", "@forwarding[0]", "enabled" , "1")
+    c:set("firewall", "guestzone_fwd", "enabled", "1")
+
+    c:set("tor", "global", "enable", "0")
+    c:commit("firewall")
+    c:commit("tor")
+
+    ngx.pipe.spawn({"/etc/init.d/firewall", "reload"}):wait()
+    ngx.pipe.spawn({"/etc/init.d/tor", "stop"}):wait()
+    ngx.pipe.spawn({"/etc/init.d/tor", "disable"}):wait()
+    ngx.pipe.spawn("iptables -t nat -D PREROUTING -i br-lan -p tcp -m tcp --dport 53 -j REDIRECT --to-ports 9053")
+    ngx.pipe.spawn("iptables -t nat -D PREROUTING -i br-lan -p udp -m udp --dport 53 -j REDIRECT --to-ports 9053")
+end
+
+--[[
+    @method-type: call
+    @method-name: get_config
+    @method-desc: Get tor settings
+
+    @out bool   manual           Manual selector switch: false: Disable, true：Enable
+    @out bool   enable           Status of tor：false: Disable， true: Enable
+    @out array  countries        Get manually selected country
+
+    @out number   ?err_code      Error code,-1:Failed to get settings.
+    @out string   ?err_msg       Error message
+    @in-example:  {"jsonrpc":"2.0","id":1,"method":"call","params":["","tor","get_config"]}
+    @out-example: {"jsonrpc": "2.0", "id": 1, "result": {"manual": true, "enable": true, "countries": "cn"}}
+--]]
+function M.get_config()
+    local c = uci.cursor()
+    local tor = {}
+    local countries = {}
+
+    local manual = c:get("tor", "global", "manual") == "1"
+    tor.enable = c:get("tor", "global", "enable") == "1"
+
+    local country_info = c:get("tor", "global", "countries")
+    if country_info ~= "all" then
+        for info in country_info:gmatch('%S+') do
+            countries[#countries + 1] = info
+        end
+    end
+    tor.countries = countries
+    tor.manual = manual
+
+    return tor
+end
+
+--[[
+    @method-type: call
+    @method-name: set_config
+    @method-desc: Set tor settings
+
+    @in  bool   manual              Manual selector switch: false: Disable, true：Enable
+    @in  bool   enable              Status of tor：false :Disable true：Enable
+    @in  array  countries           Set manually selected country(Multiple countries can be selected)
+
+    @out number   ?err_code         Error code,-1:illegal parameter.
+    @out string   ?err_msg          Error message
+    @in-example:  {"jsonrpc":"2.0","method":"call","params":["","tor","set_config",{"enable":true,"manual":true,"countries":"cn"}],"id":1}
+    @out-example: {"jsonrpc": "2.0", "id": 1, "result": null}
+--]]
+function M.set_config(params)
+    local c = uci.cursor()
+
+    local config_name = c:get("network", "ovpnclient", "config")
+    local client_mode = config_name and c:get("ovpnclient", config_name, "mode") or ""
+    if client_mode == "tap-s2s" then
+        local tap_s2s_disabled = c:get("network", "ovpnclient", "disabled") or "1"
+        if tap_s2s_disabled == "0" then
+            return {
+                err_code = 20001220,
+                err_msg = "function does not work because TAP-S2S Mode is enabled"
+            }
+        end
+    end
+
+    local enable = params.enable
+    local manual = params.manual and 1 or 0
+    local countries = params.countries or {}
+    local countries_info = {}
+
+    if not validator.base(enable, "boolean", true) then
+        return rpc.ERROR_CODE_INVALID_PARAMS, "invalid enable"
+    end
+
+    local mptun_enable = c:get("mptun", "global", "enable") == "1"
+
+    --tor is conflict with astrowarp，restrict enabling tor when astroward is enabled
+    if mptun_enable and enable then
+        return rpc.ERROR_CODE_INVALID_PARAMS, "invalid enable"
+    end
+
+    if not validator.base(params.manual, "boolean", true) then
+        return rpc.ERROR_CODE_INVALID_PARAMS, "invalid manual"
+    end
+
+    if not validator.base(params.countries, "table", true) then
+        return rpc.ERROR_CODE_INVALID_PARAMS, "invalid countries"
+    end
+
+    if (params.manual ~= nil or params.countries ~= nil) then
+        if manual == 1 and enable then
+            for _, v in ipairs(countries) do
+                countries_info[#countries_info + 1] =  v
+            end
+            c:set("tor", "global", "countries", table.concat(countries_info, " "))
+        end
+        c:set("tor", "global", "manual", manual)
+    end
+
+    if enable == true then
+        os.execute("echo 3 > /proc/sys/vm/drop_caches")
+        c:set("tor", "global", "enable", "1")
+        c:commit("tor")
+        ngx.pipe.spawn({"/etc/init.d/tor", "stop"}):wait()
+        os.remove("/var/lib/tor/control.log")
+        tor_on()
+    else
+        c:set("tor", "global", "enable", "0")
+        c:commit("tor")
+        tor_exit()
+        os.remove("/var/lib/tor/control.log")
+        os.execute("rm /.tor/ -rf")
+    end
+end
+
+--[[
+    @method-type: call
+    @method-name: get_status
+    @method-desc: Get tor status
+
+    @out number    status     Connection Status of tor：0:not connected，1 :connection succeeded， 2 :connecting
+    @out string     log       Current connection information log
+
+    @in-example: {"jsonrpc":"2.0","id":1,"method":"call","params":["","tor","get_status"]}
+    @out-example: {"id":null,"jsonrpc":"2.0","result":{"status":2,"log":"Initialization tor configuration"}}
+--]]
+function M.get_status()
+    local c = uci.cursor()
+    local tor_status = {}
+    local online = false
+
+    for s in c:each('kmwan', 'member') do
+        local status = ubus.call("network.interface."..s[".name"], "status") or {}
+
+        if s.disabled == '0' and status.up then
+            online = kmwan.get_ifstatus(s[".name"]) == "online"
+        end
+
+        if online then
+            break
+        end
+    end
+
+    if not online then
+        os.remove("/var/lib/tor/control.log")
+    end
+
+    local enable = c:get("tor", "global", "enable") == "1"
+    if enable then
+        if online then
+            local percent
+
+            if fs.access("/var/lib/tor/control.log") then
+                local rs_file = assert(io.popen("cat /var/lib/tor/control.log |grep Bootstrapped|tail -n 1"))
+                percent = rs_file:read()
+                rs_file:close()
+            end
+
+            if percent then
+                if percent:match("100") then
+                    tor_status.status = 1
+                    tor_status.log = "tor connection succeeded"
+                else
+                    tor_status.status = 2
+                    tor_status.log = percent
+                end
+            else
+                tor_status.status = 0
+                tor_status.log = "Initialization tor configuration"
+            end
+        else
+            tor_status.status = 0
+            tor_status.log = "Initialization tor configuration"
+        end
+    end
+    return tor_status
+end
+
+return M

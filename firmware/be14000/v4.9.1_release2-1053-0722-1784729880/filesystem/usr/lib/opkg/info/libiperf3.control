@@ -1,0 +1,12 @@
+Package: libiperf3
+Version: 3.10-1
+Depends: libc
+Source: feeds/mptcp_feeds/iperf3
+SourceName: libiperf3
+License: BSD-3-Clause
+Section: libs
+SourceDateEpoch: 1691717333
+Maintainer: Felix Fietkau <nbd@nbd.name>
+Architecture: aarch64_cortex-a53
+Installed-Size: 63039
+Description:  Libiperf is a library providing an API for iperf3 functionality.

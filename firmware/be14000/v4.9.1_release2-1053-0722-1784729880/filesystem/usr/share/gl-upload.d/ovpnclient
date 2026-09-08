@@ -1,0 +1,7 @@
+/tmp/ovpn_upload/.+%.zip$
+/tmp/ovpn_upload/.+%.tar$
+/tmp/ovpn_upload/.+%.gz$
+/tmp/ovpn_upload/.+%.conf$
+/tmp/ovpn_upload/.+%.txt$
+/tmp/ovpn_upload/.+%.ovpn$
+

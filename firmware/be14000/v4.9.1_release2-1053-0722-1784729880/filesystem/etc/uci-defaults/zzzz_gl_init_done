@@ -1,0 +1,2 @@
+uci set glconfig.general.inited=1
+uci commit glconfig

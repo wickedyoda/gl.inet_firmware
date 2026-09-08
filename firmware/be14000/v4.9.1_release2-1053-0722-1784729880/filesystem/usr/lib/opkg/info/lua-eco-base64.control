@@ -1,0 +1,13 @@
+Package: lua-eco-base64
+Version: 3.16.0-0
+Depends: libc, lua-eco
+Source: feeds/gl_feed_common/lua-eco
+SourceName: lua-eco-base64
+License: MIT
+LicenseFiles: LICENSE
+Section: lang
+SourceDateEpoch: 1774447581
+Maintainer: Jianhui Zhao <zhaojh329@gmail.com>
+Architecture: aarch64_cortex-a53
+Installed-Size: 2382
+Description:  base64 support for lua-eco

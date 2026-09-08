@@ -1,0 +1,5 @@
+/usr/bin/disk_get_label.sh-bk
+/usr/lib/oui-httpd/rpc/nas-web.so
+/usr/bin/disk_manage
+/usr/share/gl-validator.d/nas-web.lua
+/etc/init.d/disk_manage

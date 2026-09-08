@@ -1,0 +1,70 @@
+#!/bin/sh
+# shellcheck disable=SC2045
+# shellcheck disable=SC2039
+
+switch_devices() {
+    sleep 2
+    device_old=$(uci -q get network.tethering.ifname)
+    rm_device=$(lua -e 'local h=require("hardware") local d=h.platform_telething_whether_removing_usb0() print(d)')
+    for ifname in $(ls -1 /sys/class/net); do
+        if [ "$rm_device" != "$ifname" ]; then
+            if expr "$ifname" : ".*wwan"; then
+                continue
+            else
+                link=$(readlink "/sys/class/net/$ifname")
+                if expr "$link" : ".*usb"; then
+	            if  ! echo $link | grep -q "simonet";then
+                        device=$ifname
+		    fi
+                fi
+            fi
+        fi
+    done
+
+    [ "$device_old" != "$device" ] && [ "$device" != "" ] && {
+        uci set network.tethering.ifname="$device"
+        uci commit network
+        [ `pidof netifd` ] && /etc/init.d/network reload
+    }
+
+}
+
+[ "$ACTION" = add ] && [ "$DEVTYPE" = usb_device ] && {
+    otg_support=$(cat /proc/gl-hw-info/usb-otg)
+    if [ "$otg_support" = "true" ]; then
+        exit 1
+    fi
+
+    usb_path=/sys"$DEVPATH/product"
+
+    iPhone=$(grep -E "iPhone|iPad" "$usb_path")
+    [ -n "$iPhone" ] && {
+        /etc/init.d/usbmuxd start
+    }
+    [ "$(uci -q get glconfig.general.inited)" = "1" ] && [ "$(uci -q get network.tethering.disabled)" != "1" ] && {
+        [ `pidof netifd` ] && switch_devices &
+    }
+}
+
+[ "$ACTION" = remove ] && {
+    otg_support=$(cat /proc/gl-hw-info/usb-otg)
+    if [ "$otg_support" = "true" ]; then
+        exit 1
+    fi
+
+    ifname=$(uci -q get network.tethering.ifname)
+    [ `pidof netifd` ] && [ "$(ls /sys/class/net | grep -w "$ifname")" = "" ] && {
+        uci delete network.tethering.ifname
+        uci commit network
+        /etc/init.d/network reload
+    }
+}
+
+[ "$ACTION" = unbind ] && [ "$DEVTYPE" = usb_device ] && {
+    otg_support=$(cat /proc/gl-hw-info/usb-otg)
+    if [ "$otg_support" = "true" ]; then
+        exit 1
+    fi
+
+    /etc/init.d/usbmuxd stop
+}

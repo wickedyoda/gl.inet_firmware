@@ -1,0 +1,17 @@
+Package: lua5.4
+Version: 5.4.7-1
+Depends: libc, liblua5.4-5.4
+Source: feeds/gl_feed_common/lua5.4
+SourceName: lua5.4
+License: MIT
+LicenseFiles: COPYRIGHT
+Section: lang
+SourceDateEpoch: 1744248253
+CPE-ID: cpe:/a:lua:lua
+Maintainer: Christian Marangi <ansuelsmth@gmail.com>
+Architecture: aarch64_cortex-a53
+Installed-Size: 5793
+Description:  Lua is a powerful, efficient, lightweight, embeddable scripting language. It
+ supports procedural programming, object-oriented programming, functional
+ programming, data-driven programming, and data description.
+ This package contains the Lua language interpreter.

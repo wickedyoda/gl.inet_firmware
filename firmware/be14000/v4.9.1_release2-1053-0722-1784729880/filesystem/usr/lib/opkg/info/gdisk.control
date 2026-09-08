@@ -1,0 +1,13 @@
+Package: gdisk
+Version: 1.0.6-1
+Depends: libc, libstdcpp6, libuuid1
+Source: feeds/packages/utils/gptfdisk
+SourceName: gdisk
+License: GPL-2.0-or-later
+LicenseFiles: COPYING
+Section: utils
+SourceDateEpoch: 1610924628
+Maintainer: Alif M. Ahmad <alive4ever@live.com>
+Architecture: aarch64_cortex-a53
+Installed-Size: 59340
+Description:  gdisk is GPT aware disk partitioning tool, with interactive UI.

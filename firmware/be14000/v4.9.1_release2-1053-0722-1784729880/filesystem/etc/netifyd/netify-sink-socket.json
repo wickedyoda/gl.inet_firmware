@@ -1,0 +1,25 @@
+{
+    "default_port": 1780,
+    "channels": {
+        "default": {
+            "enable": true,
+            "bind_address": "tcp://127.0.0.1:1780"
+        },
+        "example-tcp": {
+            "enable": false,
+            "bind_address": "tcp://0.0.0.0:1750"
+        },
+        "example-ws": {
+            "enable": false,
+            "bind_address": "ws://0.0.0.0:1760"
+        },
+        "example-wss": {
+            "enable": false,
+            "bind_address": "wss://0.0.0.0:1770",
+            "tls_verify_peer": true,
+            "tls_ca": "${path_state_persistent}/keys/ca.crt",
+            "tls_cert": "${path_state_persistent}/keys/client.crt",
+            "tls_key": "${path_state_persistent}/keys/client.key"
+        }
+    }
+}

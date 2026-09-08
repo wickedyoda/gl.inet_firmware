@@ -1,0 +1,5 @@
+/etc/init.d/bark
+/usr/lib/oui-httpd/rpc/bark
+/usr/sbin/gl_bark
+/etc/bark-router-client.ipk
+/etc/config/TRL

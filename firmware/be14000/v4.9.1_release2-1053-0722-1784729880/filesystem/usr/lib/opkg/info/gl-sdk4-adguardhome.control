@@ -1,0 +1,10 @@
+Package: gl-sdk4-adguardhome
+Version: git-2026.110.30455-cffe4de-1
+Depends: libc, adguardhome-conntrack, kmod-loop
+Source: feeds/glinet/gl-sdk4-adguardhome
+SourceName: gl-sdk4-adguardhome
+Section: base
+SourceDateEpoch: 1776673655
+Architecture: aarch64_cortex-a53
+Installed-Size: 5533
+Description:  Adguardhome API for Gl.inet

@@ -1,0 +1,15 @@
+{
+    "index": 35,
+    "view": "igmp",
+    "title": "IGMP Snooping",
+    "level": 2,
+    "parent": "network",
+    "parent_icon": "network",
+    "parent_index": 48,
+    "show_mode": [
+        "router"
+    ],
+    "disables": [
+        "taps2s"
+    ]
+}

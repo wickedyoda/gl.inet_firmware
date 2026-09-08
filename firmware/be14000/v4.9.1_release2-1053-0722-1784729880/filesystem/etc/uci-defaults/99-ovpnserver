@@ -1,0 +1,38 @@
+#!/bin/sh
+
+create_random_v6_net()
+{
+        local r2=$(dd if=/dev/urandom bs=2 count=1 |hexdump -e '2/1 "%02x"')
+        local r3=$(dd if=/dev/urandom bs=2 count=1 |hexdump -e '2/1 "%02x"')
+        local r4=$(dd if=/dev/urandom bs=2 count=1 |hexdump -e '2/1 "%02x"')
+        address=fd00:$r2:$r3:$r4::0/64
+}
+
+set_v6_address()
+{
+        local address=''
+        create_random_v6_net >/dev/null 2>&1
+        [ -n "$address" ] && {
+                uci -q set ovpnserver.vpn.subnetv6="$address"
+                uci -q commit ovpnserver
+        }
+}
+
+delete_old_ovpnserver_firewall()
+{
+	uci -q delete firewall.ovpnserver
+	uci -q delete firewall.ovpnserver_allow
+	uci -q delete firewall.ovpnserver2lan
+	uci -q delete firewall.ovpnserver2wgserver
+	uci -q delete firewall.ovpnserver2wan
+	uci -q delete firewall.lan2ovpnserver
+	uci -q delete firewall.ovpnserver_allow_dns
+
+	uci commit firewall
+}
+
+delete_old_ovpnserver_firewall
+[ -z "$(uci -q get ovpnserver.vpn.subnetv6)" ] && set_v6_address
+
+exit 0
+

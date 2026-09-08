@@ -1,0 +1,3 @@
+config service general
+    option mode router
+    option inited_internet '0'

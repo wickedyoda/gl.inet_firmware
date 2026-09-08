@@ -1,0 +1,17 @@
+{
+    "index": 20,
+    "view": "wireless",
+    "icon": "wireless",
+    "level": 1,
+    "show_mode": [
+        "router",
+        "wds",
+        "relay",
+        "mesh",
+        "ap",
+        "agent"
+    ],
+    "global_sockets": [
+        "repeater.status"
+    ]
+}

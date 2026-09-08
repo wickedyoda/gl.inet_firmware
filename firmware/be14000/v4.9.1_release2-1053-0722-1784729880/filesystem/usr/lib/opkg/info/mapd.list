@@ -1,0 +1,14 @@
+/usr/bin/mapd
+/usr/bin/EasyMesh_openwrt.sh
+/usr/bin/mapd_user_iface
+/usr/bin/bs20
+/usr/bin/map_cert_script.sh
+/etc/map/mapd_user.cfg
+/etc/map/mapd_default.cfg
+/etc/init.d/easymesh_bridge
+/usr/bin/config_agent.lua
+/usr/bin/map_config_agent.lua
+/usr/bin/brsw-del.sh
+/etc/init.d/easymesh
+/usr/bin/mapd_cli
+/etc/map/wts_bss_info_config

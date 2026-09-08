@@ -1,0 +1,32 @@
+#!/bin/sh /etc/rc.common
+
+START=99
+STOP=10
+USE_PROCD=1
+
+start_service() {
+    if [ ! -f "/usr/sbin/netifyd" ]; then
+        netify_install
+    fi
+
+    if [ "$(uci -q get gl_dpi_qos.qos.prio_enable)" = "1" ]; then
+        gl_dpi_qos start
+        echo "QoS enabled, starting gl_dpi_qos"
+    else
+        echo "QoS disabled, skipping gl_dpi_qos start"
+    fi
+
+    lua /etc/netifyd/dpi_block.lua
+
+    qos_enable=$(uci -q get gl_dpi_qos.qos.prio_enable)
+    flow_statistics_enable=$(uci -q get gl_dpi_flow_statistics.global.enable)
+    content_protection_enable=$(uci -q get gl_dpi_content_protection.content_protection.enabled)
+    if [ "$qos_enable" = "0" ] && [ "$flow_statistics_enable" = "0" ] && [ "$content_protection_enable" = "0" ]; then
+        /etc/init.d/netifyd stop
+    fi
+
+    procd_open_instance
+    procd_set_param command /usr/bin/eco /usr/bin/gl-dpi
+    procd_set_param respawn 3600 5 0
+    procd_close_instance
+}

@@ -1,0 +1,26 @@
+. /lib/functions/gl_util.sh
+
+preinit_fstab() {
+	FILE="/proc/gl-hw-info/usb_power_mode"
+	if [ -f "$FILE" ]; then
+		enabled="$(cat $FILE 2>/dev/null)"
+		if [ "$enabled" = "1" ]; then
+			echo 1 > /sys/class/gpio/usb_power/value
+		elif [ "$enabled" = "2" ]; then
+			echo 0 > /sys/class/gpio/usb_power/value
+		fi
+	fi
+}
+
+preinit_usb_init() {
+	model=$(cat /proc/gl-hw-info/model)
+
+	case $model in
+	"mt3600be"|\
+	"be10000")
+		preinit_fstab
+		;;
+	esac
+}
+
+boot_hook_add preinit_main preinit_usb_init

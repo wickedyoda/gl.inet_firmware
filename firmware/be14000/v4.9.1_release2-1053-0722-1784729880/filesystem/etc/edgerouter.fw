@@ -1,0 +1,106 @@
+#!/bin/sh
+
+. /lib/functions.sh
+. /lib/functions/gl_util.sh
+
+WANIF="$(get_wan)"
+enabled=`uci get edgerouter.global.enabled`
+force_dns=`uci get edgerouter.global.force_dns`
+
+IPTW="iptables -w 5"
+
+fw4_add_forward(){
+mkdir -p /usr/share/nftables.d/chain-pre/forward/
+cat>/usr/share/nftables.d/chain-pre/forward/02-edg.nft<<EOF
+iifname "$WANIF" oifname "wg*" counter accept
+iifname "$WANIF" oifname "ovpn*" counter accept
+iifname "$WANIF" oifname "$WANIF" counter accept
+EOF
+}
+
+fw4_add_input(){
+mkdir -p /usr/share/nftables.d/chain-pre/input/
+cat>/usr/share/nftables.d/chain-pre/input/02-edg.nft<<EOF
+iifname "$WANIF" accept
+EOF
+}
+
+set_input() {
+        [ "$(uci -q get firewall.edge_input_rule)" = '' ] && {
+                uci -q set firewall.edge_input_rule='rule'
+                uci -q set firewall.edge_input_rule.src='wan'
+                uci -q set firewall.edge_input_rule.proto='any'
+                uci -q set firewall.edge_input_rule.extra="-i $WANIF"
+                uci -q set firewall.edge_input_rule.target='ACCEPT'
+                uci -q set firewall.edge_input_rule.enabled='0'
+                uci reorder firewall.edge_input_rule=500
+        }
+
+        uci -q set firewall.edge_input_rule.enabled='1'
+        uci commit firewall
+}
+
+create()
+{
+    [ -z "$WANIF" ] && return
+
+    if [ -n "$(which fw4)" ];then
+        fw4_add_forward
+        fw4_add_input
+    else
+        set_input
+
+        $IPTW -N EDGEROUTER_FORWARD 2>/dev/null
+        $IPTW -C FORWARD -j EDGEROUTER_FORWARD 2>/dev/null
+        [ ! "$?" = "0" ] && $IPTW -I FORWARD 2 -j EDGEROUTER_FORWARD
+        $IPTW -F EDGEROUTER_FORWARD 2>/dev/null
+        $IPTW -I EDGEROUTER_FORWARD -i $WANIF -o $WANIF -j ACCEPT
+        $IPTW -I EDGEROUTER_FORWARD -i $WANIF -o wg+ -j ACCEPT
+        $IPTW -I EDGEROUTER_FORWARD -i $WANIF -o ovpn+ -j ACCEPT
+    fi
+}
+
+remove()
+{
+    if [ -n "$(which fw4)" ];then
+        rm /usr/share/nftables.d/chain-pre/forward/02-edg.nft
+        rm /usr/share/nftables.d/chain-pre/input/02-edg.nft
+    else
+        $IPTW -D FORWARD -j EDGEROUTER_FORWARD 2>/dev/null
+        $IPTW -F EDGEROUTER_FORWARD 2>/dev/null
+        $IPTW -X EDGEROUTER_FORWARD 2>/dev/null
+
+        uci -q set firewall.edge_input_rule.enabled='0'
+        uci commit firewall
+    fi
+
+}
+
+shutdown()
+{
+    if [ -n "$(which fw4)" ];then
+        rm /usr/share/nftables.d/chain-pre/forward/02-edg.nft
+        rm /usr/share/nftables.d/chain-pre/input/02-edg.nft
+    fi
+}
+
+while [ true ];do
+    [ ! -f /var/run/fw3.lock ] && break
+    sleep 1
+done
+touch /var/run/fw3.lock
+
+if [ "$1" = "create" ];then
+    create
+elif [ "$1" = "loaddns" ];then
+    handle_dns
+elif [ "$1" = "shutdown" ];then
+    shutdown
+else
+    remove
+fi
+
+rm  /var/run/fw3.lock 2>/dev/null
+if [ -n "$(which fw4)" ] && [ "$1" != "shutdown" ];then
+    /etc/init.d/firewall reload
+fi

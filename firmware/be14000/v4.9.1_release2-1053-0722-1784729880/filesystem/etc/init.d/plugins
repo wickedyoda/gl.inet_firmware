@@ -1,0 +1,10 @@
+#!/bin/sh /etc/rc.common
+
+START=70
+
+start() {
+    uci set plugins.global.update_time="0"
+    uci set plugins.global.update_status="0"
+    uci commit plugins
+    update_plugins_db offline &
+}

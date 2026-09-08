@@ -1,0 +1,14 @@
+/etc/config/glipv6
+/etc/init.d/gl_ipv6
+/etc/sysctl.d/99-disable-ipv6.conf
+/etc/uci-defaults/13_add_nat6_to_firewall
+/etc/firewall.nat6
+/etc/hotplug.d/dhcpv6/01-gl_relay_add_neigh_proxy
+/etc/hotplug.d/dhcpv6/00-gl_relay_add_br-lan_route
+/etc/hotplug.d/iface/99-disable_ipv6
+/usr/bin/get_wan_interface
+/usr/bin/sipcalc
+/etc/hotplug.d/iface/99-guest-laddr
+/usr/lib/oui-httpd/rpc/ipv6
+/etc/hotplug.d/iface/99-nat6
+/etc/uci-defaults/13_fix_ipv6_config

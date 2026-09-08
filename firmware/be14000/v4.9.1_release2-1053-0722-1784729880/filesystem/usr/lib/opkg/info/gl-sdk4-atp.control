@@ -1,0 +1,10 @@
+Package: gl-sdk4-atp
+Version: 1.0.0-1
+Depends: libc, kmod-gl-sdk4-kmwan, libuci20130104
+Source: feeds/glinet/gl-sdk4-atp
+SourceName: gl-sdk4-atp
+Section: base
+SourceDateEpoch: 1784003383
+Architecture: aarch64_cortex-a53
+Installed-Size: 6710
+Description:  Internal system helper for regional compliance. No user configuration.

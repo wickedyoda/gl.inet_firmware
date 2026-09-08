@@ -1,0 +1,10 @@
+Package: gl-sdk4-tor
+Version: git-2026.023.23380-b227206-1
+Depends: libc, tor, tor-geoip, libuci-lua
+Source: feeds/glinet/gl-sdk4-tor
+SourceName: gl-sdk4-tor
+Section: base
+SourceDateEpoch: 1769149780
+Architecture: aarch64_cortex-a53
+Installed-Size: 5750
+Description:  TOR Info API for Gl.inet

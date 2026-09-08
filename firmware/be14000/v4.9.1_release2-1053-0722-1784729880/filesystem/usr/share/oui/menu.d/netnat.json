@@ -1,0 +1,9 @@
+{
+  "index": 50,
+  "view": "netnat",
+  "level": 2,
+  "parent": "network",
+  "parent_icon": "network",
+  "parent_index": 48,
+  "show_mode": ["router"]
+}

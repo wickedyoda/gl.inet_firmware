@@ -1,0 +1,129 @@
+#!/bin/sh
+
+. /lib/functions/uci-defaults.sh
+. /usr/share/libubox/jshn.sh
+
+swtich_ports_export() {
+    _json_set_var JSON_CUR $1
+    json_get_vars num role
+    if [ -z "$num" ];then
+        json_select ..
+        return
+    fi
+
+    if [ -z "$role" ];then
+        json_get_vars device
+        if [ -z "$device" ];then
+            json_select ..
+            return
+        else
+            uci set board_special.switch.device="$device"
+            uci set board_special.switch.cpu="$num"
+        fi
+    else
+        if [ "$role" == "wan" ];then
+            uci set board_special.switch.wan="$num"
+        else
+            if [ -z "$lan_ports" ];then
+                lan_ports="$num"
+            else
+                lan_ports="$lan_ports $num"
+            fi
+        fi
+    fi
+    json_select ..
+}
+
+rename_switch_vlan() {
+    config_get vlan $1 vlan
+    if [ "$vlan" == "$vlanid" ];then
+        uci rename network.$1="vlan_$role"
+    fi
+}
+
+swtich_roles_export() {
+    _json_set_var JSON_CUR $1
+    json_get_vars role ports device
+    if [ -z "$role" ];then
+        json_select ..
+        return
+    fi
+
+    uci set board_special.$role="roles"
+    uci set board_special.$role.ports="$ports"
+    uci set board_special.$role.device="$device"
+    vlanid=`echo $device | cut -d . -f 2`
+    uci set board_special.$role.vid="$vlanid"
+    [ "$role" == "lan" ] && uci set board_special.$role.bak_vid="9"
+    config_load network
+    config_foreach rename_switch_vlan switch_vlan
+    uci commit network
+    json_select ..
+}
+
+network_lan_export () {
+    [ -z $1 ] && return
+    if [ -z "$lan_ports" ];then
+        lan_ports="$1"
+    else
+        lan_ports="$lan_ports $1"
+    fi
+}
+
+[ "$(uci -q get glconfig.general.inited)" = "1" -a -n "$(uci -q get board_special.network.wan)" ] && exit 0
+
+json_init
+
+json_load_file /etc/board.json
+ 
+json_is_a switch object
+if [ "$?" == "0" ];then
+    json_select switch
+    idx=0
+    while json_is_a switch${idx} object
+    do
+        json_select switch${idx}
+        json_get_var enable enable
+        if [ "$enable" == "1" ];then
+            uci set board_special.switch.enable="1"
+            uci set board_special.switch.name="switch${idx}"
+            lan_ports=""
+            json_for_each_item swtich_ports_export ports
+            uci set board_special.switch.lan="$lan_ports"
+            json_for_each_item swtich_roles_export roles
+        else
+            uci set board_special.switch.enable="0"
+        fi
+        json_select ..
+        idx=$(( idx + 1 ))
+    done
+    json_select ..
+fi
+
+json_is_a network object
+if [ "$?" == "0" ];then
+    json_select network
+    json_is_a wan object
+    if [ "$?" == "0" ];then
+        json_select wan
+        json_get_vars ifname device
+        [ -n "$ifname" ] && uci set board_special.network.wan="$ifname"
+        [ -n "$device" ] && uci set board_special.network.wan="$device"
+        json_select ..
+    fi
+    json_is_a lan object
+    if [ "$?" == "0" ];then
+        json_select lan
+        json_get_vars ifname device
+        uci -q delete board_special.network.lan
+        [ -n "$ifname" ] && uci set board_special.network.lan="$ifname"
+        [ -n "$device" ] && uci set board_special.network.lan="$device"
+        lan_ports=""
+        json_for_each_item network_lan_export ports
+        [ -n "$lan_ports" ] && uci set board_special.network.lan="$lan_ports"
+        json_select ..
+    fi
+    json_select ..
+fi
+uci commit board_special
+

@@ -1,0 +1,43 @@
+config proxy 'global'
+    option global_proxy '1'
+
+config providers 'AzireVPN'
+    option auth_type '1'
+    option procedure '0'
+    option referral_code '9x7wisg4'
+
+config providers 'Hideme'
+    option auth_type '1'
+    option procedure '0'
+
+config providers 'IPVanish'
+    option auth_type '1'
+    option procedure '1'
+
+config providers 'Mullvad'
+    option auth_type '2'
+    option procedure '1'
+
+config providers 'NordVPN'
+    option auth_type '2'
+    option procedure '1'
+
+config providers 'PIA'
+    option auth_type '1'
+    option procedure '1'
+
+config providers 'PureVPN'
+    option auth_type '1'
+    option procedure '0'
+
+config providers 'Surfshark'
+    option auth_type '1'
+    option procedure '1'
+
+config providers 'Windscribe'
+    option auth_type '1'
+    option procedure '1' 
+
+config providers 'FromApp'
+	option auth_type '1'
+	option procedure '0'

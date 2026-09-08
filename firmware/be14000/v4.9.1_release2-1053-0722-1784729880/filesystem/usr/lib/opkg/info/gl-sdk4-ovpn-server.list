@@ -1,0 +1,15 @@
+/lib/netifd/proto/ovpnserver.sh
+/usr/bin/gen_ovpn
+/etc/openvpn/scripts/ovpnserver-up
+/etc/openvpn/scripts/checkpsw.sh
+/etc/uci-defaults/99-ovpnserver
+/etc/openvpn/scripts/after_ovpnserver_instance_down.sh
+/usr/share/gl-validator.d/ovpn-server.lua
+/etc/config/ovpnserver
+/etc/openvpn/scripts/before_ovpnserver_instance_up.sh
+/etc/openvpn/scripts/ovpnserver_func.sh
+/usr/bin/cert_manager
+/usr/bin/gl_ipcalc
+/etc/openvpn/cert/dh1024.pem
+/usr/lib/oui-httpd/rpc/ovpn-server.so
+/usr/bin/setup_tap_s2s

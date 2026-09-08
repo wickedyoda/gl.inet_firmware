@@ -1,0 +1,10 @@
+Package: gl-sdk4-vpn-client
+Version: git-2026.145.14999-1377a2a-1
+Depends: libc, kmod-gl-sdk4-dns-mark, lua, libuci-lua, kmod-veth
+Source: feeds/glinet/gl-sdk4-vpn-client
+SourceName: gl-sdk4-vpn-client
+Section: base
+SourceDateEpoch: 1779682199
+Architecture: aarch64_cortex-a53
+Installed-Size: 75348
+Description:  VPN Client with multi-instance and policy routing support

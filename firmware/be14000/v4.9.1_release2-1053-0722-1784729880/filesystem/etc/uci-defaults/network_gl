@@ -1,0 +1,350 @@
+. /lib/functions.sh
+. /lib/functions/gl_util.sh
+
+fix_ath79_upgrade_noip()
+{
+    local node="/sys/devices/platform/ahb/1a000000.eth/1a000000.eth:mdio/mdio_bus/mdio.0/mdio.0:1f/of_node/compatible"
+    [ -e "$node" ] && {
+        local compatible="$(cat $node)"
+        [ "$compatible" = "qca,ar8229-builtin" ] && {
+            swconfig dev switch0 set reset
+        }
+    }
+}
+
+setting_rg650v_platform_vendor_netwotk()
+{
+    #Assign Auto-IP to RNDIS interface
+    uci set network.rndis="interface"
+    uci set network.rndis.device="rndis0"
+    uci set network.rndis.proto="static"
+    uci set network.rndis.ipaddr="169.254.20.1"
+    uci set network.rndis.ipv6="1"
+    uci set network.rndis.netmask="255.255.255.0"
+
+    #Assign Auto-IP to ECM interface
+    uci set network.ecm="interface"
+    uci set network.ecm.device="ecm0"
+    uci set network.ecm.proto="static"
+    uci set network.ecm.ipaddr="169.254.21.1"
+    uci set network.ecm.ipv6="1"
+    uci set network.ecm.netmask="255.255.255.0"
+    #Assign Auto-IP to ETH interface
+    uci set network.eth="interface"
+    uci set network.eth.device="eth0"
+    uci set network.eth.mtu="1500"
+    uci set network.eth.proto="static"
+    uci set network.eth.ipaddr="169.254.22.1"
+    uci set network.eth.ipv6="1"
+    uci set network.eth.netmask="255.255.255.0"
+
+    uci set network.wlan0=interface
+    uci set network.wlan0.device='wlan0'
+    uci set network.wlan0.proto='static'
+    uci set network.wlan0.ipv6='1'
+    uci set network.wlan0.ipaddr='169.254.24.1'
+    uci set network.wlan0.netmask='255.255.255.0'
+
+    uci set network.wlan1=interface
+    uci set network.wlan1.device='wlan1'
+    uci set network.wlan1.proto='static'
+    uci set network.wlan1.ipv6='1'
+    uci set network.wlan1.ipaddr='169.254.25.1'
+    uci set network.wlan1.netmask='255.255.255.0'
+
+    uci set network.wlan2=interface
+    uci set network.wlan2.device='wlan2'
+    uci set network.wlan2.proto='static'
+    uci set network.wlan2.ipv6='1'
+    uci set network.wlan2.ipaddr='169.254.26.1'
+    uci set network.wlan2.netmask='255.255.255.0'
+
+    # store lan ipaddr and netmask, required this for IPPT clean up
+    uci add qcmap_lan lan
+    uci set qcmap_lan.@lan[0].ip="192.168.8.1"
+    uci set qcmap_lan.@lan[0].netmask="255.255.255.0"
+    uci commit
+}
+
+init_secondwan_by_default()
+{
+    [ -r /proc/gl-hw-info/secondwan ] || return
+    read -r sw_dev < /proc/gl-hw-info/secondwan || return
+    [ -z "$sw_dev" ] && return
+
+    sw_base="${sw_dev%.*}"
+    sw_vlan="${sw_dev##*.}"
+
+    dev_sid=""
+    for sid in $(uci -q show network 2>/dev/null | sed -n "s/^network\.\([^=]*\)=device\$/\1/p"); do
+        [ "$(uci -q get "network.${sid}.name" 2>/dev/null)" = "$sw_dev" ] && {
+            dev_sid="$sid"
+            break
+        }
+    done
+
+    if [ -n "$dev_sid" ]; then
+        [ "$dev_sid" != "secondwan_dev" ] && uci -q rename "network.${dev_sid}=secondwan_dev" && uci commit network
+    else
+        mac=$(cat /etc/board.json | jsonfilter -e '@.network.lan.macaddr')
+        mac=$(printf '%s:%02x' "${mac%:*}" $(( (0x${mac##*:} + 1) & 0xff )))
+        uci -q batch <<-EOF
+            set network.secondwan_dev="device"
+            set network.secondwan_dev.name="$sw_dev"
+            set network.secondwan_dev.ifname="$sw_base"
+            set network.secondwan.device="$sw_dev"
+            set network.secondwan_dev.macaddr="$mac"
+            commit network
+EOF
+    fi
+    uci set glconfig.general.lan2wan="1"
+    uci commit glconfig
+    uci set board_special.hardware.secondwan="$sw_dev"
+    uci commit board_special
+
+    vlan2_sid="$(uci -q show network | awk -F"[.=']" -v v="$sw_vlan" '
+        $1=="network" && $3=="switch_vlan" { sw[$2]=1; next }
+        $1=="network" && $3=="vlan" && ($4==v || $5==v) { if (sw[$2]) { print $2; exit } }
+    ')"
+    [ -n "$vlan2_sid" ] && [ "$vlan2_sid" != "vlan_secondwan" ] && {
+        uci -q rename network.${vlan2_sid}=vlan_secondwan
+        uci commit network
+    }
+}
+
+fix_ipq40xx_wan_vlan
+fix_ath79_upgrade_noip
+set_br_lan_bridge_empty
+
+sed -i "/multicast_to_unicast '0'/d" /etc/config/network
+
+[ -z "`uci -q get network.wan.force_link`" ] && uci set network.wan.force_link='0' && uci commit network
+
+has_secondwan && {
+    if [ -z "`uci -q get network.secondwan.metric`"  ];then
+        uci set network.secondwan.metric='15'
+        uci commit network
+    fi
+
+}
+
+uci -q get dhcp.@domain[0] && {
+    uci -q get dhcp.@domain[1] || {
+        uci add dhcp domain
+        uci set dhcp.@[-1].name='console.gl-inet.com'
+        uci set dhcp.@[-1].ip="::ffff:$(uci -q get network.lan.ipaddr)"
+        uci commit dhcp
+    }
+}
+
+has_radio="$(get_radio)"
+
+if [ -z "$has_radio" ]; then
+uci -q batch <<-EOF
+    delete kmwan.wwan
+    delete kmwan.wwan6
+    commit kmwan
+EOF
+echo "" > /etc/config/wireless
+fi
+
+has_usb=$(get_usb)
+
+if [ "$has_usb" == "0" ];then
+    uci delete kmwan.tethering 2>/dev/null
+    uci delete kmwan.tethering6 2>/dev/null
+    uci commit kmwan
+fi
+
+has_secondwan && [ ! $(uci -q get kmwan.secondwan) ] && {
+uci -q batch <<-EOF
+    set kmwan.secondwan="member"
+    set kmwan.secondwan.interface="secondwan"
+    set kmwan.secondwan.addr_type="4"
+    set kmwan.secondwan.track_mode="force"
+    set kmwan.secondwan.metric="15"
+    set kmwan.secondwan.weight="1"
+    set kmwan.secondwan.disabled="0"
+    set kmwan.secondwan.check="1"
+
+    commit kmwan
+EOF
+
+    for track_ip in `uci -q get glconfig.general.track_ip`
+    do
+        uci add_list kmwan.secondwan.tracks="ping,$track_ip"
+    done
+
+    uci commit kmwan
+}
+
+has_secondwan && [ ! $(uci -q get kmwan.secondwan6) ] && {
+uci -q batch <<-EOF
+    set kmwan.secondwan6="member"
+    set kmwan.secondwan6.interface="secondwan6"
+    set kmwan.secondwan6.addr_type="6"
+    set kmwan.secondwan6.track_mode="force"
+    set kmwan.secondwan6.metric="15"
+    set kmwan.secondwan6.weight="1"
+    set kmwan.secondwan6.disabled="1"
+
+    commit kmwan
+EOF
+
+    for track_ip in `uci -q get glconfig.general.track_ipv6`
+    do
+        uci add_list kmwan.secondwan6.tracks="ping,$track_ip"
+    done
+
+    uci commit kmwan
+}
+
+[ "$(uci -q get glconfig.general.inited)" = "1" ] && exit 0
+
+uci -q batch <<-EOF
+    set network.lan.isolate=0
+    set network.lan.ipaddr='192.168.8.1'
+    commit network
+EOF
+
+model="$(get_model)"
+[ "$model" = "e5800" ] && {
+    setting_rg650v_platform_vendor_netwotk
+}
+
+uci -q batch <<-EOF
+    delete network.wan6.device
+    set network.wan.ipv6='0'
+    set network.wan6.device='@wan'
+    set network.wan6.disabled='1'
+    set network.tethering6='interface'
+    set network.tethering6.device='@tethering'
+    set network.tethering6.proto='dhcpv6'
+    set network.tethering6.disabled='1'
+    set network.wwan6='interface'
+    set network.wwan6.device='@wwan'
+    set network.wwan6.proto='dhcpv6'
+    set network.wwan6.disabled='1'
+    commit network
+EOF
+
+openwrt_version=$(ubus call system board | jsonfilter -e '@.release.description' | grep -o '[0-9]\+' | head -n 1)
+
+[ "$openwrt_version" -lt 21 ] && {
+   uci -q batch <<-EOF
+    delete network.wan6.device
+    delete network.tethering6.device
+    delete network.wwan6.device
+    set network.wan6.ifname='@wan'
+    set network.tethering6.ifname='@tethering'
+    set network.wwan6.ifname='@wwan'
+    commit network
+EOF
+}
+
+uci -q batch <<-EOF
+    set dhcp.@dnsmasq[0].rebind_protection=0
+
+    add dhcp domain
+    set dhcp.@[-1].name='console.gl-inet.com'
+    set dhcp.@[-1].ip="$(uci -q get network.lan.ipaddr)"
+    add dhcp domain
+    set dhcp.@[-1].name='console.gl-inet.com'
+    set dhcp.@[-1].ip="::ffff:$(uci -q get network.lan.ipaddr)"
+    commit dhcp
+EOF
+
+uci -q batch <<-EOF
+    set firewall.@zone[1].input=DROP
+    add_list firewall.@zone[1].network=wwan
+    commit firewall
+EOF
+
+is_otg=$(is_usb_otg)
+[ "$is_otg" = "1" ] && {
+uci -q batch <<-EOF
+    add_list network.@device[0].ports='rndis0'
+    add_list network.@device[0].ports='ecm0'
+
+    set network.usbwan="interface"
+    set network.usbwan.force_link="0"
+    set network.usbwan.ipv6="0"
+    set network.usbwan.proto="dhcp"
+
+    set network.usbwan6="interface"
+    set network.usbwan6.proto="dhcpv6"
+    set network.usbwan6.device="@usbwan"
+    set network.usbwan6.disabled="1"
+    commit network
+
+    set dhcp.usbwan="dhcp"
+    set dhcp.usbwan.interface="usbwan"
+    set dhcp.usbwan.ignore="1"
+    commit dhcp
+
+    add_list firewall.@zone[1].network="usbwan"
+    commit firewall
+EOF
+}
+
+[ -n "$has_radio" ] && {
+uci -q batch <<-EOF
+    set network.wwan=interface
+    set network.wwan.proto='dhcp'
+    commit network
+EOF
+} 
+
+has_secondwan && {
+uci -q batch <<-EOF
+    set network.secondwan="interface"
+    set network.secondwan.ipv6="0"
+    set network.secondwan.proto="dhcp"
+    set network.secondwan.metric="15"
+    set network.secondwan.force_link="0"
+
+    set network.secondwan6="interface"
+    set network.secondwan6.proto="dhcpv6"
+    set network.secondwan6.device="@secondwan"
+    set network.secondwan6.disabled="1"
+    commit network
+
+    set dhcp.secondwan="dhcp"
+    set dhcp.secondwan.interface="secondwan"
+    set dhcp.secondwan.ignore="1"
+    commit dhcp
+
+    add_list firewall.@zone[1].network="secondwan"
+    commit firewall
+EOF
+
+[ "$model" = "be14000" ] && init_secondwan_by_default
+
+[ "$openwrt_version" -lt 21 ] && {
+uci -q batch <<-EOF
+    delete network.secondwan6.device
+    set network.secondwan6.ifname="@secondwan"
+    commit network
+EOF
+}
+}
+
+set_hnat_by_default
+
+if [ "$(uci -q get network.lan.type)" == "bridge" ];then
+    mac=$(cat /etc/board.json | jsonfilter -e '@.network.lan.macaddr')
+    uci set network.lan.macaddr="$mac"
+fi
+
+set_br_lan_mac() {
+    [ -n "$(uci -q get network.lan.device)" ] && {
+        [ "$(uci -q get network.$1.name)" == "br-lan" ] && {
+            mac=$(cat /etc/board.json | jsonfilter -e '@.network.lan.macaddr')
+            uci set network.$1.macaddr="$mac"
+        }
+    }
+}
+
+config_load network
+config_foreach  set_br_lan_mac device
+uci commit network

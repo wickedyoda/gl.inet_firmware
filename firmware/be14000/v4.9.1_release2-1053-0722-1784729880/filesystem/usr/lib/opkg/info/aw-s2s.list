@@ -1,0 +1,15 @@
+/usr/bin/get_mpsrv_delay.sh
+/etc/init.d/mptun
+/usr/share/gl-validator.d/mptun.lua
+/usr/bin/get_mplinkip.sh
+/etc/hotplug.d/wireguard/mptun_wg_if_event.sh
+/etc/uci-defaults/51-aw_upgrade_compat.sh
+/etc/gl_crontabs/crontabs.d/aw_arp_scan
+/usr/bin/mptcp-proxy.nft
+/usr/bin/proxy-route.sh
+/lib/functions/mptun.sh
+/usr/lib/oui-httpd/rpc/mptun
+/etc/config/mptun
+/etc/dnsmasq.conf.mptun
+/usr/share/gl-ngx/websocket/mptun.lua
+/usr/bin/mptun_tools

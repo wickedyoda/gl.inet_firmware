@@ -1,0 +1,46 @@
+#!/bin/sh
+
+. /lib/functions/gl_util.sh
+
+sync_device_to_ifaces() {
+    config_load wireless
+    config_foreach sync_single_device wifi-device
+}
+
+sync_single_device() {
+    local device="$1"
+    local dev_random
+    config_get dev_random "$device" random_bssid ""
+    [ -z "$dev_random" ] && return
+    config_foreach sync_iface wifi-iface "$device" "$dev_random"
+}
+
+sync_iface() {
+    local iface="$1"
+    local target_dev="$2"
+    local dev_random="$3"
+    local iface_dev
+    local iface_random
+    local iface_mode
+    local iface_mld
+
+    # 获取接口的 device
+    config_get iface_dev "$iface" device ""
+    [ "$iface_dev" != "$target_dev" ] && return
+
+    # 跳过有 mld 的接口（MLO接口）
+    config_get iface_mld "$iface" mld ""
+    # 跳过 mesh 的接口
+     config_get multi_ap "$iface" multi_ap ""
+    [ "$multi_ap" = "1" ] && return  # 为1则跳过
+
+    # 获取接口已有的 random_bssid
+    config_get iface_random "$iface" random_bssid ""
+    [ -n "$iface_random" ] && return  # 已有则跳过
+    config_get iface_mode "$iface" mode ""
+    [ "$iface_mode" != "ap" ] && return
+
+    uci set wireless."$iface".random_bssid="$dev_random"
+}
+
+sync_device_to_ifaces

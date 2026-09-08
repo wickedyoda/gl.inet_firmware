@@ -1,0 +1,13 @@
+. /lib/functions.sh
+
+disable_classlessroute() {
+    if [ "$(uci -q get network.$1.proto)" = dhcp -a -z "$(uci -q get network.$1.classlessroute)" ]; then
+        uci set network.$1.classlessroute=0
+    fi
+}
+
+config_load network
+config_foreach disable_classlessroute interface
+uci commit network
+
+exit 0

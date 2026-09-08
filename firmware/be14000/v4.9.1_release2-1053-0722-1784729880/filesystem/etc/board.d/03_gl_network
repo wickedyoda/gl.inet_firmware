@@ -1,0 +1,7 @@
+. /lib/functions/uci-defaults.sh
+
+board_config_update
+ucidef_set_interface lan protocol static ipaddr 192.168.8.1
+board_config_flush
+
+exit 0

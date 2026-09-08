@@ -1,0 +1,10 @@
+#!/bin/sh
+
+action="$1"
+
+if [ "$action" = "turnon" ];then
+    ubus call gl_screen set '{"method": "timer_turnon"}'
+elif [ "$action" = "turnoff" ];then
+    ubus call gl_screen set '{"method": "timer_turnoff"}'
+fi
+

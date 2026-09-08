@@ -1,0 +1,12 @@
+Package: zoneinfo-core
+Version: 2025b-1
+Depends: libc
+Source: feeds/gl_feed_common/zoneinfo
+SourceName: zoneinfo-core
+License: Public-Domain
+Section: utils
+SourceDateEpoch: 1760673708
+Maintainer: Vladimir Ulrich <admin@evl.su>
+Architecture: aarch64_cortex-a53
+Installed-Size: 24030
+Description:  Zone Information (core)

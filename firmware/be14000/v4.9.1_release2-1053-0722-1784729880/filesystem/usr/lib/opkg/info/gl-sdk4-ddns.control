@@ -1,0 +1,10 @@
+Package: gl-sdk4-ddns
+Version: git-2026.004.37588-3a5b83f-1
+Depends: libc, jansson4, gl-sdk4-uci, gl-sdk4-log, gl-sdk4-utils
+Source: feeds/glinet/gl-sdk4-ddns
+SourceName: gl-sdk4-ddns
+Section: base
+SourceDateEpoch: 1767522388
+Architecture: aarch64_cortex-a53
+Installed-Size: 32001
+Description:  Oui Support for ddns

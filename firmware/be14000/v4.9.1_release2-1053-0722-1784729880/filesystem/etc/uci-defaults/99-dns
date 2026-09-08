@@ -1,0 +1,191 @@
+#!/bin/sh
+. /lib/functions.sh
+
+CONFIG_FILE="/etc/config/gl-dns"
+
+if [ ! -f "$CONFIG_FILE" ];then
+    exit 0
+fi
+
+if ! uci -q get gl-dns-v2.@dns[0] >/dev/null;then
+    exit 0
+fi
+
+OVERRIDE_VPN=$(uci -q get gl-dns.@dns[0].override_vpn)
+FORCE_DNS=$(uci -q get gl-dns.@dns[0].force_dns)
+MODE=$(uci -q get gl-dns.@dns[0].mode)
+DOT_PROVIDER=$(uci -q get gl-dns.@dns[0].dot_provider)
+NEXTDNS_ID=$(uci -q get gl-dns.@dns[0].nextdns_id)
+CONTROLD_ID=$(uci -q get gl-dns.@dns[0].controld_id)
+FREE_CONTROLD_ID=$(uci -q get gl-dns.@dns[0].free_controld_id)
+PROTO=$(uci -q get gl-dns.@dns[0].proto)
+
+restore_dnsmasq_auto_mode() {
+    uci -q del dhcp.@dnsmasq[0].server
+    uci -q del dhcp.@dnsmasq[0].noresolv
+    uci -q del dhcp.@dnsmasq[0].boguspriv
+    uci -q del dhcp.@dnsmasq[0].cachesize
+    uci -q del dhcp.@dnsmasq[0].localuse
+    uci commit dhcp
+
+    rm "$CONFIG_FILE"
+}
+
+get_effective_dnscrypt_servers() {
+    awk -F'[][]' '/^[[:space:]]*server_names[[:space:]]*=/{print $2; exit}' /etc/dnscrypt-proxy2/dnscrypt-proxy.toml \
+        | tr -d '"' | tr ',' '\n'
+}
+
+if [ -n "$OVERRIDE_VPN" ];then
+    uci -q set gl-dns-v2.@dns[0].override_vpn="$OVERRIDE_VPN"
+fi
+
+if [ -n "$FORCE_DNS" ];then
+    uci -q set gl-dns-v2.@dns[0].force_dns="$FORCE_DNS"
+fi
+
+# manual
+if [ "$MODE" = "manual" ];then
+    uci -q set gl-dns-v2.@dns[0].mode="manual"
+    manual_servers=$(uci -q get dhcp.@dnsmasq[0].server)
+    if [ -n "$manual_servers" ];then
+        for server in $manual_servers;do
+            uci -q add_list gl-dns-v2.@dns[0].manual_list="$server"
+        done
+    fi
+
+# proxy
+elif [ "$MODE" = "proxy" ];then
+    uci -q set gl-dns-v2.@dns[0].mode="proxy"
+    proxy_servers=$(uci -q get dhcp.@dnsmasq[0].server)
+    if [ -n "$proxy_servers" ];then
+        for server in $proxy_servers;do
+            uci -q add_list gl-dns-v2.@dns[0].proxy_list="$server"
+        done
+    fi
+
+# secure mode
+elif [ "$MODE" = "secure" ];then
+    # dot nextdns
+    if [ "$PROTO" = "DoT" ] && [ "$DOT_PROVIDER" = "1" ];then
+        uci -q set gl-dns-v2.@dns[0].mode="secure"
+        uci -q set gl-dns-v2.@dns[0].provider="nextdns"
+        uci -q set gl-dns-v2.@dns[0].proto="dot"
+        if [ -n "$NEXTDNS_ID" ];then
+            uci -q set gl-dns-v2.@dns[0].nextdns_id="$NEXTDNS_ID"
+        fi
+
+    # dot controld
+    elif [ "$PROTO" = "DoT" ] && [ "$DOT_PROVIDER" = "2" ] && [ -n "$CONTROLD_ID" ];then
+        uci -q set gl-dns-v2.@dns[0].mode="secure"
+        uci -q set gl-dns-v2.@dns[0].provider="controld"
+        uci -q set gl-dns-v2.@dns[0].controld_type='0'
+        uci -q set gl-dns-v2.@dns[0].controld_id="$CONTROLD_ID"
+        uci -q set gl-dns-v2.@dns[0].proto="dot"
+
+    # dot free controld
+    elif [ "$PROTO" = "DoT" ] && [ "$DOT_PROVIDER" = "3" ] && [ -n "$FREE_CONTROLD_ID" ];then
+        uci -q set gl-dns-v2.@dns[0].mode="secure"
+        uci -q set gl-dns-v2.@dns[0].provider="controld"
+        uci -q set gl-dns-v2.@dns[0].controld_type='1'
+        uci -q set gl-dns-v2.@dns[0].proto="dot"
+        uci -q add_list gl-dns-v2.@dns[0].servers_list="$FREE_CONTROLD_ID"
+
+    # dot cloudflare
+    elif [ "$PROTO" = "DoT" ] && [ "$DOT_PROVIDER" = "0" ];then
+        uci -q set gl-dns-v2.@dns[0].mode="secure"
+        uci -q set gl-dns-v2.@dns[0].provider="cloudflare"
+        uci -q set gl-dns-v2.@dns[0].proto="dot"
+        uci -q add_list gl-dns-v2.@dns[0].servers_list="Standard"
+
+    # dnscrypt
+    elif [ "$PROTO" = "DNSCrypt" ];then
+        servers=$(get_effective_dnscrypt_servers)
+        if [ -z "$servers" ];then
+            # Keep old config when dnscrypt-proxy.toml still has template/default values.
+            restore_dnsmasq_auto_mode
+            exit 0
+        fi
+        count=0
+        for server in $servers; do
+            if [ $count -ge 5 ];then
+                break
+            fi
+            stamp=$(grep -F -A 10 -- "## $server" /etc/dnscrypt-proxy2/public-resolvers.md | grep -m 1 "sdns://")
+            if [ -n "$stamp" ];then
+                uci -q add_list gl-dns-v2.@dns[0].secure_manual_list="$stamp"
+                count=$((count+1))
+            fi
+        done
+        if [ $count -eq 0 ];then
+            restore_dnsmasq_auto_mode
+            exit 0
+        fi
+        uci -q set gl-dns-v2.@dns[0].mode="secure"
+        uci -q set gl-dns-v2.@dns[0].provider="manual"
+        uci -q set gl-dns-v2.@dns[0].proto="dnscrypt"
+        uci -q set gl-dns-v2.@dns[0].proto_manual="dnscrypt"
+
+    # doh
+    elif [ "$PROTO" = "DoH" ];then
+        servers=$(get_effective_dnscrypt_servers)
+        if [ -z "$servers" ];then
+            # Keep old config when dnscrypt-proxy.toml still has template/default values.
+            restore_dnsmasq_auto_mode
+            exit 0
+        fi
+        count=0
+        for server in $servers; do
+            if [ $count -ge 5 ];then
+                break
+            fi
+            stamp=$(grep -F -A 10 -- "## $server" /etc/dnscrypt-proxy2/public-resolvers.md | grep -m 1 "sdns://")
+            if [ -n "$stamp" ];then
+                uci -q add_list gl-dns-v2.@dns[0].secure_manual_list="$stamp"
+                count=$((count+1))
+            fi
+        done
+        if [ $count -eq 0 ];then
+            restore_dnsmasq_auto_mode
+            exit 0
+        fi
+        uci -q set gl-dns-v2.@dns[0].mode="secure"
+        uci -q set gl-dns-v2.@dns[0].provider="manual"
+        uci -q set gl-dns-v2.@dns[0].proto="doh"
+        uci -q set gl-dns-v2.@dns[0].proto_manual="doh"
+
+    # odoh
+    elif [ "$PROTO" = "oDoH" ];then
+        servers=$(get_effective_dnscrypt_servers)
+        if [ -z "$servers" ];then
+            # Keep old config when dnscrypt-proxy.toml still has template/default values.
+            restore_dnsmasq_auto_mode
+            exit 0
+        fi
+        count=0
+        for server in $servers; do
+            if [ $count -ge 5 ];then
+                break
+            fi
+            stamp=$(grep -F -A 10 -- "## $server" /etc/dnscrypt-proxy2/odoh-servers.md | grep -m 1 "sdns://")
+            if [ -n "$stamp" ];then
+                uci -q add_list gl-dns-v2.@dns[0].secure_manual_list="$stamp"
+                count=$((count+1))
+            fi
+        done
+        if [ $count -eq 0 ];then
+            restore_dnsmasq_auto_mode
+            exit 0
+        fi
+        uci -q set gl-dns-v2.@dns[0].mode="secure"
+        uci -q set gl-dns-v2.@dns[0].provider="manual"
+        uci -q set gl-dns-v2.@dns[0].proto="odoh"
+        uci -q set gl-dns-v2.@dns[0].proto_manual="odoh"
+    fi
+fi
+
+
+uci -q set gl-dns-v2.@dns[0].config_syn='1'
+uci commit gl-dns-v2
+
+rm "$CONFIG_FILE"

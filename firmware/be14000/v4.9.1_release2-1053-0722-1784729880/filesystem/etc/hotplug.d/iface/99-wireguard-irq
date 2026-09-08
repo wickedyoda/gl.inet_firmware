@@ -1,0 +1,61 @@
+#!/bin/sh
+. /lib/functions/gl_util.sh
+model=$(get_model)
+
+wireguard_irq()
+{
+	[ $ACTION = "ifup" ] || return
+	[ `echo "${INTERFACE}" | grep wg | wc -l` -ge 1 ] || [ "$INTERFACE" = "wan" -o "$INTERFACE" = "lan" ] || return
+	if ls /sys/class/net/wg* >/dev/null 2>&1; then
+		[ -e /sys/class/net/eth1 ] && echo 4 > /sys/class/net/eth1/queues/rx-0/rps_cpus
+		[ -e /sys/class/net/eth1.1 ] && echo 4 > /sys/class/net/eth1.1/queues/rx-0/rps_cpus
+		[ -e /sys/class/net/eth2 ] && echo 8 > /sys/class/net/eth2/queues/rx-0/rps_cpus
+		[ -e /sys/class/net/eth0 ] && echo 8 > /sys/class/net/eth0/queues/rx-0/rps_cpus
+		[ "$model" = "mt6000" ] && [ -e /sys/class/net/br-lan ] && echo 3 > /sys/class/net/br-lan/queues/rx-0/rps_cpus
+
+		for iface in /sys/class/net/wg*; do
+			if [ -e "$iface" ]; then
+				if [ "$model" = "mt6000" ]; then
+					echo 7 > "$iface/queues/rx-0/rps_cpus"
+				elif [ "$model" = "be14000" ]; then
+					echo 1 > "$iface/queues/rx-0/rps_cpus"
+				else
+					echo 3 > "$iface/queues/rx-0/rps_cpus"
+				fi
+			fi
+		done
+	fi
+}
+
+sfa216826_wireguard_irq()
+{
+	if [ "$INTERFACE" = "wgclient" -o "$INTERFACE" = "wgserver" ];then
+		if [ $ACTION = "ifup" ];then
+			for irq in `cat /proc/interrupts  | grep xgmac_dma_ | grep xq1 | awk -F : '{print $1}'`
+			do
+				echo 4 > /proc/irq/$irq/smp_affinity
+			done
+		else
+			for irq in `cat /proc/interrupts  | grep xgmac_dma_ | grep xq1 | awk -F : '{print $1}'`
+			do
+				echo 2 > /proc/irq/$irq/smp_affinity
+			done
+		fi
+	fi
+}
+
+case "$model" in
+	"be9300"|\
+	"be6500"|\
+	"be10000"|\
+	"be14000"|\
+	"mt6000"|\
+	"mt3600be"|\
+	"mt5000"|\
+	"be3600")
+		wireguard_irq
+	;;
+	"sft3000")
+		sfa216826_wireguard_irq
+	;;
+esac

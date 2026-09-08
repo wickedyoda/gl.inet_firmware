@@ -1,0 +1,10 @@
+Package: gl-sdk4-bark
+Version: git-2025.213.27510-e522deb-1
+Depends: libc, libuci-lua
+Source: feeds/glinet/gl-sdk4-bark
+SourceName: gl-sdk4-bark
+Section: base
+SourceDateEpoch: 1754033910
+Architecture: aarch64_cortex-a53
+Installed-Size: 1171813
+Description:  glinet SDK4 bark module

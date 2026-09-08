@@ -1,0 +1,26 @@
+#!/bin/sh
+
+. /lib/functions/gl_util.sh
+
+get_env() {
+    local cfg="/etc/fw_env_gl.config"
+
+    [ -f "$cfg" ] || {
+        cfg="/etc/fw_env.config"
+        [ -f "$cfg" ] || return
+    }
+
+    fw_printenv -c "$cfg" $1 2>/dev/null | awk -F'=' '{print $2}'
+}
+
+do_indicate_fw_type() {
+    local fw=$(get_env fw)
+    local fw_art=$(get_art_fw)
+
+    [ -n "$fw" ] || fw=2c
+    [ "$fw_art" = "2b" ] && fw=2b
+
+    echo "$fw" > /etc/firmware_type
+}
+
+boot_hook_add preinit_main do_indicate_fw_type

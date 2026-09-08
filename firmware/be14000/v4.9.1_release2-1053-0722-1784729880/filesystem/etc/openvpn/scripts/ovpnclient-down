@@ -1,0 +1,56 @@
+#!/bin/sh
+
+# include netifd library
+. /lib/netifd/netifd-proto.sh
+. /lib/functions/gl_util.sh
+
+logger -t ovpnclient-down "env value:"`env`
+
+interface="$1"
+
+client_info_dir="/var/ovpnclient"
+[ -d ${client_info_dir} ] || mkdir -p ${client_info_dir}
+
+down_update_status()
+{
+        local interface=$1
+        uci -q -c ${client_info_dir} set status_table.${interface}.active='0'
+        uci -q -c ${client_info_dir} commit status_table
+}
+
+proto_init_update "*" 0
+proto_send_update "$interface"
+
+disabled=1  # default: no section -> disabled
+
+if uci -q get network.${interface} >/dev/null; then
+        disabled="$(uci -q get network.${interface}.disabled || echo 0)"
+fi
+
+if [ "$disabled" = "0" ]; then
+        echo "connecting" > /tmp/ovpnclient/${interface}_state
+else
+        rm -f /tmp/ovpnclient/${interface}_state
+fi
+
+down_update_status ${interface}
+
+client_tap=$(uci -q get ovpnclient.$(uci -q get network.${interface}.config).mode)
+if [ "$client_tap" = tap-s2s -o "$client_tap" = tap ]; then
+	/usr/bin/setup_tap_s2s client_ifdown
+	touch /tmp/run/disconnect_lan_flag
+	uci set dhcp.lan.ignore=0
+	uci commit dhcp
+	/etc/init.d/dnsmasq reload
+	disconnect_lan_clients
+	/etc/init.d/network reload&
+	exit 0
+fi
+
+if [ "$client_tap" != tap-s2s -a "$client_tap" != tap ]; then
+	/usr/bin/rtp2.sh 'interface_status_change' "${interface}" 'down'
+fi
+
+rm -f /tmp/run/ovpn_resolved_ip/${interface}
+
+exit 0

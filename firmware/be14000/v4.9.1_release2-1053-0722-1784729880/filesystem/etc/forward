@@ -1,0 +1,170 @@
+#!/bin/sh
+# shellcheck disable=SC2062
+# shellcheck disable=SC2027
+# shellcheck disable=SC3010
+# shellcheck disable=SC3009
+# shellcheck disable=SC3037
+. /lib/functions/modem.sh
+
+CONFIG_FILE="/etc/config/cellular/sms_forward.json"
+SIM1_NUMBER=""
+SIM2_NUMBER=""
+
+get_model() {
+    local model=$(uci get board_special.hardware.model 2>/dev/null)
+    if [ -z "$model" ]; then
+        model=$(cat /proc/gl-hw-info/model)
+    fi
+    echo $model
+}
+
+get_sim_numbers_only() {
+    local ubus_result=$(ubus call cellular.sim info 2>/dev/null)
+    local local_number=$(echo "$ubus_result" | jsonfilter -e '$.sims[*].phone_number' 2>/dev/null)
+    echo "$local_number"
+}
+
+is_sim_number() {
+    local number="$1"
+    local sim_numbers="$2"
+    [ -z "$number" ] || [ -z "$sim_numbers" ] && return 1
+
+    if echo "$sim_numbers" | grep -qw "$number"; then
+        return 0
+    fi
+
+    local sim_num
+    for sim_num in $sim_numbers; do
+        case "$number" in
+            *"$sim_num")
+                return 0
+                ;;
+        esac
+        case "$sim_num" in
+            *"$number")
+                return 0
+                ;;
+        esac
+    done
+
+    return 1
+}
+
+process_numbers() {
+    local numbers="$1"
+    local sim_numbers="$2"
+    local label="$3"
+    local valid_numbers=""
+    local valid_count=0
+    if [ -n "$numbers" ]; then
+        for num in $numbers; do
+            if is_sim_number "$num" "$sim_numbers"; then
+                log_debug $LINENO "sms-forward" "[$label] forward number same as local number, skip..."
+            else
+                valid_numbers="$valid_numbers $num"
+                valid_count=$((valid_count + 1))
+            fi
+        done
+    else
+        log_debug $LINENO "sms-forward" "[$label]: no forward numbers"
+    fi
+
+    valid_numbers=$(echo $valid_numbers)
+    echo "$valid_numbers"
+}
+
+check_dual_number() {
+    local sim_numbers=$(get_sim_numbers_only)
+    local sim1_num_list=$(jsonfilter -i "$CONFIG_FILE" -e '@.dual_sim.sim1.forward_numbers[*]' 2>/dev/null | tr ' ' '\n' | sort -u)
+    local sim2_num_list=$(jsonfilter -i "$CONFIG_FILE" -e '@.dual_sim.sim2.forward_numbers[*]' 2>/dev/null | tr ' ' '\n' | sort -u)
+    SIM1_NUMBER=$(process_numbers "$sim1_num_list" "$sim_numbers" "SIM1")
+    SIM2_NUMBER=$(process_numbers "$sim2_num_list" "$sim_numbers" "SIM2")
+    local sim1_count=0
+    local sim2_count=0
+    if [ -n "$SIM1_NUMBER" ]; then
+        sim1_count=$(echo $SIM1_NUMBER | wc -w)
+    fi
+
+    if [ -n "$SIM2_NUMBER" ]; then
+        sim2_count=$(echo $SIM2_NUMBER | wc -w)
+            fi
+    local total_count=$((sim1_count + sim2_count))
+    if [ $total_count -gt 0 ]; then
+        return 0
+    else
+        return 1
+    fi
+}
+
+
+check_single_number() {
+    local sim_numbers=$(get_sim_numbers_only)
+    local num_list=$(jsonfilter -i "$CONFIG_FILE" -e '@.single_sim.forward_numbers[*]' 2>/dev/null | tr ' ' '\n' | sort -u)
+
+    local result=$(process_numbers "$num_list" "$sim_numbers" "Single SIM")
+    local valid_count=$(echo $result | wc -w)
+    if [ $valid_count -gt 0 ]; then
+        echo "$result"
+        return 0
+    else
+        return 1
+    fi
+}
+
+MAIL=$(jsonfilter -i "$CONFIG_FILE" -e '@.email.emails' 2>/dev/null | sed 's/[][]//g' | tr -d '"')
+SUBJECT=$(jsonfilter -i "$CONFIG_FILE" -e '@.email.subject' 2>/dev/null)
+SENDER=$(cat /etc/ssmtp/ssmtp.conf 2>/dev/null | grep '^AuthUser' | grep -E -o '[a-zA-Z0-9.-]{1,}@[a-zA-Z0-9.-]{1,}\.[a-z]{1,3}' || echo "")
+SOURCE=$(cat "$2" | grep '^From:' | cut -d " " -f2)
+phone_single_enable=$(jsonfilter -i "$CONFIG_FILE" -e '@.single_sim.enable' 2>/dev/null)
+phone_dual_sim1_enable=$(jsonfilter -i "$CONFIG_FILE" -e '@.dual_sim.sim1.enable' 2>/dev/null)
+phone_dual_sim2_enable=$(jsonfilter -i "$ECONFIG_FILE" -e '@.dual_sim.sim2.enable' 2>/dev/null)
+email_enable=$(jsonfilter -i "$CONFIG_FILE" -e '@.email.enable' 2>/dev/null)
+
+if [ "$1" = "RECEIVED" ]; then
+    Bus=$(grep -i "^Bus:" "$2" | awk '{print $2}')
+    Slot=$(grep -i "^Slot:" "$2" | awk '{print $2}')
+
+    line=$(awk '/^\s*$/{print NR}' $2 | head -n 1)
+    [ -z "$line" ] && exit 0
+    if cat "$2" | grep -q UCS2; then
+        LENGTH=$(cat "$2" | grep 'Length:' | head -n 1 | cut -d " " -f2)
+
+        TMPFILE=$(mktemp /tmp/forward_XXXXXX)
+        sed -e "1,${line}d" "$2" > "$TMPFILE"
+        SMS_MESSAGE=$(gl_modem -B "$Bus" convert "$TMPFILE" "$LENGTH")
+        rm -f "$TMPFILE"
+    else
+        SMS_MESSAGE=$(sed "1,${line}d" < "$2")
+    fi
+
+    model=$(get_model)
+    case "$model" in
+        "e5800")
+            if check_dual_number; then
+                if [ "$Slot" = "1" ] && [ "$phone_dual_sim1_enable" = "true" ] && [ -n "$SIM1_NUMBER" ]; then
+                    sendsms "$SIM1_NUMBER" "$Bus" "$Slot" "${SMS_MESSAGE}" international
+                elif [ "$Slot" = "2" ] && [ "$phone_dual_sim2_enable" = "true" ] && [ -n "$SIM2_NUMBER" ]; then
+                    sendsms "$SIM2_NUMBER" "$Bus" "$Slot" "${SMS_MESSAGE}" international
+                else
+                    log_info $LINENO "sms-forward" "Does not meet forwarding conditions: Slot=$Slot, SIM1 enable=$phone_dual_sim1_enable, SIM2 enable=$phone_dual_sim2_enable"
+                fi
+            else
+                log_err $LINENO "sms-forward" "Dual SIM mode check failed, no forwarding"
+            fi
+            ;;
+        *)
+
+        NUMBER=$(check_single_number)
+        if [ "$phone_single_enable" = "true" ] && [ -n "$NUMBER" ]; then
+            sendsms "$NUMBER" "$Bus" "$Slot" "${SMS_MESSAGE}" international
+        else
+            log_info $LINENO "sms-forward" "Single SIM mode does not meet forwarding conditions"
+        fi
+        ;;
+    esac
+
+    if [ "$email_enable" = "true" ] && [ -n "$MAIL" ]; then
+       echo -e "From: $SENDER\nSubject:${SUBJECT} received a message from ${SOURCE}\nContent-Type: text/html;charset=UTF-8\n\n$SMS_MESSAGE" | ssmtp -vvv "$MAIL"
+    fi
+fi
+

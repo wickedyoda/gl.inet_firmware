@@ -1,0 +1,5 @@
+/usr/bin/gl_eqos
+/etc/init.d/gl_eqos
+/etc/hotplug.d/iface/96-gleqos
+/usr/lib/oui-httpd/rpc/qos
+/etc/config/qos

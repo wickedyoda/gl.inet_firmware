@@ -1,0 +1,10 @@
+Package: gl-sdk4-screen-large
+Version: git-2026.187.11087-e8ad45a-1
+Depends: libc, libcurl4, jansson4, libubus20210630, libblobmsg-json20210516, libubox20210516, libstdcpp6
+Source: feeds/glinet/gl-sdk4-screen-large
+SourceName: gl-sdk4-screen-large
+Section: base
+SourceDateEpoch: 1783307087
+Architecture: aarch64_cortex-a53
+Installed-Size: 8850129
+Description:  Screen Large Support

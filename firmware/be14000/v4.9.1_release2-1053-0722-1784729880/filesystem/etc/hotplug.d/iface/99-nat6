@@ -1,0 +1,9 @@
+[ ifup = "$ACTION" ] && {
+    if [ -n "$INTERFACE" ]; then
+        proto=$(uci -q get network.$INTERFACE.proto)
+        mode=$(uci -q get glipv6.lan.mode)
+        if [ "$proto" = "dhcpv6" ] && { [ "$mode" = "nat6" ] || [ "$mode" = "static" ]; }; then
+            $(sleep 3;conntrack -D -f ipv6 -p icmpv6) &
+        fi
+    fi
+}

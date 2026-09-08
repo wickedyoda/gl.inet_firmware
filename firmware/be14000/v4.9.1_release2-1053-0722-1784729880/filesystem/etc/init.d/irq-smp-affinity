@@ -1,0 +1,26 @@
+#!/bin/sh /etc/rc.common
+
+START=20
+
+start() {
+    local board=$(board_name)
+
+    case $board in
+    glinet,gl-mt3000)
+        [ -d /sys/module/mt7915e ] && echo 2 > /proc/irq/81/smp_affinity
+        ;;
+    glinet,gl-mt6000)
+        irq0=$(cat /proc/interrupts | grep 'GICv3 229' | cut -d: -f1)
+        irq1=$(cat /proc/interrupts | grep 'GICv3 230' | cut -d: -f1)
+        echo 2 > /proc/irq/$irq0/smp_affinity
+        echo 8 > /proc/irq/$irq1/smp_affinity
+        ;;
+    qcom,sdxpinn-idp)
+        irq_usb=$(grep 'eth0' /proc/interrupts | cut -d: -f1 | tr -d ' ')
+        if [ -e /proc/irq/${irq_usb}/smp_affinity ]; then
+            smp_affinity=$(cat /proc/irq/${irq_usb}/smp_affinity)
+            [ "$smp_affinity" != "c" ] && echo c > /proc/irq/${irq_usb}/smp_affinity
+        fi
+        ;;
+    esac
+}

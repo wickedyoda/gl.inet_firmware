@@ -1,0 +1,42 @@
+#!/bin/sh /etc/rc.common
+# shellcheck disable=SC2034
+
+START=93
+STOP=99
+
+if [ -f "/etc/init.d/usbmuxd" ]; then
+    usbmuxd_func="/etc/init.d/usbmuxd"
+else
+    usbmuxd_func="/usr/sbin/usbmuxd"
+fi
+
+stop_usbmuxd() {
+        sleep 20
+        $usbmuxd_func enable
+        $usbmuxd_func start
+        sleep 2
+        ipheth=$(grep ipheth /sys/kernel/debug/usb/devices)
+        if [ -z "$ipheth" ];then
+            $usbmuxd_func  stop
+        fi
+}
+
+start() {
+        $usbmuxd_func disable
+        stop_usbmuxd &
+}
+
+boot() {
+        disabled=$(uci -q get network.tethering.disabled)
+        ifname=$(uci -q get network.tethering.ifname)
+        if [ "$disabled" != "1" -a -n "$ifname" ];then
+                if [ -e /proc/gl-hw-info/usb-reset ];then
+                        power=$(cat /proc/gl-hw-info/usb-reset | cut -d , -f 1)
+                        value=$(cat /proc/gl-hw-info/usb-reset | cut -d , -f 2)
+                        [ "$value" = "0" ] && echo 1 > /sys/class/gpio/$power/value || echo 0 > /sys/class/gpio/$power/value
+                        sleep 1
+                        echo $value > /sys/class/gpio/$power/value
+                fi
+        fi
+        start
+}

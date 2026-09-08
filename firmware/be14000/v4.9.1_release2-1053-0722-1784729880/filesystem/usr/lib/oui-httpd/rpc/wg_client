@@ -1,0 +1,714 @@
+--[[
+    @object-name: wg_client
+    @object-desc: wireguard client
+--]]
+local uci = require "uci"
+local fs = require "oui.fs"
+local ubus = require "oui.ubus"
+local lfactory = require "lfactory"
+local wg = require "gl.wg_client"
+local err = require "gl.vpn_err_code"
+local provider_list = wg.provider_list
+
+local M = {}
+
+local function is_expressvpn_partner_device()
+    local helper = "/etc/wireguard/scripts/get_partner.sh"
+    if not fs.access(helper) then
+        return false
+    end
+
+    local handle = io.popen(". " .. helper .. "; get_partner 2>/dev/null")
+    if not handle then
+        return false
+    end
+
+    local partner = handle:read("*l") or ""
+    handle:close()
+
+    return partner == "expressvpn"
+end
+
+local function is_hidden_expressvpn_partner_provider(c, group)
+    if not is_expressvpn_partner_device() then
+        return false
+    end
+
+    local group_name = c:get("wireguard", group, "group_name")
+    local group_type = tonumber(c:get("wireguard", group, "group_type") or "")
+
+    return group_type == 1 and group_name ~= "ExpressVPN" and group_name ~= "FromApp"
+end
+
+local function hidden_provider_error()
+    return {
+        err_code = err.VPN_ERR_UNKNOWN_PROVIDER,
+        err_msg = err.err_msg[err.VPN_ERR_UNKNOWN_PROVIDER]
+    }
+end
+
+--[[
+    @method-type: call
+    @method-name: gen_key
+    @method-desc: Generate a new private key and a public key
+
+    @in  string ?private_key  Private key
+
+    @out number public_key    Public key
+    @out number private_key   Private key
+    @out number ?err_code     Error code [20001207: "Key is not the correct length or format"]
+    @out string ?err_msg      Error data
+
+    @in-example: {"jsonrpc":"2.0","method":"call","params":["","wg_client","gen_key",{"private_key":"8OCHkH3DTKVtrKo/B/gxzFn9SAtTldI4yNzdMCTEVFM="}],"id":1}
+    @out-example: {"id":1,"jsonrpc":"2.0","result":{"public_key":"NpSVHOUs5UBgKMsr4MJtiWncbq+PkgnYyXDAQ8ZlvU0=\n","private_key":"8OCHkH3DTKVtrKo\/B\/gxzFn9SAtTldI4yNzdMCTEVFM="}}
+--]]
+M.gen_key = function(params)
+    return wg.gen_key_pair(params.private_key or nil)
+end
+
+--[[
+    @method-type: call
+    @method-name: get_provider_server_list
+    @method-desc: Get third part provider server list
+
+    @in  number  group_id                  group id
+    @in  string  username                  username
+    @in  string  ?password                 password
+
+    @out string  provider                      Provider name
+    @out array   server_info                   Server list
+    @out string  ?server_info.country_id       Country id
+    @out string  ?server_info.country_code     Country code
+    @out string  server_info.country_name      Country name
+    @out array   server_info.cities            City list
+    @out string  server_info.cities.city_id    City id
+    @out string  server_info.cities.city_name  City name
+    @out array   server_info.cities.hostname   Server list
+    @out bool    ?mfa_required                 Whether provider requires OTP verification before continuing
+    @out string  ?mfa_type                     MFA type, current only supports "otp"
+
+    @out number ?err_code     Error code  [20001011: "parameter missing"; 20001012: "invalid parameter"; 20001107:"download configuration file failed"; 20001100:"invalid login info"; 20001223:"two factor authentication required"]
+    @out number ?err_msg      Error data
+
+    @in-example: {"jsonrpc":"2.0","method":"call","params":["","wg_client","get_provider_server_list",{"group_id":4408, "username":"test", "password":"123456"}],"id":1}
+    @out-example: {"id":1,"jsonrpc":"2.0","result":{"provider":"Surfshark","server_info":[{"country_name":"United States","cities":[{"city_id":"dbe53459-2fe7-4679-b318-f65b4d704902","city_name":"Seattle","hostname":["us-sea.prod.surfshark.com"]},{"city_id":"9e8e411b-54a2-44b3-a410-ceb3a44f408b","city_name":"Bend","hostname":["us-bdn.prod.surfshark.com"]},{"city_id":"acfbb50d-520b-47aa-8c68-56327fa513fc","city_name":"San Francisco","hostname":["us-sfo.prod.surfshark.com"]},{"city_id":"f3848fad-6836-4bf7-bda1-08cd1ad91e9a","city_name":"San Jose","hostname":["us-sjc.prod.surfshark.com"]},{"city_id":"aadc5167-ee87-4190-8917-6d7028f0aefe","city_name":"Salt Lake City","hostname":["us-slc.prod.surfshark.com"]},{"city_id":"9f0ed7c6-b694-4c6c-b01e-a878852df83a","city_name":"Los Angeles","hostname":["us-lax.prod.surfshark.com"]},{"city_id":"6fdfb9ae-8c41-4d1e-ab74-f2b46c6f36d8","city_name":"Las Vegas","hostname":["us-las.prod.surfshark.com"]},{"city_id":"ed58ed6d-48ed-4c2a-b6c8-7a101d4b9df5","city_name":"Denver","hostname":["us-den.prod.surfshark.com"]},{"city_id":"4e5279a4-9962-4adc-be8a-72ba668ea670","city_name":"Phoenix","hostname":["us-phx.prod.surfshark.com"]},{"city_id":"c187ef46-5453-4ed3-895f-a1b3df02ae08","city_name":"Chicago","hostname":["us-chi.prod.surfshark.com"]},{"city_id":"1c14f2f0-1156-4695-81da-ded69cf58876","city_name":"Detroit","hostname":["us-dtw.prod.surfshark.com"]},{"city_id":"30cb5a75-8937-4e3d-9813-84392ecb1f6b","city_name":"Kansas City","hostname":["us-kan.prod.surfshark.com"]},{"city_id":"fcc03a18-317e-42e5-b32c-605462d5abb3","city_name":"Buffalo","hostname":["us-buf.prod.surfshark.com"]},{"city_id":"4683fe1f-01c0-4fdf-8475-a7abe2faacbe","city_name":"Latham","hostname":["us-ltm.prod.surfshark.com"]},{"city_id":"b146903e-f0d4-4a87-975c-0c227ed69c24","city_name":"Boston","hostname":["us-bos.prod.surfshark.com"]},{"city_id":"71d5961f-4b6c-4a9c-98b7-505435e3e466","city_name":"New York","hostname":["us-nyc.prod.surfshark.com"]},{"city_id":"d5a988fe-33a2-4bc5-afc4-eb22486d7809","city_name":"Dallas","hostname":["us-dal.prod.surfshark.com"]},{"city_id":"1ba167e0-a964-4742-887e-672d6511605e","city_name":"Ashburn","hostname":["us-ash.prod.surfshark.com"]},{"city_id":"e7a0250c-2b09-4cc6-a936-e55cd58169ea","city_name":"Charlotte","hostname":["us-clt.prod.surfshark.com"]},{"city_id":"fb3c5eed-ad76-4633-a233-f9f0c55a28c6","city_name":"Atlanta","hostname":["us-atl.prod.surfshark.com"]},{"city_id":"2c204c08-91cd-4eb9-8f45-6f0e62b5c73a","city_name":"Houston","hostname":["us-hou.prod.surfshark.com"]},{"city_id":"16faed5a-475a-421e-b3dd-7ee70e3fc9b9","city_name":"Miami","hostname":["us-mia.prod.surfshark.com"]}],"country_id":"US"}]}}
+--]]
+M.get_provider_server_list = function(params)
+    local res = {}
+    local group_name
+    local c = uci.cursor()
+
+    if not params.group_id then
+        return {
+            err_code = err.VPN_ERR_PARAM_MISSING,
+            err_msg = err.err_msg[err.VPN_ERR_PARAM_MISSING]
+        }
+    end
+
+    local group = "group_"..params.group_id
+
+    if is_hidden_expressvpn_partner_provider(c, group) then
+        return hidden_provider_error()
+    end
+
+    group_name = c:get("wireguard", group, "group_name")
+
+    if not group_name then
+        return {
+            err_code = err.VPN_ERR_UNKNOWN_PROVIDER,
+            err_msg = err.err_msg[err.VPN_ERR_UNKNOWN_PROVIDER]
+        }
+    end
+
+    if group_name ~= "ExpressVPN" then
+        if not params.username then
+            return {
+                err_code = err.VPN_ERR_PARAM_MISSING,
+                err_msg = err.err_msg[err.VPN_ERR_PARAM_MISSING]
+            }
+        end
+    end
+
+    if provider_list[group_name] and provider_list[group_name].get_server then
+        res = provider_list[group_name].get_server(params)
+    end
+
+    return res
+end
+
+--[[
+    @method-type: call
+    @method-name: submit_provider_otp
+    @method-desc: Submit OTP for provider MFA challenge
+
+    @in  number  group_id     Group id of third part provider
+    @in  string  username     Username
+    @in  string  password     Password
+    @in  string  otp          One-time password
+
+    @out number ?err_code     Error code [20001011: "parameter missing"; 20001012:"invalid parameter"; 20001101:"unknown provider"; 20001224:"invalid two factor authentication code"]
+    @out string ?err_msg      Error data
+
+    @in-example: {"jsonrpc":"2.0","method":"call","params":["","wg_client","submit_provider_otp",{"group_id":4408, "username":"test", "password":"123456", "otp":"123456"}],"id":1}
+    @out-example: {"id":1,"jsonrpc":"2.0","result":{}}
+--]]
+M.submit_provider_otp = function(params)
+    -- gl-validator does not enforce missing numeric params, so group_id stays validated here.
+    if not params.group_id or not params.username or params.username == "" or
+        not params.password or params.password == "" or
+        not params.otp or params.otp == "" then
+        return {
+            err_code = err.VPN_ERR_PARAM_MISSING,
+            err_msg = err.err_msg[err.VPN_ERR_PARAM_MISSING]
+        }
+    end
+
+    return wg.submit_provider_otp(params)
+end
+
+--[[
+    @method-type: call
+    @method-name: generate_provider_config
+    @method-desc: Generate selected server's config
+
+    @in number  group_id                      Group id
+    @in array   server_info                   Server list
+    @in bool    match_all                     Whether to generate all the configurations for the selected city
+    @in string  ?server_info.country_id       Country id
+    @in string  ?server_info.country_code     Country code
+    @in string  server_info.country_name      Country name
+    @in array   server_info.cities            City list
+    @in string  ?server_info.cities.city_id   City id
+    @in string  server_info.cities.city_name  City name
+    @in array   ?server_info.cities.hostname  Server list
+
+    @out number ?err_code     Error code [20001011: "parameter missing"; 20001012: "invalid parameter"; 20001101:"unknown provider"]
+    @out string ?err_msg      Error data
+
+    @in-example: {"jsonrpc":"2.0","method":"call","params":["","wg_client","generate_provider_config",{"group_id":2182,"match_all":false,"server_info":[{"cities":[{"city_id":"ca_vancouver","city_name":"CA Vancouver","hostname":["vancouver431"]},{"city_id":"ca_ontario-so","city_name":"CA Ontario Streaming Optimized","hostname":["ontario416"]},{"city_id":"ca_ontario","city_name":"CA Ontario","hostname":["ontario437"]}],"country_name":"CA"}]}],"id":1}
+    @out-example: {"id":1,"jsonrpc":"2.0","result":[]}
+--]]
+M.generate_provider_config = function(params)
+    local group_name
+    local res
+    local c = uci.cursor()
+
+    if not params.group_id or not params.server_info or type(params.server_info) ~= "table" then
+        return {
+            err_code = err.VPN_ERR_PARAM_MISSING,
+            err_msg = err.err_msg[err.VPN_ERR_PARAM_MISSING]
+        }
+    end
+
+    local group = "group_"..params.group_id
+
+    if is_hidden_expressvpn_partner_provider(c, group) then
+        return hidden_provider_error()
+    end
+
+    group_name = c:get("wireguard", group, "group_name")
+
+    if not group_name then
+        return {
+            err_code = err.VPN_ERR_UNKNOWN_PROVIDER,
+            err_msg = err.err_msg[err.VPN_ERR_UNKNOWN_PROVIDER]
+        }
+    end
+
+    if group_name == "IPVanish" and not params.match_all then
+        wg.clean_unselect_peers(params.group_id, params.server_info)
+    elseif group_name == "ExpressVPN" and not params.match_all then
+        wg.clean_unselect_peers(params.group_id, params.server_info)
+    else
+        wg.clean_old_peers(params.group_id)
+    end
+
+    if provider_list[group_name] and provider_list[group_name].gen_config then
+        res = provider_list[group_name].gen_config(params)
+    else
+        return {
+            err_code = err.VPN_ERR_PARAM_INVALIED,
+            err_msg = err.err_msg[err.VPN_ERR_PARAM_INVALIED]
+        }
+    end
+
+    ubus.call('gl-session', 'call', {
+        module = "vpn-client",
+        func = "check_vpn_config",
+        params = {}
+    })
+
+    return res
+end
+
+--[[
+    @method-type: call
+    @method-name: update_provider_config
+    @method-desc: update selected server's config
+
+    @in number  group_id                       Group id
+    @in bool    update_all                     Whether to update all saved configurations
+    @in number  ?peer_id                       Peer_id to update
+    @in string  ?instance                      Wireguard instance to update
+
+    @out number ?err_code     Error code [20001011: "parameter missing"; 20001012: "invalid parameter"]
+    @out string ?err_msg      Error data
+
+    @in-example: {"jsonrpc":"2.0","method":"call","params":["","wg_client","update_provider_config",{"group_id":5928, "update_all":false, "peer_id":8885}],"id":1}
+    @out-example: {"id":1,"jsonrpc":"2.0","result":[]}
+--]]
+M.update_provider_config = function(params)
+    local group_name
+    local res
+    local c = uci.cursor()
+
+    if not params.group_id or (not params.update_all and not params.peer_id) then
+        return {
+            err_code = err.VPN_ERR_PARAM_MISSING,
+            err_msg = err.err_msg[err.VPN_ERR_PARAM_MISSING]
+        }
+    end
+
+    local group = "group_"..params.group_id
+
+    if is_hidden_expressvpn_partner_provider(c, group) then
+        return hidden_provider_error()
+    end
+
+    group_name = c:get("wireguard", group, "group_name")
+
+    if provider_list[group_name] and provider_list[group_name].update_config then
+        res = provider_list[group_name].update_config(params)
+    else
+        res = {
+            err_code = err.VPN_ERR_PARAM_INVALIED,
+            err_msg = err.err_msg[err.VPN_ERR_PARAM_INVALIED]
+        }
+    end
+
+    return res
+end
+
+--[[
+    @method-type: call
+    @method-name: get_max_client
+    @method-desc: Calculate how many client configurations the available memory can be used to save
+
+    @out  number   max_client      The max clients can be set[0: not memory available]
+    @in-example: {"jsonrpc":"2.0","method":"call","params":["","wg_client","get_max_client",{}],"id":1}
+    @out-example: {"id":1,"jsonrpc":"2.0","result":{"max_client":435110}}
+--]]
+M.get_max_client = function(params)
+    local res
+    local memory_available
+    local memory_total
+    local max_count
+
+    local system_status = ubus.call("system", "info")
+    if type(system_status) == "table" and  type(system_status.memory) == "table" then
+        memory_total = system_status.memory.total
+        memory_available = system_status.memory.available or (system_status.memory.free + system_status.memory.buffered)
+    end
+
+    local _, flash_available = fs.statvfs("/")
+    local flash_total = 0
+    if fs.access("/proc/gl-hw-info/flash_size") then
+        flash_total = string.gsub(lfactory.get_falsh_size(), "[^%d]", "") * 1024 * 1024
+    end
+
+    memory_available = memory_available - (memory_total * 0.05)
+    flash_available = flash_available - (flash_total * 0.05)
+
+    if flash_available < memory_available then
+        max_count = flash_available / 700
+    else
+        max_count = memory_available / 700
+    end
+
+    -- if available memory is too small, limit again
+    if max_count < 500 then
+        max_count = max_count / 2
+    end
+
+    res = {
+        max_client = math.max(math.floor(max_count), 0)
+    }
+
+    return res
+end
+
+--[[
+    @method-type: call
+    @method-name: get_provider_user_info
+    @method-desc: Get account information
+
+    @in number   group_id    Group id of third part provider
+
+    @out number expires_at    Expiration time
+    @out number ?allocated    Number of allocated users
+    @out number ?available    Number of available users
+    @out number ?err_code     Error code [20001011: "parameter missing"]
+    @out string ?err_msg      Error data
+
+    @in-example: {"jsonrpc":"2.0","method":"call","params":["","wg_client","get_provider_user_info",{"group_id":676}],"id":1}
+    @out-example: {"id":1,"jsonrpc":"2.0","result":{"allocated":10,"available":0,"expires_at":1735689600}}
+--]]
+M.get_provider_user_info = function(params)
+    local c = uci.cursor()
+    local res = {}
+
+    if not params.group_id then
+        return {
+            err_code = err.VPN_ERR_PARAM_MISSING,
+            err_msg = err.err_msg[err.VPN_ERR_PARAM_MISSING]
+        }
+    end
+
+    local group = "group_"..params.group_id
+
+    if is_hidden_expressvpn_partner_provider(c, group) then
+        return hidden_provider_error()
+    end
+
+    local group_name = c:get("wireguard", group, "group_name")
+
+    if not group_name then
+        return {
+            err_code = err.VPN_ERR_UNKNOWN_PROVIDER,
+            err_msg = err.err_msg[err.VPN_ERR_UNKNOWN_PROVIDER]
+        }
+    end
+
+    if provider_list[group_name] and provider_list[group_name].get_user_info then
+        res = provider_list[group_name].get_user_info(params)
+    end
+
+    return res
+end
+
+--[[
+    @method-type: call
+    @method-name: create_provider_account
+    @method-desc: Create new third part provider account
+
+    @in  number  group_id     Group id of third part provider
+    @in  string  username     Username [can only contain letters and numbers]
+    @in  string  password     Password [at least 8 characters]
+
+    @out number expires_at    Expiration time
+    @out number ?err_code     Error code [20001207: "the password must be at least 8 characters"; 20001208: "the username has already been taken"; 20001209: "the username may only contain letters and numbers";]
+    @out string ?err_msg      Error data
+
+    @in-example: {"jsonrpc":"2.0","method":"call","params":["","wg_client","create_provider_account",{"group_id":676, "username":"testnew3","password":"12345678"}],"id":1}
+    @out-example: {"id":1,"jsonrpc":"2.0","result":{"expires_at":1735689600}}
+--]]
+M.create_provider_account = function(params)
+    local c = uci.cursor()
+    local res = {}
+
+    if not params.group_id or not params.username or not params.password then
+        return {
+            err_code = err.VPN_ERR_PARAM_MISSING,
+            err_msg = err.err_msg[err.VPN_ERR_PARAM_MISSING]
+        }
+    end
+
+    local group = "group_"..params.group_id
+
+    if is_hidden_expressvpn_partner_provider(c, group) then
+        return hidden_provider_error()
+    end
+
+    local group_name = c:get("wireguard", group, "group_name")
+
+    if not group_name then
+        return {
+            err_code = err.VPN_ERR_UNKNOWN_PROVIDER,
+            err_msg = err.err_msg[err.VPN_ERR_UNKNOWN_PROVIDER]
+        }
+    end
+
+    if provider_list[group_name] and provider_list[group_name].create_account then
+        res = provider_list[group_name].create_account(params)
+    end
+
+    return res
+end
+
+--[[
+    @method-type: call
+    @method-name: start_random_client
+    @method-desc: Start random client of the selected group
+
+    @in  number  group_id     Group id of third part provider
+    @in  number  ?peer_id     Peer id of third part provider
+    @in  number  ?peer_count  Peer count of selected group
+
+    @out number ?err_code     Error code [20001011: "parameter missing"; 20001213: "vpn client failed to connect to server"]
+    @out string ?err_msg      Error data
+
+    @in-example: {"jsonrpc":"2.0","method":"call","params":["","wg_client","start_random_client",{"group_id":676, "peer_id":654}],"id":1}
+    @out-example: {"id":1,"jsonrpc":"2.0","result":[]}
+--]]
+M.start_random_client = function(params)
+    local res = {}
+    local timeout = 60
+    local c = uci.cursor()
+
+    if not params.group_id then
+        return {
+            err_code = err.VPN_ERR_PARAM_MISSING,
+            err_msg = err.err_msg[err.VPN_ERR_PARAM_MISSING]
+        }
+    end
+
+    local group = "group_"..params.group_id
+    if is_hidden_expressvpn_partner_provider(c, group) then
+        return hidden_provider_error()
+    end
+
+    os.execute(string.format("killall -9 /etc/wireguard/scripts/start_random_client.sh 2 >/dev/null"))
+
+    if params.peer_count then
+        timeout = 30 * params.peer_count + 10
+    end
+
+    local cmd
+    if not params.peer_id then
+        cmd = string.format("timeout %d /etc/wireguard/scripts/start_random_client.sh %d", timeout, params.group_id)
+    else
+        cmd = string.format("timeout %d /etc/wireguard/scripts/start_random_client.sh %d %d", timeout, params.group_id, params.peer_id)
+    end
+
+    local handle = ngx.pipe.spawn(cmd, { stdout_read_timeout = timeout * 1000 })
+    local output = handle:stdout_read_all()
+
+    if output and string.find(output, "connect failed") then
+        res = {
+            err_code = err.VPN_ERR_VPN_CLIENT_CONNECT_FAIL,
+            err_msg = err.err_msg[err.VPN_ERR_VPN_CLIENT_CONNECT_FAIL]
+        }
+    end
+
+    return res
+end
+
+--[[
+    @method-type: call
+    @method-name: init_provider_group
+    @method-desc: Initialize group configurations for providers
+
+    @out number ?err_code     Error code
+    @out string ?err_msg      Error data
+
+    @in-example: {"jsonrpc":"2.0","method":"call","params":["","wg_client","init_provider_group",{}],"id":1}
+    @out-example: {"id":1,"jsonrpc":"2.0","result":[]}
+--]]
+M.init_provider_group = function(params)
+    local res
+
+    res = wg.init_provider_group(params)
+
+    return res
+end
+
+local xvpn = require "gl.expressvpn"
+
+--[[
+    ExpressVPN error response (used by all expressvpn_* RPCs below on failure).
+
+    On failure, the result object contains:
+      @out number  err_code   One of {VPN_ERR_XV_NETWORK 20001300, VPN_ERR_XV_DEVICE_CONFIG 20001301,
+                                       VPN_ERR_XV_LOGIN_EXPIRED 20001302, VPN_ERR_XV_NO_SUBSCRIPTION 20001303,
+                                       VPN_ERR_XV_BUSINESS 20001304, VPN_ERR_XV_INTERNAL 20001305}
+      @out string  err_msg    English short phrase (from gl.vpn_err_code.err_msg)
+      @out string  ?detail    Upstream business message pass-through
+      @out number  ?http_status  Present on HTTP-class errors
+--]]
+
+--[[
+    @method-type: call
+    @method-name: expressvpn_get_status
+    @method-desc: Query ExpressVPN co-branded wizard state. Returns two independent fields: activation and login.
+
+    @out string activation   One of {unknown, eligible, ineligible, redeeming, redeemed}
+    @out string login        One of {none, ready}
+    @out string ?order_id    Present when activation = "redeeming"
+    @out string ?purchase_source  Present when activation = "redeeming" and submitted with checkout
+    @out string ?order_email      Present when activation = "redeeming" and submitted with checkout
+    @out object ?activation_info  When activation is redeemed or ineligible: {email, activation_time}; activation_time is Unix epoch seconds
+
+    @in-example: {"jsonrpc":"2.0","method":"call","params":["","wg_client","expressvpn_get_status",{}],"id":1}
+    @out-example: {"id":1,"jsonrpc":"2.0","result":{"activation":"redeemed","login":"ready","activation_info":{"email":"jes***age@gmail.com","activation_time":1781181987}}}
+--]]
+M.expressvpn_get_status = function(params)
+    return xvpn.get_status()
+end
+
+--[[
+    @method-type: call
+    @method-name: expressvpn_check_eligibility
+    @method-desc: Probe ExpressVPN co-branded eligibility for the current device; persists `eligibility` to UCI.
+
+    @out string eligibility  One of {eligible, ineligible}
+    @out string ?source      e.g. "cloud"
+
+    On probe failure: returns VPN_ERR_XV_NETWORK (20001300) and persists
+    expressvpn.global.eligibility = "probe_failed".
+    On other failures: see ExpressVPN error response above.
+
+    @in-example: {"jsonrpc":"2.0","method":"call","params":["","wg_client","expressvpn_check_eligibility",{}],"id":1}
+    @out-example: {"id":1,"jsonrpc":"2.0","result":{"eligibility":"eligible","source":"cloud"}}
+--]]
+M.expressvpn_check_eligibility = function(params)
+    return xvpn.check_eligibility()
+end
+
+--[[
+    @method-type: call
+    @method-name: expressvpn_accept_agreement
+    @method-desc: Mark the ExpressVPN co-branded user agreement as accepted (sets UCI expressvpn.global.agreement_accepted=1).
+
+    @out bool ok  true on success
+
+    @in-example: {"jsonrpc":"2.0","method":"call","params":["","wg_client","expressvpn_accept_agreement",{}],"id":1}
+    @out-example: {"id":1,"jsonrpc":"2.0","result":{"ok":true}}
+--]]
+M.expressvpn_accept_agreement = function(params)
+    return xvpn.accept_agreement()
+end
+
+--[[
+    @method-type: call
+    @method-name: expressvpn_request_checkout
+    @method-desc: POST GL Cloud checkout session — returns checkout_url (browser XV promo page); requires expressvpn.global.gl_activation_base.
+
+    @in  string order_id        Order ID provided by the user
+    @in  string ?purchase_source Optional purchase channel: "amazon" | "glinet_store"
+    @in  string ?order_email     Required when purchase_source = "glinet_store"
+
+    @out string status        "success"
+    @out string checkout_url  XV promo page URL (open in browser)
+
+    On failure: see ExpressVPN error response above.
+
+    @in-example: {"jsonrpc":"2.0","method":"call","params":["","wg_client","expressvpn_request_checkout",{"order_id":"113-5829374-2938475","purchase_source":"amazon"}],"id":1}
+    @in-example: {"jsonrpc":"2.0","method":"call","params":["","wg_client","expressvpn_request_checkout",{"order_id":"GL-123456","purchase_source":"glinet_store","order_email":"user@example.com"}],"id":1}
+    @out-example: {"id":1,"jsonrpc":"2.0","result":{"status":"success","checkout_url":"https://www.expressvpn.com/checkout/..."}}
+--]]
+M.expressvpn_request_checkout = function(params)
+    return xvpn.request_checkout(params or {})
+end
+
+--[[
+    @method-type: call
+    @method-name: expressvpn_poll_order_activation
+    @method-desc: Poll GL Cloud for subscription_activated / order-linked state after user completes XV checkout (webhook on GL backend).
+
+    @in  string order_id           Order ID
+
+    @out string status             "success"
+    @out string activation_status  One of {activated, pending, failed}
+    @out string ?activation_hint   Raw upstream hint (lowercased)
+    @out string ?err_msg           Upstream business message (when activation_status = "failed")
+
+    On failure: see ExpressVPN error response above.
+
+    @in-example: {"jsonrpc":"2.0","method":"call","params":["","wg_client","expressvpn_poll_order_activation",{"order_id":"GL-123456"}],"id":1}
+    @out-example: {"id":1,"jsonrpc":"2.0","result":{"status":"success","activation_status":"activated"}}
+--]]
+M.expressvpn_poll_order_activation = function(params)
+    return xvpn.poll_order_activation(params or {})
+end
+
+--[[
+    @method-type: call
+    @method-name: expressvpn_start_login
+    @method-desc: Start OIDC device-code login; returns user_code and verification_uri_complete for the front-end to display.
+
+    @out string user_code                 Code shown to the user
+    @out string verification_uri_complete URL to open in browser
+    @out string ?status                   "started" on success
+    @out number ?interval                 Recommended poll interval (seconds)
+    @out number ?expires_in               Device code TTL (seconds)
+
+    On failure: see ExpressVPN error response above.
+
+    @in-example: {"jsonrpc":"2.0","method":"call","params":["","wg_client","expressvpn_start_login",{}],"id":1}
+    @out-example: {"id":1,"jsonrpc":"2.0","result":{"user_code":"ABCD-1234","verification_uri_complete":"https://expressvpn.com/device?user_code=ABCD-1234","interval":5,"expires_in":900}}
+--]]
+M.expressvpn_start_login = function(params)
+    return xvpn.start_login()
+end
+
+--[[
+    @method-type: call
+    @method-name: expressvpn_poll_login
+    @method-desc: Poll the OIDC token endpoint for an active device-code login.
+
+    @out string status   One of {pending, success}
+    @out string ?error   When status=pending, IdP sub-state: authorization_pending | slow_down
+
+    On failure: see ExpressVPN error response above
+    (e.g. when device code expired, user denied authorization, or no active login session).
+
+    @in-example: {"jsonrpc":"2.0","method":"call","params":["","wg_client","expressvpn_poll_login",{}],"id":1}
+    @out-example: {"id":1,"jsonrpc":"2.0","result":{"status":"success"}}
+--]]
+M.expressvpn_poll_login = function(params)
+    return xvpn.poll_login()
+end
+
+--[[
+    @method-type: call
+    @method-name: expressvpn_cancel_login
+    @method-desc: Cancel the in-flight OIDC device-code login session (best-effort; cleans local state).
+
+    @out bool ok  true on success
+
+    @in-example: {"jsonrpc":"2.0","method":"call","params":["","wg_client","expressvpn_cancel_login",{}],"id":1}
+    @out-example: {"id":1,"jsonrpc":"2.0","result":{"ok":true}}
+--]]
+M.expressvpn_cancel_login = function(params)
+    return xvpn.cancel_login()
+end
+
+--[[
+    @method-type: call
+    @method-name: expressvpn_fetch_srt
+    @method-desc: After device-code login, fetch SRT via CP subscription_receipts using current access_token (skip GoodCloud partner activation).
+
+    @out string status  "success"
+
+    On failure: see ExpressVPN error response above
+    (returns err_code = VPN_ERR_XV_NO_SUBSCRIPTION when account has no usable XV subscription).
+
+    @in-example: {"jsonrpc":"2.0","method":"call","params":["","wg_client","expressvpn_fetch_srt",{}],"id":1}
+    @out-example: {"id":1,"jsonrpc":"2.0","result":{"status":"success"}}
+--]]
+M.expressvpn_fetch_srt = function(params)
+    return xvpn.fetch_srt()
+end
+
+--[[
+    @method-type: call
+    @method-name: expressvpn_get_subscriptions
+    @method-desc: Subscription summary for UI; cached at /tmp/expressvpn/subscriptions_cache.json after first successful fetch.
+                  Returns cache when present (is_expired recomputed each call). On HTTP 401, retries once after expressvpn_login.sh refresh_oidc if refresh_token exists.
+
+    @out string  status           "success"
+    @out boolean is_expired       true when nextBillingAt <= now (UTC)
+    @out string  account_name     OIDC access/id token preferred_username or email; fallback UCI activation_email
+    @out number  expiration_date  Unix epoch seconds converted from upstream subscriptions[].nextBillingAt
+
+    On failure: see ExpressVPN error response above
+    (HTTP 401 maps to err_code = VPN_ERR_XV_LOGIN_EXPIRED — access_token has expired).
+
+    @in-example: {"jsonrpc":"2.0","method":"call","params":["","wg_client","expressvpn_get_subscriptions",{}],"id":1}
+    @out-example: {"id":1,"jsonrpc":"2.0","result":{"status":"success","is_expired":false,"account_name":"user@example.com","expiration_date":1800974823}}
+--]]
+M.expressvpn_get_subscriptions = function(params)
+    return xvpn.get_subscriptions()
+end
+
+return M

@@ -1,0 +1,10 @@
+Package: gl-sdk4-cellular
+Version: git-2026.138.27364-d49463d-1.0.0
+Depends: libc, jansson4, gl-sdk4-uci, gl-sdk4-utils, gl-sdk4-timer, comgt, comgt-ncm, chat, uqmi, usb-modeswitch, kmod-usb-acm, kmod-usb-net-huawei-cdc-ncm, kmod-usb-serial, kmod-usb-serial-option, kmod-usb-serial-wwan, kmod-usb-net-cdc-ether, kmod-usb-net-qmi-wwan, gl-sdk4-log, libubox20210516, libubus20210630, smstools3
+Source: feeds/glinet/gl-sdk4-cellular
+SourceName: gl-sdk4-cellular
+Section: base
+SourceDateEpoch: 1779089764
+Architecture: aarch64_cortex-a53
+Installed-Size: 701090
+Description:  glinet cellular

@@ -1,0 +1,10 @@
+Package: gl-sdk4-ipv6
+Version: git-2026.104.29414-d5d568d-1
+Depends: libc, libiwinfo-lua, kmod-ipt-nat6, kmod-ipt-raw6, gl-sdk4-lua-utils
+Source: feeds/glinet/gl-sdk4-ipv6
+SourceName: gl-sdk4-ipv6
+Section: base
+SourceDateEpoch: 1776154214
+Architecture: aarch64_cortex-a53
+Installed-Size: 27067
+Description:  glinet SDK4 ipv6 module

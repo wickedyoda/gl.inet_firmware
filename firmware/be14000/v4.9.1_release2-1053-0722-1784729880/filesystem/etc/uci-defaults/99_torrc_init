@@ -1,0 +1,8 @@
+uci -q set firewall.dns_int.family='any'
+uci -q set firewall.tcp_int.family='any'
+uci -q set firewall.tor_dns.family='any'
+uci commit firewall
+
+[ "$(uci -q get glconfig.general.inited)" = "1" ] && exit 0
+rm /usr/share/tor/*
+

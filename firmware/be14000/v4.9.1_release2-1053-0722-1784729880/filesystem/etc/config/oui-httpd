@@ -1,0 +1,24 @@
+config oui-httpd 'main'
+    # 0: no security rule
+    # 1: generic security rule
+    option security_rule 1
+    option max_login_fail 10
+    option login_fail_wait 600
+    option console_disabled 1
+
+config no-auth-methods
+    option object ui
+    list method get_lang
+    list method load_locales
+    list method check_initialized
+    list method get_wifi_config_init
+    list method init
+    list method get_timezone_list
+
+config no-auth-methods
+    option object system
+    list method get_timezone_list
+
+config no-auth-methods
+    option object screen
+    list method get_lock_status

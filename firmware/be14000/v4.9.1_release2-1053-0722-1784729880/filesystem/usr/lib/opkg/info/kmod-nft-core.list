@@ -1,0 +1,16 @@
+/lib/modules/5.4.281/nf_tables.ko
+/lib/modules/5.4.281/nft_reject_inet.ko
+/lib/modules/5.4.281/nft_redir.ko
+/lib/modules/5.4.281/nft_reject.ko
+/lib/modules/5.4.281/nft_limit.ko
+/lib/modules/5.4.281/nft_numgen.ko
+/lib/modules/5.4.281/nft_quota.ko
+/lib/modules/5.4.281/nft_ct.ko
+/lib/modules/5.4.281/nft_reject_ipv4.ko
+/lib/modules/5.4.281/nft_log.ko
+/lib/modules/5.4.281/nf_tables_set.ko
+/lib/modules/5.4.281/nft_reject_ipv6.ko
+/lib/modules/5.4.281/nft_objref.ko
+/lib/modules/5.4.281/nft_hash.ko
+/lib/modules/5.4.281/nft_counter.ko
+/etc/modules.d/nft-core

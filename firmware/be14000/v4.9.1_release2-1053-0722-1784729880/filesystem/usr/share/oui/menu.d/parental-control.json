@@ -1,0 +1,18 @@
+{
+    "index": 45,
+    "view": "parental-control",
+    "title": {
+        "translate": "menu_parentalcontrol"
+    },
+    "level": 2,
+    "parent": "flowcontrol",
+    "parent_icon": "smartinternet",
+    "parent_index": 49,
+    "show_mode": [
+        "router"
+    ],
+    "disables": [
+        "portal",
+        "taps2s"
+    ]
+}

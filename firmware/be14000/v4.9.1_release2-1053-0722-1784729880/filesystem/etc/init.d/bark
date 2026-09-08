@@ -1,0 +1,4 @@
+#!/bin/sh
+START=99
+
+/usr/sbin/gl_bark &

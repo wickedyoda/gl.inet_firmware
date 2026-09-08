@@ -1,0 +1,4 @@
+/usr/bin/reset_network_utils.lua
+/usr/lib/lua/gl/vpn_client.lua
+/usr/lib/libgl-utils.so
+/usr/lib/lua/gl/vpn_err_code.lua

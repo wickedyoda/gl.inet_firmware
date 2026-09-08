@@ -1,0 +1,10 @@
+#!/bin/sh
+
+CRON_PATH='/etc/crontabs/root'
+if [ -f "$CRON_PATH" ] && grep -q 'gl-update-cable-mac\.lua' "$CRON_PATH"; then
+	sed -i 's|.*gl-update-cable-mac\.lua.*|*/30 * * * * /usr/sbin/gl-update-cable-mac.sh time|' "$CRON_PATH"
+	/etc/init.d/cron restart 2>/dev/null
+fi
+
+sh /usr/sbin/gl-update-cable-mac.sh reboot
+return 1

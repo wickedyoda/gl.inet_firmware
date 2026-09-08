@@ -1,0 +1,10 @@
+Package: gl-sdk4-ui-qos
+Version: git-2026.077.32659-c32108d-1
+Depends: libc
+Source: feeds/glinet/gl-ui4.0/module/qos
+SourceName: gl-sdk4-ui-qos
+Section: base
+SourceDateEpoch: 1773824659
+Architecture: aarch64_cortex-a53
+Installed-Size: 15369
+Description:  gl-sdk4-ui-qos

@@ -1,0 +1,15 @@
+/etc/init.d/gl_nas_diskmanager
+/etc/hotplug.d/block/30-mount
+/etc/uci-defaults/gl-nas
+/etc/init.d/gl_nas_sys_dl
+/usr/bin/gl_nas_diskmanager
+/etc/init.d/gl_nas_sys
+/usr/bin/gl_nas_sys
+/usr/bin/gl_nas_client
+/etc/gl_nas/nas_samba3
+/etc/gl_nas/nas_samba4
+/usr/bin/disk_get_label.sh
+/etc/samba/smb.conf.template3
+/etc/samba/smb.conf.template4
+/etc/init.d/gl_nas_sys_up
+/usr/bin/gl_nas_copy_exe

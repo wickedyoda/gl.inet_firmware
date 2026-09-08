@@ -1,0 +1,21 @@
+#!/bin/sh
+
+enable=`uci -q get gl_ddns.glddns.enabled`
+if [ "$enable" = 1 -a "$INTERFACE" != "lan" ];then
+    case "$ACTION" in
+    ifdown |\
+    ifup)
+        mkdir -p /var/run/ddns
+        if [ -e /var/run/ddns/glddns.lasttime -a -e /var/run/ddns/glddns.lock ];then
+            now=`date +%s`
+            last=`cat /var/run/ddns/glddns.lasttime`
+            interval=$((now-last))
+            if [ $interval -gt 10 ];then
+                rm /var/run/ddns/glddns.lock
+            fi
+        fi
+        flock -n /var/run/ddns/glddns.lock /etc/init.d/gl_ddns restart && rm /var/run/ddns/glddns.lock &
+        date +%s > /var/run/ddns/glddns.lasttime
+    ;;
+    esac
+fi

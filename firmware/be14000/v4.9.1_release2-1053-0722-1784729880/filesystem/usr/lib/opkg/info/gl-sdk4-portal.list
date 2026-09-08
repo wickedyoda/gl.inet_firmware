@@ -1,0 +1,4 @@
+/etc/init.d/gl-portal
+/etc/nginx/gl-conf.d/gl-portal.conf
+/etc/uci-defaults/zzz_init_portal_config
+/usr/share/gl-ngx/gl-portal.lua

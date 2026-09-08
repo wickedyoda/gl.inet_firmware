@@ -1,0 +1,10 @@
+Package: kmod-rtl8261x
+Version: 5.4.281+1.0.0-1
+Depends: kernel (=5.4.281-1-df4fa332840f56a774a5d60bd140aaf6), kmod-libphy
+Source: feeds/glinet/gl-rtl8261x-driver
+SourceName: kmod-rtl8261x
+Section: kernel
+SourceDateEpoch: 1773897482
+Architecture: aarch64_cortex-a53
+Installed-Size: 16140
+Description:  realtek phy driver

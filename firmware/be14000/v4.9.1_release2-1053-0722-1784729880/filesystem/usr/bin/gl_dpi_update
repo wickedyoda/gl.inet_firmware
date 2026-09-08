@@ -1,0 +1,99 @@
+#!/bin/sh
+
+dpi_path=$1
+dpi_sha256=$2
+dpi_size=$3
+
+[ -f /tmp/dpi_update_pid -a "$use_mirror_dl" = 1 ] && {
+        logger -t dpi "Only one gl_dpi_update process is allowed, exit......"
+        exit 0
+}
+
+# kill one_click_upgrade if it is executing
+[ -f /tmp/dpi_update_pid ] && {
+        cat /tmp/dpi_update_pid | xargs kill -9
+        ps | grep "curl -C - -Ls --connect-timeout 5" | grep -v grep | xargs kill -9
+        sleep 1
+}
+echo $$ > /tmp/dpi_update_pid
+
+# dpi_update_status
+# 1. downloading
+# 2. download_failed
+# 3. download_success
+# 4. verify_ok
+# 5. verify_failed
+# 6. install_ok
+# 7. install_failed
+# 8. no_available
+
+[ -f "/tmp/dpi.ipk" ] && rm /tmp/dpi.ipk
+
+echo '1' > /tmp/dpi_update_status
+logger -t dpi upgrade "Begin download ipk......"
+
+curl -C - -Ls --connect-timeout 5 $dpi_path -o /tmp/dpi.ipk >> /dev/null
+
+actual_size=$(ls -l /tmp/dpi.ipk | awk '{print $5}')
+
+# check ipk size
+if [ "$dpi_size" -eq "$actual_size" ]; then
+        logger -t dpi upgrade "Download ipk success."
+        echo '3' > /tmp/dpi_update_status
+else
+        logger -t dpi upgrade "Download ipk failed,exit..."
+        echo '2' > /tmp/dpi_update_status
+        rm /tmp/dpi_update_pid
+        exit 0
+fi
+
+# check ipk sha256sum
+sha256sum=$(timeout 5 sha256sum /tmp/dpi.ipk |awk '{print $1}')
+if [ $? -eq 0 ]; then
+        if [ "$dpi_sha256" != "$sha256sum"  ]; then
+                logger -t dpi upgrade "Check ipk sha256sum failed,exit..."
+                echo '5' > /tmp/dpi_update_status
+                rm /tmp/dpi_update_pid
+                exit 0
+        else
+                logger -t dpi upgrade "Check ipk sha256sum success."
+                echo '4' > /tmp/dpi_update_status
+        fi
+else
+        logger -t dpi upgrade "Check ipk sha256sum failed,exit..."
+        echo '5' > /tmp/dpi_update_status
+        rm /tmp/dpi_update_pid
+        exit 0
+fi
+
+logger -t dpi upgrade "Begin install......"
+
+{
+    logger -t dpi "Running: opkg install /tmp/dpi.ipk"
+    sleep 2
+
+    if opkg install /tmp/dpi.ipk; then
+        logger -t dpi "SUCCESS: dpi upgraded successfully"
+        echo '6' > /tmp/dpi_update_status
+
+        logger -t dpi upgrade "Install netify ipks."
+        opkg install /etc/dpi_ipks/netifyd*.ipk
+
+        logger -t dpi upgrade "rm netifyd config"
+        rm /etc/netifyd/netify-apps.conf-opkg
+        rm /etc/netifyd/netify-categories.json-opkg
+        rm /etc/netifyd/netify-proc-aggregator.json-opkg
+        rm /etc/netifyd/netify-proc-core.json-opkg
+        rm /etc/netifyd/netify-proc-flow-actions.json-opkg
+        rm /etc/netifyd/netify-sink-http.json-opkg
+        rm /etc/netifyd/netify-sink-log.json-opkg
+        rm /etc/netifyd/netify-sink-socket.json-opkg
+    else
+        logger -t dpi "FAILED: opkg install returned non-zero exit code"
+        echo '99' > /tmp/dpi_update_status
+    fi
+} > /tmp/dpi_opkg.log 2>&1 &
+
+rm /tmp/dpi_update_pid
+
+exit 0

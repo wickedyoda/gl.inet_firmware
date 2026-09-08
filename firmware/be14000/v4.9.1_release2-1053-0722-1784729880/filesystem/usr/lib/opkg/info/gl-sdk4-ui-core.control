@@ -1,0 +1,10 @@
+Package: gl-sdk4-ui-core
+Version: git-2026.187.06782-f9b4e95-1
+Depends: libc
+Source: feeds/glinet/gl-ui4.0/module/core
+SourceName: gl-sdk4-ui-core
+Section: base
+SourceDateEpoch: 1783302782
+Architecture: aarch64_cortex-a53
+Installed-Size: 817577
+Description:  gl-sdk4-ui-core

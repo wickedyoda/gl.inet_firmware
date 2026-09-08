@@ -1,0 +1,19 @@
+#!/bin/sh
+
+# shellcheck disable=SC3014
+
+. /lib/functions/uci-defaults.sh
+
+
+action="$1"
+
+if [ "$action" == "turnon" ];then
+	/etc/init.d/gl_nas_diskmanager restart
+fi
+
+if [ "$action" == "turnoff" ];then
+	echo "#safe_remove;" > /tmp/gl_nas/pipe_disk_add_remove
+fi
+
+
+

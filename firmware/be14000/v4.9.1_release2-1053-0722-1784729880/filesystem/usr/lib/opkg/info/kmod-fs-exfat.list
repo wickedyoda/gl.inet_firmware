@@ -1,0 +1,2 @@
+/etc/modules.d/fs-exfat
+/lib/modules/5.4.281/exfat.ko

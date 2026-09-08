@@ -1,0 +1,9 @@
+#!/bin/sh
+
+[ "$(uci -q get adguardhome.config.enabled)" = '1' ] && {
+    uci -q set dhcp.@dnsmasq[0].localuse='0'
+    uci commit dhcp
+}
+
+exit 0
+

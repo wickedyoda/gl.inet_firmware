@@ -1,0 +1,8 @@
+/etc/modules.d/30-gl-sdk4-black_white_list
+/usr/share/gl-upload.d/black_white_list
+/etc/init.d/gl-black_white_list
+/lib/modules/5.4.281/gl-sdk4-black_white_list.ko
+/usr/lib/oui-httpd/rpc/black_white_list
+/etc/modules-boot.d/30-gl-sdk4-black_white_list
+/www/js/mac-template.csv
+/etc/config/gl-black_white_list

@@ -1,0 +1,10 @@
+/etc/hotplug.d/gl-tertf/00-gl_clients
+/usr/share/gl-validator.d/clients.lua
+/usr/bin/gl_block.sh
+/lib/upgrade/keep.d/gl-sdk4-clients
+/etc/config/gl_block
+/usr/lib/oui-httpd/rpc/clients
+/etc/hotplug.d/dhcp/00-gl_dhcp_ping
+/usr/bin/gl_clients_update
+/etc/init.d/gl_clients
+/etc/uci-defaults/glblock

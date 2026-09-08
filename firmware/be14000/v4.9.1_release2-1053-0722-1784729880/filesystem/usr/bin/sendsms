@@ -1,0 +1,147 @@
+#!/bin/sh
+. /lib/functions/modem.sh
+
+set_log_level "$(get_modem_log_level)"
+
+# This script send a text sms at the command line by creating
+# a sms file in the outgoing queue.
+
+# $1 is the destination phone number.
+# $2 is the message text.
+# If you leave $2 or both empty, the script will ask you.
+# If you give more than 2 arguments, last is taken as a text and
+# all other are taken as destination numbers.
+# If a destination is asked, you can type multiple numbers
+# delimited with spaces.
+
+# Keys for example: "password" and "keke":
+# KEYS="5f4dcc3b5aa765d61d8327deb882cf99 4a5ea11b030ec1cfbc8b9947fdf2c872 "
+KEYS=""
+
+# When creating keys, remember to use -n for echo:
+ECHO='echo'
+case $(uname) in
+SunOS)
+    ECHO=/usr/ucb/echo
+    ;;
+esac
+
+[ $# -lt 1 -o "$1" = "-h" -o "$1" = "--help" ] && {
+    echo "Example:"
+    echo "sendsms 123456789741 'test sms' National"
+    echo "sendsms +86123456789741 'test sms' international"
+    exit
+}
+
+if ! [ -z "$KEYS" ]; then
+    printf "Key: "
+    read KEY
+    if [ -z "$KEY" ]; then
+        echo "Key required, stopping."
+        exit 1
+    fi
+    KEY=$($ECHO -n "$KEY" | md5sum | awk '{print $1;}')
+    if ! echo "$KEYS" | grep "$KEY" >/dev/null; then
+        echo "Incorrect key, stopping."
+        exit 1
+    fi
+fi
+
+DEST=$1
+BUS=$2
+SLOT=$3
+TEXT=$4
+TYPE=$5
+
+if [ -z "$DEST" ]; then
+    echo "Destination(s): "
+    read DEST
+    if [ -z "$DEST" ]; then
+        echo "No destination, stopping."
+        exit 1
+    fi
+fi
+
+if [ -z "$BUS" ]; then
+    echo "Bus: "
+    read BUS
+    if [ -z "$BUS" ]; then
+        echo "No bus, stopping."
+        exit 1
+    fi
+fi
+
+if [ -z "$SLOT" ]; then
+    echo "Slot: "
+    read SLOT
+    if [ -z "$SLOT" ]; then
+        echo "No slot, stopping."
+        exit 1
+    fi
+fi
+
+if [ -z "$TEXT" ]; then
+    echo "Text: "
+    read TEXT
+    if [ -z "$TEXT" ]; then
+        echo "No text, stopping."
+        exit 1
+    fi
+fi
+
+if [ -z "$TYPE" ]; then
+    TYPE="international"
+fi
+
+destinations=$DEST
+
+echo "-- "
+echo "Text: $TEXT"
+echo "Bus: $BUS"
+echo "Slot: $SLOT"
+echo "Type: $TYPE"
+
+ALPHABET=""
+if which iconv >/dev/null 2>&1; then
+    if ! $ECHO -n "$TEXT" | iconv -t ISO-8859-15 >/dev/null 2>&1; then
+        ALPHABET="Alphabet: UCS"
+    fi
+fi
+
+group=""
+if [ -f /etc/group ]; then
+    if grep $smsd_group: /etc/group >/dev/null; then
+        group=$smsd_group
+    fi
+fi
+
+for destination in $destinations; do
+    echo "To: $destination"
+
+    TMPFILE=$(mktemp /tmp/smsd_XXXXXX)
+
+    log_debug $LINENO "modem" "destination:$destination TMPFILE:$TMPFILE"
+
+    $ECHO "To: $destination" >>$TMPFILE
+    $ECHO "Alphabet: UTF-8" >> $TMPFILE
+    $ECHO "Bus: $BUS" >> $TMPFILE
+    $ECHO "Slot: $SLOT" >> $TMPFILE
+    # [ -n "$TYPE" ] && $ECHO "To_TOA: $TYPE" >> $TMPFILE
+    [ -z "$(echo "$destination" | grep +)" ] && $ECHO "To_TOA: National" >>$TMPFILE || $ECHO "To_TOA: $TYPE" >>$TMPFILE
+    [ -n "$ALPHABET" ] && $ECHO "$ALPHABET" >>$TMPFILE
+    $ECHO "" >>$TMPFILE
+    if [ -z "$ALPHABET" ]; then
+        $ECHO -n "$TEXT" >>$TMPFILE
+    else
+        $ECHO -n "$TEXT" | iconv -t UNICODEBIG >>$TMPFILE
+    fi
+
+    if [ "x$group" != x ]; then
+        chgrp $group $TMPFILE
+    fi
+
+    chmod 0660 $TMPFILE
+
+    FILE=$(mktemp /etc/spool/sms/outgoing/send_XXXXXX)
+    mv $TMPFILE $FILE
+done

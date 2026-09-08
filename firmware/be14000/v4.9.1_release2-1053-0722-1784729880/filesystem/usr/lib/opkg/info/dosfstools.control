@@ -1,0 +1,14 @@
+Package: dosfstools
+Version: 4.1-4
+Depends: libc
+Source: feeds/packages/utils/dosfstools
+SourceName: dosfstools
+License: GPL-3.0-or-later
+LicenseFiles: COPYING
+Section: utils
+SourceDateEpoch: 1614187565
+CPE-ID: cpe:/a:dosfstools_project:dosfstools
+Maintainer: Álvaro Fernández Rojas <noltari@gmail.com>
+Architecture: aarch64_cortex-a53
+Installed-Size: 64747
+Description:  The dosfstools package includes the mkfs.fat and fsck.fat utilities, which respectively make and check MS-DOS FAT filesystems.

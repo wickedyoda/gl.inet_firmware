@@ -1,0 +1,13 @@
+Package: gl-sdk4-arp-scan
+Version: 1.0.1-1
+Depends: libc
+Source: feeds/glinet/gl-sdk4-arp-scan
+SourceName: gl-sdk4-arp-scan
+License: GPL-2.0
+LicenseFiles: LICENSE
+Section: base
+SourceDateEpoch: 1754616319
+Maintainer: Clan Xie <yongping.xie@gl-inet.com>
+Architecture: aarch64_cortex-a53
+Installed-Size: 808710
+Description:  This is a simple Go program for ARP scanning.

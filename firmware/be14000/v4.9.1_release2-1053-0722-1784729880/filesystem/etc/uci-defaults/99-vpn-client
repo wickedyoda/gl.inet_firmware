@@ -1,0 +1,800 @@
+#!/bin/sh
+
+. /lib/functions.sh
+. /lib/functions/gl_util.sh
+
+nonevpn_mark=0x8000
+
+proxy_mode=$(uci -q get vpnpolicy.route_policy.proxy_mode)
+[ "$proxy_mode" = "" ] && proxy_mode="0"
+
+del_process_mark_fw3(){
+    if [ -n "$(uci -q get firewall.process_mark.name)" ]; then
+        uci delete firewall.process_mark
+    fi
+    if [ -n "$(uci -q get firewall.process_mark_dns.name)" ]; then
+        uci delete firewall.process_mark_dns
+    fi
+    if [ -n "$(uci -q get firewall.process_mark_stubby.name)" ]; then
+        uci delete firewall.process_mark_stubby
+    fi
+    if [ -n "$(uci -q get firewall.process_usevpn.name)" ]; then
+        uci delete firewall.process_usevpn
+    fi
+}
+
+del_port_foward_fw3(){
+    uci -q delete firewall.wan_in_conn_mark
+    uci -q delete firewall.lan_in_conn_mark_restore
+    uci -q delete firewall.out_conn_mark_restore
+    uci -q delete firewall.swap_wan_in_conn_mark
+}
+
+need_handle_vpn_cascading(){
+    local tunnel1_enbaled=$(uci -q get route_policy.@rule[0].enabled)
+    local ovpnserver=$(uci -q get network.ovpnserver)
+    local wgserver=$(uci -q get network.wgserver)
+
+    [ "$ovpnserver" = "" ] && [ "$wgserver" = "" ] && echo "3" && return
+    [ "$tunnel1_enbaled" != "1" ] &&  echo "3" && return
+
+    local vpn_server_policy=$(uci -q get vpnpolicy.global.vpn_server_policy)
+    local enabled=$([ "$vpn_server_policy" = "1" ] && echo "0" || echo "1")
+
+    echo $enabled
+}
+
+translate_vpnpolicy_domain(){
+    local url=$(uci -q get vpnpolicy.domain.url)
+    local manual=$(uci -q get vpnpolicy.domain.manual)
+    local domain=$(uci -q get vpnpolicy.domain.domain)
+    local default_policy=$(uci -q get vpnpolicy.domain.default_policy)
+    local dst_net="dst_net"$(uci -q get route_policy.@rule[0].tunnel_id)
+
+    [ "$manual" = "0" ] && [ "$url" != "" ] && {
+        uci set route_policy.@rule[0].to=$([ "$default_policy" = "0" ] && echo $dst_net || echo "!"$dst_net)
+        uci set route_policy.@rule[0].to_url="$url"
+        uci set route_policy.@rule[0].to_type="ipset"
+        uci set route_policy.@rule[0].to_manual="$manual"
+        uci set route_policy.@rule[0].to_list_external="/etc/domain_mac_list/$dst_net"
+
+        mkdir -p /etc/domain_mac_list
+        [ -f "/etc/vpnpolicy_domain/url.txt" ] && mv /etc/vpnpolicy_domain/url.txt /etc/domain_mac_list/$dst_net
+        [ -f "/etc/gl_crontabs/crontabs.d/update_vpn_url" ] && echo '0 3 * * * /usr/bin/update_vpn_domain.sh' > /etc/gl_crontabs/crontabs.d/update_vpn_url
+        uci -q delete vpnpolicy.domain
+        return
+    }
+
+    [ "$domain" != "" ] && {
+        uci set route_policy.@rule[0].to=$([ "$default_policy" = "0" ] && echo "$dst_net" || echo "!"$dst_net)
+        uci set route_policy.@rule[0].to_type="ipset"
+        uci set route_policy.@rule[0].to_manual="1"
+        uci set route_policy.@rule[0].to_list_external="/etc/domain_mac_list/$dst_net"
+
+        mkdir -p /etc/domain_mac_list
+        uci -q get vpnpolicy.domain.domain > /etc/domain_mac_list/$dst_net
+        uci -q delete vpnpolicy.domain
+        return
+    }
+}
+
+translate_vpnpolicy_mac(){
+    local mac_list=$(uci -q get vpnpolicy.mac.mac)
+    local default_policy=$(uci -q get vpnpolicy.mac.default_policy)
+    local src_mac="src_mac"$(uci -q get route_policy.@rule[0].tunnel_id)
+
+    [ "$mac_list" != "" ] && {
+        uci set route_policy.@rule[0].from=$([ "$default_policy" = "0" ] && echo "$src_mac" || echo "!"$src_mac)
+        uci set route_policy.@rule[0].from_type="ipset"
+
+        for mac in ${mac_list}; do
+            uci add_list route_policy.@rule[0].from_mac="$mac"
+        done
+    }
+
+    uci -q delete vpnpolicy.mac
+    return
+}
+
+translate_vpnpolicy_vlan(){
+    local cascading_enbaled=$(need_handle_vpn_cascading)
+    local ovpnserver=$(uci -q get network.ovpnserver)
+    local wgserver=$(uci -q get network.wgserver)
+
+    local private=$(uci -q get vpnpolicy.vlan.private)
+    local guest=$(uci -q get vpnpolicy.vlan.guest)
+
+    uci set route_policy.@rule[0].from_type="interface"
+
+    [ "$private" != "1" ] && [ "$guest" != "1" ] && {
+        [ "$cascading_enbaled" = "1" ] && {
+            [ "$ovpnserver" ] && uci add_list route_policy.@rule[0].from="ovpnserver"
+            [ "$wgserver" ] && uci add_list route_policy.@rule[0].from="wgserver"
+            return
+        }
+
+        [ "$cascading_enbaled" = "3" ] || [ "$cascading_enbaled" = "0" ] && {
+            uci add_list route_policy.@rule[0].from="lan"
+            uci add_list route_policy.@rule[0].from="guest"
+            uci set route_policy.@rule[0].enabled=$( [ "$cascading_enabled" = "0" ] && echo 1 || echo 0 )
+            uci set route_policy.@rule[0].via_type="novpn"
+            return
+        }
+    }
+
+    [ "$private" = "1" ] && uci add_list route_policy.@rule[0].from="lan"
+    [ "$guest" = "1" ] && uci add_list route_policy.@rule[0].from="guest"
+    [ "$ovpnserver" ] && [ "$cascading_enbaled" = "1" ] && uci add_list route_policy.@rule[0].from="ovpnserver"
+    [ "$wgserver" ] && [ "$cascading_enbaled" = "1" ] && uci add_list route_policy.@rule[0].from="wgserver"
+
+    uci -q delete vpnpolicy.vlan
+    return
+}
+
+clean_ip_rules_44(){
+    if [ -n "$(uci -q get network.policy_bypass_vpn)" ]; then
+        uci delete network.policy_bypass_vpn
+        uci delete network.policy_via_vpn
+        uci delete network.policy_dns
+    fi
+}
+
+clean_block_dns_45(){
+    if [ -n "$(uci -q get firewall.block_dns.name)" ]; then
+        uci delete firewall.block_dns
+    fi
+}
+
+add_usergroup(){
+    cat /etc/group|grep -q nonevpn || echo nonevpn:x:65533:root >>/etc/group
+    cat /etc/group|grep -q usevpn || echo usevpn:x:10000:root >>/etc/group
+    cat /etc/group|grep -q explict_vpn || echo explict_vpn:x:20000:root >>/etc/group
+}
+
+set_wgserver_mark(){
+    uci set wireguard_server.main_server.fwmark="$nonevpn_mark"
+}
+
+clean_drop_explict_vpn_dest_port(){
+    [ -n "$(uci -q get firewall.safe_mode_mark_drop.dest_port)" ] && {
+        uci -q delete firewall.safe_mode_mark_drop.dest_port
+    }
+}
+
+set_dns(){
+    if [ "`uci -q get adguardhome.config.enabled`" = '1' ]; then
+        uci -q set dhcp.@dnsmasq[0].localuse='0'
+    fi
+
+    if [ -z "$(uci -q get gl-dns-v2.@dns[0].override_vpn)" ]; then
+        uci set gl-dns-v2.@dns[0].override_vpn="1"
+    fi
+}
+
+clean_old_killswitch(){
+    # ToDo
+    if [ -n "$(uci -q get firewall.safe_mode_mark.name)" ]; then
+        uci delete firewall.safe_mode_mark
+    fi
+    if [ -n "$(uci -q get firewall.safe_mode_mark_save.name)" ]; then
+        uci delete firewall.safe_mode_mark_save
+    fi
+    if [ -n "$(uci -q get firewall.process_explict_vpn.name)" ]; then
+        uci delete firewall.process_explict_vpn
+    fi
+    if [ -n "$(uci -q get firewall.safe_mode_lan.name)" ]; then
+        uci delete firewall.safe_mode_lan
+    fi
+    if [ -n "$(uci -q get firewall.safe_mode_guest.name)" ]; then
+        uci delete firewall.safe_mode_guest
+    fi
+    if [ -n "$(uci -q get firewall.safe_mode_mark_drop.name)" ]; then
+        uci delete firewall.safe_mode_mark_drop
+    fi
+    if [ -n "$(uci -q get firewall.safe_mode_dns_drop.name)" ]; then
+        uci delete firewall.safe_mode_dns_drop
+    fi
+}
+
+clean_old_process_mark(){
+    if [ -n "$(uci -q get firewall.process_mark_dns.name)" ]; then
+        uci delete firewall.process_mark_dns
+    fi
+}
+
+del_direct_route_priority(){
+    uci -q delete network.policy_direct_rt
+    uci -q delete network.policy_direct_rt6
+}
+
+delete_old_server_firewall_rule()
+{
+    uci -q delete firewall.wgserver2wgclient
+    uci -q delete firewall.wgserver2ovpnclient
+    uci -q delete firewall.ovpnserver2wgclient
+    uci -q delete firewall.ovpnserver2ovpnclient
+    uci -q delete firewall.wgclient2wgserver
+    uci -q delete firewall.wgclient2ovpnserver
+    uci -q delete firewall.ovpnclient2wgserver
+    uci -q delete firewall.ovpnclient2ovpnserver
+    uci -q delete firewall.vpn_server_policy
+}
+
+set_lan_to_wan_forwarding_enabled() {
+    local i=$(cat /etc/config/firewall | grep -c "config forwarding")
+    while [ $i -gt 0 ]; do
+        let i=i-1
+        src=$(uci -q get firewall.@forwarding[$i].src)
+        dest=$(uci -q get firewall.@forwarding[$i].dest)
+        [ -z "$src" ] && continue
+
+        if [ "$src" = "lan" -o "$src" = "guest" ] && [ "$dest" = "wan" ]; then
+            uci set firewall.@forwarding[$i].enabled='1'
+            uci commit firewall
+        fi
+    done
+}
+
+clear_firewall(){
+	#zone
+	uci -q delete firewall.ovpnclient
+	uci -q delete firewall.wgclient
+
+	uci -q delete firewall.dns_vpn
+	uci -q delete firewall.dns_vpn_guest
+
+	uci -q delete firewall.guest2ovpnclient
+	uci -q delete firewall.guest2wgclient
+	uci -q delete firewall.lan2ovpnclient
+	uci -q delete firewall.lan2wgclient
+
+	uci -q delete firewall.ovpnclient2wan
+	uci -q delete firewall.wgclient2wan
+
+	uci -q delete firewall.vpn_client_deal_leak
+}
+
+clean_ip_rules_44
+clean_block_dns_45
+add_usergroup
+set_wgserver_mark
+del_process_mark_fw3
+del_port_foward_fw3
+clean_drop_explict_vpn_dest_port
+set_dns
+clean_old_killswitch
+clean_old_process_mark
+del_direct_route_priority
+delete_old_server_firewall_rule
+clear_firewall
+set_lan_to_wan_forwarding_enabled
+
+create_rule(){
+    local index=$1
+    local name=$2
+    local rule_exist=$(uci -q get route_policy.@rule[$index])
+
+    [ "$rule_exist" = "" ] && {
+        uci add route_policy rule
+    }
+
+    uci set route_policy.@rule[$index].enabled="0"
+    uci set route_policy.@rule[$index].name="$name"
+    uci set route_policy.@rule[$index].tunnel_id=$((index+10))
+    uci set route_policy.@rule[$index].killswitch="1"
+}
+
+sync_wg_config() {
+    local idx=0
+    local wg_config=$(uci -q get network.wgclient.config)
+    local wg_disabled=$(uci -q get network.wgclient.disabled)
+    [ "$wg_config" ] && {
+        create_rule 0 "Primary Tunnel"
+        local group_id=$(uci -q get wireguard.$wg_config.group_id)
+
+        uci set route_policy.@rule[$idx].via_type="wireguard"
+        uci set route_policy.@rule[$idx].group_id=$group_id
+        uci set route_policy.@rule[$idx].peer_id=$(echo "$wg_config" | sed -E 's/peer_([0-9]+)/\1/')
+
+        local mtu=$(uci -q get wireguard.$wg_config.mtu)
+        local masq=$(uci -q get wireguard.$wg_config.masq)
+        local local_access=$(uci -q get wireguard.$wg_config.local_access)
+        [ "$mtu" ] && uci set route_policy.@rule[$idx].mtu=$mtu
+        [ "$masq" = "0" ] && uci set route_policy.@rule[$idx].masq="0"
+        [ "$local_access" = "1" ] && uci set route_policy.@rule[$idx].local_access="1"
+
+        uci -q delete network.wgclient
+
+        [ "$wg_disabled" = "0" ] && {
+            uci set route_policy.@rule[$idx].enabled="1"
+
+            echo "enabled"
+            return
+        }
+
+        echo "configed"
+        return
+    }
+
+    echo "no config"
+    return
+}
+
+sync_ovpn_client() {
+    local idx=0
+    local ovpn_config=$(uci -q get network.ovpnclient.config)
+    local ovpn_disabled=$(uci -q get network.ovpnclient.disabled)
+    [ "$ovpn_config" ] && {
+        [ ! $(uci -q get route_policy.@rule[$idx]) ] && create_rule 0 "Primary Tunnel"
+        local mode=$(uci -q get ovpnclient.$ovpn_config.mode)
+        [ "$mode" = "tap-s2s" ] && echo "no config" && return
+
+        local group_id=$(echo $ovpn_config | sed 's/\([0-9]*\)_\([0-9]*\)/\1/')
+        local client_id=$(echo $ovpn_config | sed 's/\([0-9]*\)_\([0-9]*\)/\2/')
+
+        uci set route_policy.@rule[$idx].via_type="openvpn"
+        uci set route_policy.@rule[$idx].group_id=$group_id
+        uci set route_policy.@rule[$idx].client_id=$client_id
+        uci -q delete route_policy.@rule[$idx].peer_id
+
+        local mtu=$(uci -q get ovpnclient.$ovpn_config.mtu)
+        local masq=$(uci -q get ovpnclient.$ovpn_config.masq)
+        local local_access=$(uci -q get ovpnclient.$ovpn_config.local_access)
+        [ "$mtu" ] && uci set route_policy.@rule[$idx].mtu=$mtu
+        [ "$masq" = "0" ] && uci set route_policy.@rule[$idx].masq="0"
+        [ "$local_access" = "1" ] && uci set route_policy.@rule[$idx].local_access="1"
+
+        uci -q delete network.ovpnclient
+
+        [ "$ovpn_disabled" = "0" ] && {
+            uci set route_policy.@rule[$idx].enabled="1"
+
+            echo "enabled"
+            return
+        }
+        echo "configed"
+        return
+    }
+
+    echo "no config"
+    return
+}
+
+sync_single_client(){
+    local res=$(sync_wg_config 0)
+
+    local ovpn_disabled=$(uci -q get network.ovpnclient.disabled)
+
+    [ "$res" = "enabled" ] && {
+        uci -q delete network.ovpnclient
+        return
+    }
+
+    [ "$res" = "configed" ] && [ "$ovpn_disabled" = "1" ] && {
+        uci -q delete network.ovpnclient
+        return
+    }
+
+
+    [ "$res" = "configed" ] && [ "$ovpn_disabled" = "" ] && {
+        uci -q delete network.ovpnclient
+        return
+    }
+
+
+    sync_ovpn_client 0
+}
+
+create_novpn_for_cascading(){
+    local ovpnserver=$(uci -q get network.ovpnserver)
+    local wgserver=$(uci -q get network.wgserver)
+
+    create_rule 1 "Cascading Tunnel"
+    uci set route_policy.@rule[1].enabled="1"
+    uci set route_policy.@rule[1].via_type="novpn"
+    uci set route_policy.@rule[1].enabled="1"
+
+    uci set route_policy.@rule[1].from_type="interface"
+    [ "$ovpnserver" ] && uci add_list route_policy.@rule[1].from="ovpnserver"
+    [ "$wgserver" ] && uci add_list route_policy.@rule[1].from="wgserver"
+
+    uci reorder route_policy.@rule[-1]=@rule[0]
+}
+
+create_usevpn_for_cascading(){
+    local ovpnserver=$(uci -q get network.ovpnserver)
+    local wgserver=$(uci -q get network.wgserver)
+
+    create_rule 1 "Cascading Tunnel"
+
+    local via_type=$(uci -q get route_policy.@rule[0].via_type)
+    local group_id=$(uci -q get route_policy.@rule[0].group_id)
+    local client_id=$(uci -q get route_policy.@rule[0].client_id)
+    local peer_id=$(uci -q get route_policy.@rule[0].peer_id)
+    local enabled=$(uci -q get route_policy.@rule[0].enabled)
+    [ "$via_type" ] && uci set route_policy.@rule[1].via_type="$via_type"
+    [ "$group_id" ] && uci set route_policy.@rule[1].group_id="$group_id"
+    [ "$client_id" ] && uci set route_policy.@rule[1].client_id="$client_id"
+    [ "$peer_id" ] && uci set route_policy.@rule[1].peer_id="$peer_id"
+    [ "$enabled" ] && uci set route_policy.@rule[1].enabled="$enabled"
+
+    uci set route_policy.@rule[1].from_type="interface"
+    [ "$ovpnserver" ] && uci add_list route_policy.@rule[1].from="ovpnserver"
+    [ "$wgserver" ] && uci add_list route_policy.@rule[1].from="wgserver"
+
+    uci reorder route_policy.@rule[-1]=@rule[0]
+}
+
+handle_global_mode(){
+    sync_single_client
+
+    local cascading_enbaled=$(need_handle_vpn_cascading)
+
+    [ "$cascading_enbaled" = "3" ] || [ "$cascading_enbaled" = "1" ] && return
+    [ "$cascading_enbaled" = "0" ] && create_novpn_for_cascading
+}
+
+handle_auto_detect(){
+    uci -q delete network.wgclient
+    uci -q delete network.ovpnclient
+}
+
+handle_custom_route(){
+    uci -q delete network.wgclient
+    uci -q delete network.ovpnclient
+}
+
+handle_domain_mode(){
+    sync_single_client
+    translate_vpnpolicy_domain
+
+    local cascading_enbaled=$(need_handle_vpn_cascading)
+
+    [ "$cascading_enbaled" = "3" ] && return
+    [ "$cascading_enbaled" = "1" ] && create_usevpn_for_cascading
+    [ "$cascading_enbaled" = "0" ] && create_novpn_for_cascading
+}
+
+handle_mac_mode(){
+    sync_single_client
+    translate_vpnpolicy_mac
+
+    local cascading_enbaled=$(need_handle_vpn_cascading)
+    [ "$cascading_enbaled" = "3" ] && return
+    [ "$cascading_enbaled" = "0" ] && create_novpn_for_cascading && return
+    [ "$cascading_enbaled" = "1" ] && create_usevpn_for_cascading
+}
+
+handle_vlan_mode(){
+    sync_single_client
+    translate_vpnpolicy_vlan
+}
+
+handle_global_options(){
+    local kill_switch=$(uci -q get vpnpolicy.global.kill_switch)
+    local service_policy=$(uci -q get vpnpolicy.global.service_policy)
+
+    [ "$kill_switch" = "1" ] && {
+        uci set route_policy.@default[0].enabled="0"
+    } || {
+        [ "$(uci -q get vpnpolicy.global.wan_access)" = "1" ] && {
+            for i in $(seq 0 5); do
+                uci set route_policy.@rule[$i].killswitch="0"
+            done
+        }
+    }
+
+    if [ "$service_policy" = "0" ]; then
+        #if has mutiple vpn rules, should set openvpn/wireguard rule's service_policy to 1 first
+        local rule_cont=$(uci show route_policy | grep -E '@rule\[[0-9]+\]=rule' | wc -l)
+        if [ "$rule_cont" -gt 1 ] ;then
+            local i=0
+            for i in $(seq 0 $((rule_cont-1))); do
+                local via_type=$(uci -q get route_policy.@rule[$i].via_type)
+                if [ "$via_type" = "openvpn" ] || [ "$via_type" = "wireguard" ] ;then
+                    uci set route_policy.@rule[$i].service_policy="1"
+                fi
+            done
+        else
+            #set first rule's service_policy to 1 defaultly
+            uci set route_policy.@rule[0].service_policy="1"
+        fi
+    fi
+}
+
+delete_mark_in_new_conntrack(){
+    local rules="$(cat /etc/config/firewall | grep mark_in_new_conntrack | grep rule | awk -F " " '{print$3}' | awk -F "'" '{print$2}')"
+    for rule in $rules ;do
+        uci -q delete firewall.${rule}
+    done
+    uci commit firewall
+}
+
+modify_old_vpn_route_name() {
+    sed -E 's/rt_wg([0-9]+)/rt_wgclient\1/g' -i /etc/config/network
+    sed -E 's/rt_ovpn([0-9]+)/rt_ovpnclient\1/g' -i /etc/config/network
+    sed -E "/^config rule 'rt_wg(client){2,}[0-9]+'/,/^$/d" -i /etc/config/network
+    sed -E "/^config rule6 'rt_wg(client){2,}[0-9]+_6'/,/^$/d" -i /etc/config/network
+    sed -E "/^config rule 'rt_ovpn(client){2,}[0-9]+'/,/^$/d" -i /etc/config/network
+    sed -E "/^config rule6 'rt_ovpn(client){2,}[0-9]+_6'/,/^$/d" -i /etc/config/network
+}
+
+set_global_mode() {
+    [ ! -f "/etc/config/vpnpolicy" ] && return
+    [ "$(uci -q get route_policy.@rule[1])" != "" ] && uci set route_policy.global.mode="1" && return
+
+    local from_type=$(uci -q get route_policy.@rule[0].from_type)
+    local to_type=$(uci -q get route_policy.@rule[0].to_type)
+    local default_enabled=$(uci -q get route_policy.@default[0].enabled)
+
+    [ "$from_type" != "" ] || [ "$to_type" != "" ] || [ "$default_enabled" = "0" ] && {
+        uci set route_policy.global.mode="1"
+        return
+    }
+
+    uci set route_policy.global.mode="0"
+}
+
+set_firewall_include() {
+    local use_fw4='0'
+    which fw4 > /dev/null && use_fw4='1'
+    if [ "$use_fw4" = '1' ] ;then
+        uci -q delete firewall.vpnclient
+    else
+        [ "$(uci -q get firewall.vpnclient)" = "" ] && {
+            uci set firewall.vpnclient=include
+            uci set firewall.vpnclient.type=script
+            uci set firewall.vpnclient.path="/usr/bin/rtp2.sh"
+            uci set firewall.vpnclient.reload=0
+        }
+    fi
+}
+
+add_specific_option_for_vpn_ifs() {
+    add_option() {
+        local section="$1"
+        local proto
+
+        config_get proto "$section" proto ''
+        [ "${proto}" = 'wgclient' -o "${proto}" = 'ovpnclient' ] && uci -q set network."$section".gl_vpn_instance='1'
+    }
+    config_load network
+    config_foreach add_option 'interface'
+    uci commit network 2>/dev/null
+}
+
+clean_old_killswitch_dns_rule() {
+    uci -q delete firewall.lan_drop_leaked_dns
+    uci -q delete firewall.lan_drop_leak_adgdns
+    uci -q delete firewall.guest_drop_leaked_dns
+    uci -q delete firewall.guest_drop_leak_adgdns
+    uci -q delete firewall.wgserver_drop_leaked_dns
+    uci -q delete firewall.ovpnserver_drop_leaked_dns
+    uci -q delete firewall.wgserver_drop_leaked_adgdns
+    uci -q delete firewall.ovpnserver_drop_leaked_adgdns
+    uci -q delete firewall.wan_drop_leaked_dns
+    uci -q delete firewall.wan_drop_leaked_adgdns
+}
+
+update_port_forward() {
+    local config_section="$1"
+    local src=$(uci -q get firewall."${config_section}".src)
+    local dest=$(uci -q get firewall."${config_section}".dest)
+    if [ "$src" = "ovpnclient" ]; then
+        uci -q set firewall."${config_section}".src='ovpnclient1'
+    elif [ "$src" = "wgclient" ]; then
+        uci -q set firewall."${config_section}".src='wgclient1'
+    fi
+
+    if [ "$dest" = "ovpnclient" ]; then
+        uci -q set firewall."${config_section}".dest='ovpnclient1'
+    elif [ "$dest" = "wgclient" ]; then
+        uci -q set firewall."${config_section}".dest='wgclient1'
+    fi
+
+}
+
+set_port_forward() {
+    config_load firewall
+    config_foreach update_port_forward redirect
+    uci commit firewall 2>/dev/null
+}
+
+PROFILE_PREFIX="/etc/openvpn/profiles/"
+set_group_work_mode() {
+    local group_type
+    group_type=$(uci -q get "ovpnclient.$1.group_type")
+    if [ "${group_type}" != "1" ] ; then
+        # only add work_mode for non-business group
+        local work_mode
+        work_mode=$(uci -q get "ovpnclient.$1.work_mode")
+        [ "$work_mode" = "legacy" ] || [ "$work_mode" = "modern" ] && return
+
+        # get group_id and construct profile path
+        local group_id=$(uci -q get "ovpnclient.$1.group_id")
+        [ -z "$group_id" ] && return
+
+        local profile_path="${PROFILE_PREFIX}${group_id}/"
+        [ ! -d "$profile_path" ] && return
+
+        # detect cipher from ovpn config files
+        local cbc_cipher=$(grep -rh -i '^cipher AES-.*-CBC' "${profile_path}" 2>/dev/null | awk '{print $2}' | head -n1)
+        if [ -n "$cbc_cipher" ]; then
+            # CBC cipher detected, use legacy mode
+            uci set "ovpnclient.$1.work_mode"='legacy'
+        else
+            # no CBC cipher or modern cipher, use modern mode
+            uci set "ovpnclient.$1.work_mode"='modern'
+        fi
+    fi
+}
+
+set_imported_ovpn_legacy_mode() {
+    [ ! -f "/etc/config/ovpnclient" ] && return
+
+    config_load ovpnclient
+    config_foreach set_group_work_mode groups
+    uci commit ovpnclient 2>/dev/null
+}
+
+set_always_usevpn() {
+    cat /etc/group|grep -q explict_vpn || echo explict_vpn:x:20000:root >>/etc/group
+    if [ -z "$(uci -q get route_policy.gl_process_vpn)" ]; then
+        uci batch <<EOF
+set route_policy.gl_process_vpn=rule_process
+set route_policy.gl_process_vpn.name='process policy'
+set route_policy.gl_process_vpn.from_type='process_gid'
+set route_policy.gl_process_vpn.from='20000'
+set route_policy.gl_process_vpn.tunnel_id='10100'
+set route_policy.gl_process_vpn.enabled='1'
+set route_policy.gl_process_vpn.via='wgclient1'
+EOF
+    fi
+}
+
+fix_lan_domain_leak_to_vpn () {
+    sed -i "s/option local '\/lan_chgd\/'/option local '\/lan\/'/g" /etc/config/dhcp
+}
+
+fix_vpn_instance_dnsmasq_domain_cb() {
+    local cfg="$1"
+    local user
+
+    config_get user "$cfg" user
+    [ "$user" = "dnsmasq_vpn" ] || return 0
+
+    uci -q delete dhcp.${cfg}.domain
+    uci -q set dhcp.${cfg}.domain='lan'
+}
+
+fix_vpn_instance_dnsmasq_domain() {
+    config_load dhcp
+    config_foreach fix_vpn_instance_dnsmasq_domain_cb dnsmasq
+}
+
+fix_op24_dnsmasq_confdir() {
+    if [ -n "$(echo "$(uci -q get dhcp.@dnsmasq[0].resolvfile)" | grep resolv.conf.auto)" ]; then
+        uci set dhcp.@dnsmasq[0].confdir='/tmp/dnsmasq.d'
+    fi
+}
+
+v4_9_migrate_to_profiles() {
+    # Migrate VPN rules from v4.8.x group_id/peer_id format to v4.9.x profiles file format
+    _delete_if_empty() {
+        local section="$1"
+        local from to
+        from=$(uci -q get route_policy."$section".from)
+        to=$(uci -q get route_policy."$section".to)
+        [ -z "$from" ] && [ -z "$to" ] && uci delete route_policy."$section"
+    }
+
+    _migrate_rule() {
+        local section="$1"
+        local via_type group_id id tunnel_id profiles_path
+
+        # skip if already migrated
+        [ -n "$(uci -q get route_policy."$section".profiles)" ] && return
+
+        config_get via_type "$section" via_type
+        config_get group_id "$section" group_id
+        config_get tunnel_id "$section" tunnel_id
+
+        case "$via_type" in
+            wireguard) config_get id "$section" peer_id ;;
+            openvpn)   config_get id "$section" client_id ;;
+            novpn)     return ;;
+            *) _delete_if_empty "$section"; return ;;
+        esac
+
+        if [ -n "$group_id" ] && [ -n "$id" ] && [ -n "$tunnel_id" ]; then
+            profiles_path="/etc/vpn_profiles.d/profile${tunnel_id}"
+            mkdir -p "$(dirname "$profiles_path")"
+            echo "${group_id}_${id}" > "$profiles_path"
+            uci set route_policy.${section}.profiles="$profiles_path"
+            # force enable killswitch to prevent traffic leaks from v4.8.x failover function failures
+            uci set route_policy.${section}.killswitch="1"
+        else
+            # via_type set but VPN credentials removed — stale rule, clean up if no traffic rules
+            _delete_if_empty "$section"
+        fi
+    }
+
+    config_load route_policy
+    config_foreach _migrate_rule rule
+    uci commit route_policy
+}
+
+cn_disable_vpn() {
+    if [ "$(get_country_code)" = "CN" ]; then
+        /etc/init.d/vpn-client disable
+        uci -q set route_policy.global.enabled=0
+        . /lib/functions/vpn_func/global_leak_drop.sh
+        clean_global_killswitch_rule
+    fi
+}
+
+case "$proxy_mode" in
+    "0")
+    handle_global_mode
+    ;;
+    "1")
+    handle_auto_detect
+    ;;
+    "2")
+    handle_custom_route
+    ;;
+    "3")
+    handle_domain_mode
+    ;;
+    "4")
+    handle_mac_mode
+    ;;
+    "5")
+    handle_vlan_mode
+    ;;
+    *)
+    esac
+
+handle_global_options
+
+delete_mark_in_new_conntrack
+
+modify_old_vpn_route_name
+
+set_firewall_include
+
+fix_vpn_instance_dnsmasq_domain
+
+add_specific_option_for_vpn_ifs
+
+clean_old_killswitch_dns_rule
+
+uci commit firewall
+uci commit wireguard_server
+uci commit network
+uci commit gl-dns-v2
+uci commit dhcp
+
+rm -f /etc/udhcpc.user.d/vpn_dns.sh
+
+/etc/init.d/dnscrypt-proxy-vpn disable
+/etc/init.d/stubby-vpn disable
+/etc/init.d/dnsproxy-vpn disable
+
+set_global_mode
+set_port_forward
+set_always_usevpn
+fix_lan_domain_leak_to_vpn
+fix_op24_dnsmasq_confdir
+set_imported_ovpn_legacy_mode #4.8.x
+v4_9_migrate_to_profiles #4.9.x compatibility design.
+cn_disable_vpn
+
+rm /etc/config/vpnpolicy -rf
+
+uci commit route_policy
+sync
+
+touch /var/run/first_time_boot
+
+exit 0

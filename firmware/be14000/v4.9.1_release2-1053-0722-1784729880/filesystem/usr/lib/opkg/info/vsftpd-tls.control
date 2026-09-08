@@ -1,0 +1,13 @@
+Package: vsftpd-tls
+Version: 3.0.3-3
+Depends: libc, libopenssl1.1
+Source: feeds/gl_feed_common/vsftpd
+SourceName: vsftpd-tls
+License: GPLv2
+Section: net
+SourceDateEpoch: 1671596686
+CPE-ID: cpe:/a:beasts:vsftpd
+Maintainer: Cezary Jackiewicz <cezary@eko.one.pl>
+Architecture: aarch64_cortex-a53
+Installed-Size: 54298
+Description:  Fast and secure FTP server (TLS)

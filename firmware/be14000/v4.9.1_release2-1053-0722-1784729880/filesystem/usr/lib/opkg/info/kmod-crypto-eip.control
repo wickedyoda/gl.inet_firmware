@@ -1,0 +1,13 @@
+Package: kmod-crypto-eip
+Version: 5.4.281-1
+Depends: kernel (=5.4.281-1-df4fa332840f56a774a5d60bd140aaf6)
+Source: feeds/mtk_openwrt_feed/feed/kernel/crypto-eip
+SourceName: kmod-crypto-eip
+Section: kernel
+SourceDateEpoch: 1766125924
+Architecture: aarch64_cortex-a53
+Installed-Size: 104
+Description:  Enable crypto engine to accelerate encrypt/decrypt. Support look aside
+ mode (semi-HW) and inline mode (pure-HW). Look aside mode is bind with
+ Linux Crypto API and support AES, DES, SHA1, and SHA2 algorithms. In-
+ line mode only support ESP Tunnel mode (single tunnel) now.

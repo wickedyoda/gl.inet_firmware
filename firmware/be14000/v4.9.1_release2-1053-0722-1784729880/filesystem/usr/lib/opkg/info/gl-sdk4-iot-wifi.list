@@ -1,0 +1,2 @@
+/etc/uci-defaults/01_gl_iot-network
+/etc/uci-defaults/wifi.d/03_gl_iot_wifi

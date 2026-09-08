@@ -1,0 +1,61 @@
+#!/bin/sh
+
+. /lib/functions/gl_log.sh
+. /lib/functions/modem.sh
+
+INTERFACE=$(echo "$INTERFACE" | sed 's/_[46]$//')
+
+case "$INTERFACE" in
+    *modem*)
+      set_log_level "$(get_modem_log_level)"
+      ;;
+    *) exit 0 ;;
+esac
+
+log_debug $LINENO "modem" "ACTION=$ACTION INTERFACE=$INTERFACE DEVICE=$DEVICE"
+#echo "$(date '+%Y-%m-%d %H:%M:%S')ACTION=$ACTION INTERFACE=$INTERFACE DEVICE=$DEVICE" >> /tmp/report_modem_status
+
+STATUS=""
+
+case "$ACTION" in
+    ifup)          STATUS="ifup" ;;
+    ifdown)        STATUS="ifdown" ;;
+    ifup-failed)   STATUS="ifup-failed" ;;
+    *) exit 0 ;;
+esac
+
+
+case "$INTERFACE" in
+    *cpu*)
+        sub_id=$(uci -q get network.$INTERFACE.dds_id)
+        [ -z "$sub_id" -o "$sub_id" = "0" ] && exit 1
+        ubus -t 5 call cellular.network update_status "{\"bus\":\"cpu\",\"slot\":$sub_id,\"dial_progress\":2,\"dial_status\":\"$STATUS\"}" &
+	    ubus -t 5 call cellular.network update_info "{\"bus\":\"cpu\",\"slot\":$sub_id}" &
+        exit 0
+        ;;
+esac
+
+
+bus=$(uci -q get network.$INTERFACE.bus)
+slot=$(uci -q get network.$INTERFACE.slot)
+
+
+if [ -z "$bus" ] || [ -z "$slot" ]; then
+    log_debug $LINENO "modem" "Error: Missing bus/slot config for $INTERFACE"
+    #echo "$(date '+%Y-%m-%d %H:%M:%S')Error: Missing bus/slot config for $INTERFACE" >> /tmp/report_modem_status
+    exit 1
+fi
+
+#When an external module is pulled out, there is no need to update the status here, otherwise it may cause the module information on the page to temporarily disappear
+usb_path="/sys/bus/usb/devices/$bus"
+
+if [ ! -d "$usb_path" ] && [ -n "$(echo $bus | grep '-')" ] ; then
+    log_debug $LINENO "modem" "usb $usb_path not exist!"
+    exit 1
+fi
+
+#echo "$(date '+%Y-%m-%d %H:%M:%S')bus:$bus slot:$slot dial_progress:2 dial_status:$STATUS" >> /tmp/report_modem_status
+ubus -t 5 call cellular.network update_status "{\"bus\":\"$bus\",\"slot\":$slot,\"dial_progress\":2,\"dial_status\":\"$STATUS\"}" &
+ubus -t 5 call cellular.network update_info "{\"bus\":\"$bus\",\"slot\":$slot}" &
+
+

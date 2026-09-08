@@ -1,0 +1,7 @@
+#!/bin/sh
+[ "$(uci -q get tor.global.enable)" = "0" ] && exit 0
+[ "$(uci -q get glconfig.general.mode)" != "router" ] && exit 0
+/etc/init.d/tor running || exit 0
+
+/etc/init.d/tor restart &
+

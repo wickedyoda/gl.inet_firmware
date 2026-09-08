@@ -1,0 +1,16 @@
+Package: liburing
+Version: 0.7-1
+Depends: libc
+Source: feeds/packages/libs/liburing
+SourceName: liburing
+License: MIT
+LicenseFiles: COPYING
+Section: libs
+SourceDateEpoch: 1594540164
+Maintainer: Christian Lachner <gladiac@gmail.com>
+Architecture: aarch64_cortex-a53
+Installed-Size: 4593
+Description:  liburing provides helpers to setup and teardown io_uring instances,
+ and also a simplified interface for applications that don't need
+ (or want) to deal with the full kernel side implementation.
+ For more info on io_uring, please see: https://kernel.dk/io_uring.pdf

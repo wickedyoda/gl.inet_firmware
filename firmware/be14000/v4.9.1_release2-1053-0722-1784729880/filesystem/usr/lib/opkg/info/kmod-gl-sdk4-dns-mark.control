@@ -1,0 +1,10 @@
+Package: kmod-gl-sdk4-dns-mark
+Version: 5.4.281+git-2025.325.38811-c808830-1
+Depends: kernel (=5.4.281-1-df4fa332840f56a774a5d60bd140aaf6)
+Source: feeds/glinet/gl-sdk4-dns-mark
+SourceName: kmod-gl-sdk4-dns-mark
+Section: kernel
+SourceDateEpoch: 1763722011
+Architecture: aarch64_cortex-a53
+Installed-Size: 13668
+Description:  Kernel module for marking DNS packets based on source MAC and query domain

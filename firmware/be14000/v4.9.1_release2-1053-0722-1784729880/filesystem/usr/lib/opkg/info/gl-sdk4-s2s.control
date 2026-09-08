@@ -1,0 +1,10 @@
+Package: gl-sdk4-s2s
+Version: git-2025.287.33410-28f0e2e-1
+Depends: libc, jansson4, gl-sdk4-uci, gl-sdk4-utils, wireguard-tools
+Source: feeds/glinet/gl-sdk4-s2s
+SourceName: gl-sdk4-s2s
+Section: base
+SourceDateEpoch: 1760433410
+Architecture: aarch64_cortex-a53
+Installed-Size: 19033
+Description:  Oui Support for s2s

@@ -1,0 +1,16 @@
+Package: libunwind8
+Version: 1.5.0-1
+Depends: libc, zlib
+Provides: libunwind
+Source: package/libs/libunwind
+SourceName: libunwind
+License: X11
+LicenseFiles: LICENSE
+Section: libs
+SourceDateEpoch: 1617049587
+ABIVersion: 8
+CPE-ID: cpe:/a:libunwind_project:libunwind
+Maintainer: Yousong Zhou <yszhou4tech@gmail.com>
+Architecture: aarch64_cortex-a53
+Installed-Size: 58857
+Description:  Libunwind defines a portable and efficient C programming interface (API) to determine the call-chain of a program.

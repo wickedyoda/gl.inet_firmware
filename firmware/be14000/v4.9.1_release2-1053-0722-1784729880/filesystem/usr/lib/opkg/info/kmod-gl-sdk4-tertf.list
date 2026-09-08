@@ -1,0 +1,5 @@
+/etc/modules.d/30-gl-sdk4-tertf
+/etc/modules-boot.d/30-gl-sdk4-tertf
+/etc/init.d/gl-tertf
+/etc/config/gl-tertf
+/lib/modules/5.4.281/gl-sdk4-tertf.ko

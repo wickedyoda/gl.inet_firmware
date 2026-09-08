@@ -1,0 +1,10 @@
+Package: gl-sdk4-base-files
+Version: git-2026.188.15468-391ff7d-1
+Depends: libc, kmod-gl-sdk4-hw-info, conntrack
+Source: feeds/glinet/gl-sdk4-base-files
+SourceName: gl-sdk4-base-files
+Section: base
+SourceDateEpoch: 1783397868
+Architecture: aarch64_cortex-a53
+Installed-Size: 38170
+Description:  Base filesystem for gl-inet

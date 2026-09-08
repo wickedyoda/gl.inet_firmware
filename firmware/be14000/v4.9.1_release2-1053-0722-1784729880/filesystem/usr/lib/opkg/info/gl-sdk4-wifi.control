@@ -1,0 +1,10 @@
+Package: gl-sdk4-wifi
+Version: git-2026.190.11575-0495343-1
+Depends: libc, libiwinfo-lua, wireless-regdb, lua-cjson, libnl-tiny1, libiwinfo20230701
+Source: feeds/glinet/gl-sdk4-wifi
+SourceName: gl-sdk4-wifi
+Section: base
+SourceDateEpoch: 1783566775
+Architecture: aarch64_cortex-a53
+Installed-Size: 55695
+Description:  WiFi API for Gl.inet

@@ -1,0 +1,120 @@
+get_wifi_dev() {
+    local board=$(cat /tmp/sysinfo/board_name)
+
+    case $board in
+    glinet,gl-mt6000)
+        echo mt7986
+        ;;
+    glinet,mt3000-snand)
+        echo mt7981
+        ;;
+    esac
+}
+
+merge_mtk_wifi_from_sdk() {
+   local dev=$(get_wifi_dev)
+   local path="platform/soc/18000000.wifi"
+
+    uci -q get wireless.${dev}11 > /dev/null || return
+
+    sed -i "s/${dev}11/radio0/g" /etc/config/wireless
+    sed -i "s/${dev}12/radio1/g" /etc/config/wireless
+
+    uci set wireless.radio0.type=mac80211
+    uci set wireless.radio1.type=mac80211
+
+    uci set wireless.radio0.path="$path"
+    uci set wireless.radio1.path="$path+1"
+
+    uci set wireless.radio1.channels='36,40,44,48,149,153,157,161'
+
+    uci delete wireless.radio0.txpower
+    uci delete wireless.radio1.txpower
+
+    uci set wireless.wifi2g.ifname=wlan0
+    uci set wireless.wifi5g.ifname=wlan1
+
+    uci -q set wireless.guest2g.ifname='wlan0-1'
+    uci -q set wireless.guest5g.ifname='wlan1-1'
+
+    uci commit wireless
+}
+
+merge_mtk_hnat_from_sdk() {
+    [ -f /etc/config/mtkhnat ] || return
+
+    local enable=$(uci -q get mtkhnat.global.enable)
+
+    rm /etc/config/mtkhnat
+
+    [ "$enable" = "1" ] || return
+
+    uci set firewall.@defaults[0].flow_offloading='1'
+    uci set firewall.@defaults[0].flow_offloading_hw='1'
+    uci commit firewall
+}
+
+merge_mtk_wifi_from_vanilla() {
+    local dev=$(get_wifi_dev)
+
+    uci -q get wireless.radio0 > /dev/null || return
+
+    sed -i 's/default_radio0/wifi2g/g' /etc/config/wireless
+    sed -i 's/default_radio1/wifi5g/g' /etc/config/wireless
+
+    sed -i "s/radio0/${dev}11/g" /etc/config/wireless
+    sed -i "s/radio1/${dev}12/g" /etc/config/wireless
+
+    uci set wireless.${dev}11.type=mtk
+    uci set wireless.${dev}12.type=mtk
+
+    uci delete wireless.${dev}11.path
+    uci delete wireless.${dev}12.path
+
+    uci set wireless.${dev}11.txpower=100
+    uci set wireless.${dev}12.txpower=100
+
+    uci -q delete wireless.${dev}12.channels
+
+    uci set wireless.wifi2g.ifname=ra0
+    uci set wireless.wifi5g.ifname=rax0
+
+    uci -q set wireless.guest2g.ifname=ra1
+    uci -q set wireless.guest5g.ifname=rax1
+
+    uci commit wireless
+}
+
+merge_mtk_hnat_from_vanilla() {
+    local enable=$(uci -q get firewall.@defaults[0].flow_offloading_hw)
+
+    [ -n "$enable" ] || return
+
+    uci delete firewall.@defaults[0].flow_offloading
+    uci delete firewall.@defaults[0].flow_offloading_hw
+
+    uci set mtkhnat.global.enable=$enable
+
+    uci commit mtkhnat
+    uci commit firewall
+}
+
+do_merge_from_sdk() {
+    [ "$(uci -q get wireless.@wifi-device[0].type)" = "mtk" ] || return
+    [ -f /lib/modules/$(uname -r)/mt7915e.ko ] || return
+
+    merge_mtk_wifi_from_sdk
+    merge_mtk_hnat_from_sdk
+
+    rm -rf /etc/wireless
+}
+
+do_merge_from_vanilla() {
+    [ -d /etc/wireless/mediatek ] || return
+
+    merge_mtk_wifi_from_vanilla
+    merge_mtk_hnat_from_vanilla
+}
+
+boot_hook_add preinit_main do_merge_from_sdk
+boot_hook_add preinit_main do_merge_from_vanilla

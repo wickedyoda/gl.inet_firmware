@@ -1,0 +1,8 @@
+if [ "$IFNAME" == "usb" ];then
+    sd=`ls /dev/sd*`
+    if [ -z "$sd" ];then
+        echo 0 > /sys/class/gpio/usb_power/value
+        sleep 1
+        echo 1 > /sys/class/gpio/usb_power/value
+    fi
+fi

@@ -1,0 +1,60 @@
+#!/bin/sh
+
+# netifyd 安装
+
+opkg install /etc/netifyd_ipks/netify*.ipk
+
+netifyd --enable-plugin proc-aggregator
+netifyd --enable-plugin sink-socket
+
+# 开启本地监控
+#jq '.channels.default.enable = true' "/etc/netifyd/netify-sink-socket.json" > tmp.$$.json && mv tmp.$$.json "/etc/netifyd/netify-sink-socket.json"
+#jq '.sinks["sink-socket"].default.enable = true' "/etc/netifyd/netify-proc-core.json" > tmp.$$.json && sudo mv tmp.$$.json "/etc/netifyd/netify-proc-core.json"
+#jq '.sinks["sink-http"].legacy.enable = true' "/etc/netifyd/netify-proc-core.json" > tmp.$$.json && sudo mv tmp.$$.json "/etc/netifyd/netify-proc-core.json"
+
+netifyd --enable-plugin sink-http
+
+# 安装proc-flows
+netifyd --enable-plugin proc-nfa
+
+mkdir /etc/xtables 
+ln -s /etc/connlabel.conf /etc/xtables
+
+# 使用nfq方式
+cp /etc/netifyd/interfaces.d/10-example-nfq.conf /etc/netifyd/interfaces.d/10-nfq.conf
+echo '[capture-interface-nfq0]' >> /etc/netifyd/interfaces.d/10-nfq.conf
+echo 'capture_type = nfqueue' >> /etc/netifyd/interfaces.d/10-nfq.conf
+echo 'role = lan' >> /etc/netifyd/interfaces.d/10-nfq.conf
+echo 'queue_id = 0' >> /etc/netifyd/interfaces.d/10-nfq.conf
+echo 'queue_instances = 2' >> /etc/netifyd/interfaces.d/10-nfq.conf
+echo 'conntrack_counters = true' >> /etc/netifyd/interfaces.d/10-nfq.conf
+uci set netifyd.@netifyd[0].autoconfig='0'
+uci delete netifyd.@netifyd[0].options
+uci add_list netifyd.@netifyd[0].options='--thread-detection-cores=2'
+uci commit netifyd
+
+echo '' > /etc/config/netify-proc-flow-actions
+
+mkdir /etc/netifyd/nfa-qos.d
+touch /etc/netifyd/nfa-qos.d/10-app-qos-high.conf
+touch /etc/netifyd/nfa-qos.d/10-app-qos-middle.conf
+touch /etc/netifyd/nfa-qos.d/10-app-qos-low.conf
+mkdir /etc/netifyd/nfa-block.d
+touch /etc/netifyd/nfa-block.d/10-app-block.conf
+touch /etc/netifyd/nfa-block.d/10-app-content-protection.conf
+touch /etc/netifyd/nfa-block.d/10-app-allow.conf
+touch /etc/netifyd/categories.d/10-gl_content_protection.conf
+
+#sed -i '/^\[netify-api\]/,/^$/ s/^enable = .*/enable = yes/' "/etc/netifyd/profiles.d/00-default.conf"
+
+rm /etc/netifyd/netify-apps.conf-opkg
+rm /etc/netifyd/netify-categories.json-opkg
+rm /etc/netifyd/netify-proc-aggregator.json-opkg
+rm /etc/netifyd/netify-proc-core.json-opkg
+rm /etc/netifyd/netify-proc-flow-actions.json-opkg
+rm /etc/netifyd/netify-sink-http.json-opkg
+rm /etc/netifyd/netify-sink-log.json-opkg
+rm /etc/netifyd/netify-sink-socket.json-opkg
+
+/etc/init.d/firewall restart
+/etc/init.d/netifyd restart

@@ -1,0 +1,53 @@
+fw4_icmp_flood_rules()
+{
+    nft insert rule inet fw4 input iifname "br-lan" ip protocol icmp icmp type echo-request counter drop
+    nft insert rule inet fw4 input iifname "br-lan" ip protocol icmp icmp type echo-request counter limit rate 1/second log prefix "ICMP_DROP "
+    nft insert rule inet fw4 input iifname "br-lan" ip protocol icmp icmp type echo-request counter limit rate 50/second burst 200 packets counter accept
+}
+
+fw4_arp_flood_rules()
+{
+    nft list table arp filter > /dev/null 2>&1
+    [ $? = 1 ] && {
+            nft add table arp filter
+            nft add chain arp filter input '{ type filter hook input priority 0; policy accept; }'
+            nft insert rule arp filter input iifname "br-lan" counter limit rate 25/second burst 50 packets accept
+            nft add rule arp filter input iifname "br-lan" counter drop
+    }
+}
+
+fw4_syn_flood_rules()
+{
+    pos=$(nft -a list chain inet fw4 syn_flood | grep "limit rate" | awk '{print $NF}')
+    nft add rule inet fw4 syn_flood position $pos tcp flags syn limit rate 1/second log prefix "SYN_FLOOD " drop
+}
+
+fw3_icmp_flood_rules()
+{
+    iptables -w -C INPUT -i br-lan -p icmp --icmp-type echo-request -j DROP 2>/dev/null || \
+        iptables -w -I INPUT -i br-lan -p icmp --icmp-type echo-request -j DROP
+
+    iptables -w -C INPUT -i br-lan -p icmp --icmp-type echo-request -m limit --limit 1/s -j LOG 2>/dev/null || \
+        iptables -w -I INPUT -i br-lan -p icmp --icmp-type echo-request -m limit --limit 1/s -j LOG
+
+    iptables -w -C INPUT -i br-lan -p icmp --icmp-type echo-request -m limit --limit 25/s -j ACCEPT 2>/dev/null || \
+        iptables -w -I INPUT -i br-lan -p icmp --icmp-type echo-request -m limit --limit 25/s -j ACCEPT
+}
+
+fw3_syn_flood_rules()
+{
+    iptables -w -C syn_flood -p tcp --tcp-flags SYN,RST,ACK SYN -m limit --limit 1/s -j LOG --log-prefix "SYN_DROPPED: " --log-level 4 || \
+        iptables -I syn_flood 2 -p tcp --tcp-flags SYN,RST,ACK SYN -m limit --limit 1/s -j LOG --log-prefix "SYN_DROPPED: " --log-level 4
+}
+
+
+
+if [ -e /sbin/fw4 ]; then
+    fw4_icmp_flood_rules
+    fw4_arp_flood_rules
+    fw4_syn_flood_rules
+else
+    fw3_icmp_flood_rules
+    fw3_syn_flood_rules
+fi
+

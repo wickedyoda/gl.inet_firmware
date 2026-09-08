@@ -1,0 +1,7 @@
+#!/bin/sh
+
+[ ! -f /etc/config/glfan ] && exit 0
+. /lib/functions/gl_util.sh
+
+[ "$(uci -q get glconfig.general.inited)" = "1" -a -n "$(uci -q get glfan.globals.warn_temperature)" ] && exit 0
+fan_init

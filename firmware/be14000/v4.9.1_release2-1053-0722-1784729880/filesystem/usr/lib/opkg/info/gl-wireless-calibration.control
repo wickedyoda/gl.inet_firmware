@@ -1,0 +1,10 @@
+Package: gl-wireless-calibration
+Version: git-2026.128.41650-6514646-1
+Depends: libc
+Source: feeds/glinet/gl-wireless-calibration
+SourceName: gl-wireless-calibration
+Section: base
+SourceDateEpoch: 1778240050
+Architecture: aarch64_cortex-a53
+Installed-Size: 950
+Description:  GL Wireless Calibration Module

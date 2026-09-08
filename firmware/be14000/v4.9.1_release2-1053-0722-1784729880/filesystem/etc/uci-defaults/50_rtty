@@ -1,0 +1,12 @@
+/etc/init.d/rtty disable
+
+uci -q get rtty.general && exit 0
+
+uci set rtty.general=rtty
+
+[ -f /etc/wbf/customer ] && {
+    uci set rtty.general.ssh_en=1
+    uci set rtty.general.web_en=1
+}
+
+uci commit rtty

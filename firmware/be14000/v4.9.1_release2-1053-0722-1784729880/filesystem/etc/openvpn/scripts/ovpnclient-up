@@ -1,0 +1,166 @@
+#!/bin/sh
+
+# shellcheck disable=SC3037
+# shellcheck disable=SC3057
+
+# include netifd library
+. /lib/functions.sh
+. /lib/netifd/netifd-proto.sh
+. /lib/functions/gl_util.sh
+
+interface="$1"
+parameter="$2"
+eval "${parameter}"
+
+logger -t ovpnclient-up "env value:"`env`
+
+client_info_dir="/var/ovpnclient"
+[ -d ${client_info_dir} ] || mkdir -p ${client_info_dir}
+
+up_update_status()
+{
+	local interface=$1
+	[ -f ${client_info_dir}/status_table ] || touch ${client_info_dir}/status_table
+	[ "`uci -q -c ${client_info_dir} get status_table.${interface}.name`" = "" ] && {
+		uci -q -c ${client_info_dir} set status_table.${interface}='status'
+		uci -q -c ${client_info_dir} set status_table.${interface}.name="${interface}"
+	}
+	uci -q -c ${client_info_dir} set status_table.${interface}.active='1'
+	uci -q -c ${client_info_dir} commit status_table
+}
+
+add_dns_settings()
+{
+	mkdir -p /tmp/resolv.conf.d/
+	echo -e "# Interface $interface" > /tmp/resolv.conf.d/resolv.conf.$interface
+	local i=1
+	local has_ns=0
+	local has_ns6=0
+
+	local default_dns_v4="$(uci -q get ovpnclient.global.default_dns_v4)"
+	local default_dns_v6="$(uci -q get ovpnclient.global.default_dns_v6)"
+	[ -z "${default_dns_v4}" ] && default_dns_v4='1.0.0.1'
+	[ -z "${default_dns_v6}" ] && default_dns_v6='2606:4700:4700::1111'
+
+	while true; do
+		# As we know, for non-Windows openvpn clients can accept push DHCP
+		# options by using a client-side up script which parses the
+		# foreign_option_n environmental variable list
+		eval opt=\$foreign_option_${i}
+		[ -z "${opt}" ] && break
+		[ -n "$(echo "${opt}" | grep "dhcp-option WINS")" ] && break
+
+		#ns="$(echo ${opt} | sed -e 's/dhcp-option DOMAIN/domain/g' -e 's/dhcp-option DNS/nameserver/g')"
+		#ns="$(echo ${opt} | grep -e 'dhcp-option DNS' -e 'dhcp-option DNS6' | awk '{print $3}')"
+		ns="$(echo ${opt} | grep -w 'dhcp-option DNS' | awk '{print $3}')"
+		ns6="$(echo ${opt} | grep -w 'dhcp-option DNS6' | awk '{print $3}')"
+		if [ -n "$ns" ]; then
+			#proto_add_dns_server "$ns"
+			has_ns=1
+			echo -e "nameserver $ns" >> /tmp/resolv.conf.d/resolv.conf.$interface
+		fi
+
+		if [ -n "$ns6" ]; then
+			#proto_add_dns_server "$ns6"
+			has_ns6=1
+			echo -e "nameserver $ns6" >> /tmp/resolv.conf.d/resolv.conf.$interface
+		fi
+		i=$((i + 1))
+	done
+
+	[ $has_ns -eq 0 ] && {
+		for per_dns in ${default_dns_v4} ;do
+			echo -e "nameserver ${per_dns}" >> /tmp/resolv.conf.d/resolv.conf.$interface
+		done
+	}
+	[ $has_ns6 -eq 0 -a "$(uci -q get glipv6.globals.enabled)" = '1' ] && {
+		for per_dns in ${default_dns_v6} ;do
+			echo -e "nameserver ${per_dns}" >> /tmp/resolv.conf.d/resolv.conf.$interface
+		done
+	}
+}
+
+global_proxy_settings()
+{
+	local action="$1"
+	client_tap=$(uci -q get ovpnclient.$(uci -q get network.ovpnclient.config).mode)
+	if [ "$client_tap" = tap-s2s -o "$client_tap" = tap ]; then
+		return
+	fi
+
+	if [ ${action} = "add" ]; then
+		ip route add default dev "${interface}" table $((${interface:0-1}+1010))
+		ip -6 route add default dev "${interface}" table $((${interface:0-1}+1010))
+	elif [ ${action} = "del" ]; then
+		ip route del default dev "${interface}" table $((${interface:0-1}+1010))
+		ip -6 route del default dev "${interface}" table $((${interface:0-1}+1010))
+	fi
+}
+
+add_base_route(){
+	eval "$(ipcalc.sh $1 $2)";
+	ip_net="$NETWORK"
+	ip_prefix="$PREFIX"
+
+	proto_add_ipv4_route "$ip_net" "$ip_prefix"
+	[ -d /tmp/run/ovpn_resolved_ip ] || mkdir -p /tmp/run/ovpn_resolved_ip
+	echo $trusted_ip >/tmp/run/ovpn_resolved_ip/${interface}
+	if [ -n "$(ip route get $trusted_ip | grep "dev ${interface}")" ]; then
+		# route loop happens when server ip and interface is the same network
+		route_bak=$(ip route |grep ${interface})
+		ip route del $(echo "$route_bak"|awk '{print $1}')
+		ip route add $(ip route get "$trusted_ip" |head -1)
+		ip route add $route_bak
+	fi
+}
+
+modify_if_mtu() {
+	local interface="$1"
+	local origin_mtu="$2"
+	[ -n "${origin_mtu}" ] && {
+		local new_mtu=$((origin_mtu - 72))	# 72 = 40(ipv6 header) + 8(udp header) + 4(ovpn proto header) + 20(hmac max len) , TCP mode is different.
+		ip link set mtu ${new_mtu} dev ${interface}
+	}
+}
+
+client_tap=$(uci -q get ovpnclient.$(uci -q get network.${interface}.config).mode)
+# not call from vpn policy api
+if [ -z "$GL_SERVICE_QUEUE" ]; then
+	proto_init_update "${interface}" 1 1
+	proto_set_keep 1
+	proto_add_ipv4_address "${ifconfig_local}" 32
+	[ $# -gt 3 ] && {
+		add_base_route $6 $7
+	}
+	[ -n "$script_type" ] && add_dns_settings
+	proto_send_update "${interface}"
+	echo "connected" > /tmp/ovpnclient/${interface}_state
+
+	# tap-s2s settings
+	if [ "$client_tap" = tap-s2s -o "$client_tap" = tap ]; then
+		/usr/bin/setup_tap_s2s client
+		touch /tmp/run/disconnect_lan_flag
+		uci set dhcp.lan.ignore=1
+		uci commit dhcp
+		/etc/init.d/dnsmasq reload
+		wait_for_wifi_ready
+		/etc/init.d/network reload&
+		disconnect_lan_clients
+	fi
+
+	# tunnel mode modify default mtu.
+	if [ "$client_tap" = 'tun' ] ;then
+		[ "${mtu_is_set}" != '1' -a "${tun_mtu}" = '1500' ] && {
+			modify_if_mtu "${interface}" "$tun_mtu"
+		}
+	fi
+fi
+
+global_proxy_settings add
+
+if [ "$client_tap" != tap-s2s -a "$client_tap" != tap ]; then
+        /usr/bin/rtp2.sh 'interface_status_change' "${interface}" 'up'
+fi
+
+up_update_status ${interface}
+exit 0

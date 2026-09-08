@@ -1,0 +1,18 @@
+#!/bin/sh /etc/rc.common
+
+START=01
+STOP=90
+
+record_size=`uci get gl_logread.crash.record_size`
+if [ -z "$record_size" ];then
+    record_size=8192
+fi
+
+start() {
+	mod="/lib/modules/$(uname -r)/mtdoops.ko"
+
+	[ -f "$mod" ] && {
+		lsmod | grep -q mtdoops && rmmod mtdoops
+		insmod /lib/modules/$(uname -r)/mtdoops.ko record_size=$record_size mtddev=log
+	}
+}

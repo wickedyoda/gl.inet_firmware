@@ -1,0 +1,15 @@
+Package: samba4-utils
+Version: 4.18.8-1
+Depends: libc, samba4-libs
+Source: feeds/gl_feed_common/samba4
+SourceName: samba4-utils
+License: GPL-3.0-only
+LicenseFiles: COPYING
+Section: net
+SourceDateEpoch: 1749729434
+CPE-ID: cpe:/a:samba:samba
+Architecture: aarch64_cortex-a53
+Installed-Size: 34014
+Description:  installs: smbstatus smbtree mvxattr smbtar (smbcquotas)
+ 
+ Utilities collection

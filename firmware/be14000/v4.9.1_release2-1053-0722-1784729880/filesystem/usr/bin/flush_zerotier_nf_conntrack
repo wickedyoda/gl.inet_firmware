@@ -1,0 +1,21 @@
+#!/bin/sh
+
+. /lib/functions/uci-defaults.sh
+. /usr/share/libubox/jshn.sh
+
+get_via_from_routes()
+{
+    _json_set_var JSON_CUR $1
+    json_get_var via via
+    json_get_vars target target
+    if [ -z "$via" -a -n "$target" ];then
+        conntrack -D --src "$target"
+        conntrack -D --dst "$target"
+    fi
+    json_select ..
+}
+
+json_init
+json_load "$(zerotier-cli  -j listnetworks | jsonfilter -e @[0])"
+json_for_each_item get_via_from_routes routes
+

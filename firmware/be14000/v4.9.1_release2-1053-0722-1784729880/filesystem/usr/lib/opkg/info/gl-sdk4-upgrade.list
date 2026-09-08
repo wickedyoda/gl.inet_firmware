@@ -1,0 +1,8 @@
+/usr/bin/one_click_upgrade
+/usr/lib/oui-httpd/rpc/upgrade.so
+/usr/lib/oui-httpd/rpc/upgrade
+/usr/bin/upgrade_cellular
+/usr/bin/glautoupdater
+/etc/config/upgrade
+/usr/share/gl-upload.d/upgrade
+/usr/bin/mirror_downloader

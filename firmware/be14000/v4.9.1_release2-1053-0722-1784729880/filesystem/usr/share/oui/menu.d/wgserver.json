@@ -1,0 +1,17 @@
+{
+    "index": 50,
+    "view": "wgserver",
+    "level": 2,
+    "parent": "vpn",
+    "parent_icon": "vpn",
+    "parent_index": 40,
+    "lang_hide": [
+        "zh-cn"
+    ],
+    "show_mode": [
+        "router"
+    ],
+    "disables": [
+        "taps2s"
+    ]
+}

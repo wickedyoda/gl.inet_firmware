@@ -1,0 +1,10 @@
+Package: gl-sdk4-plugins
+Version: git-2026.100.15282-694fe64-1
+Depends: libc, jansson4, gl-sdk4-uci, gl-sdk4-log, gl-sdk4-utils, libsqlite3-0
+Source: feeds/glinet/gl-sdk4-plugins
+SourceName: gl-sdk4-plugins
+Section: base
+SourceDateEpoch: 1775794482
+Architecture: aarch64_cortex-a53
+Installed-Size: 13830
+Description:  Oui Support for plug-in installation

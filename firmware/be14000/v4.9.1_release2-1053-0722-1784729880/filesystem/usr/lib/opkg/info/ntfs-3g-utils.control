@@ -1,0 +1,28 @@
+Package: ntfs-3g-utils
+Version: 2022.10.3-1
+Depends: libc, ntfs-3g, libgcrypt, libuuid1
+Source: feeds/gl_feed_common/ntfs-3g
+SourceName: ntfs-3g-utils
+License: GPL-2.0-only LGPL-2.1-or-later
+LicenseFiles: COPYING COPYING.LIB
+Section: utils
+SourceDateEpoch: 1749729394
+CPE-ID: cpe:/a:tuxera:ntfs-3g
+Architecture: aarch64_cortex-a53
+Installed-Size: 293803
+Description:  Suite of NTFS utilities for doing neat things with NTFS.
+ Contains:
+ - mkntfs - Create an NTFS filesystem.
+ - ntfscat - Dump a file's content to the standard output.
+ - ntfsclone - Efficiently clone, backup, restore or rescue NTFS.
+ - ntfscluster - Locate the files which use the given sectors or clusters.
+ - ntfscmp - Compare two NTFS filesystems and tell the differences.
+ - ntfscp - Copy a file to an NTFS volume.
+ - ntfssecaudit - Display ownership and permissions, check consistency
+ - ntfsfix - Check and fix some common errors, clear the LogFile.
+ - ntfsinfo - Show information about NTFS or one of the files or directories within it.
+ - ntfslabel - Show, or set, an NTFS filesystem's volume label.
+ - ntfsls - List information about files in a directory residing on an NTFS.
+ - ntfsresize - Resize NTFS without losing data.
+ - ntfsundelete - Recover deleted files from NTFS.
+ - ntfsusermap - Define mapping of Windows accounts to Linux logins

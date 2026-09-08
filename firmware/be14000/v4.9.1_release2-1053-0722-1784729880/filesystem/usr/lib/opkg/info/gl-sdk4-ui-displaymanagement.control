@@ -1,0 +1,10 @@
+Package: gl-sdk4-ui-displaymanagement
+Version: git-2026.183.23603-dfffd51-1
+Depends: libc
+Source: feeds/glinet/gl-ui4.0/module/displaymanagement
+SourceName: gl-sdk4-ui-displaymanagement
+Section: base
+SourceDateEpoch: 1782974003
+Architecture: aarch64_cortex-a53
+Installed-Size: 46944
+Description:  gl-sdk4-ui-displaymanagement

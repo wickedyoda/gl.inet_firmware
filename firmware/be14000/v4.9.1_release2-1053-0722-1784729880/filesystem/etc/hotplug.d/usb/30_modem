@@ -1,0 +1,104 @@
+#!/bin/sh
+
+. /lib/functions/modem.sh
+
+MAX_RETRY=5             # Maximum retry attempts
+RETRY_DELAY=1           # Retry delay (seconds)
+
+REMOVENAME="$(basename "$DEVPATH")"
+case "$REMOVENAME" in
+    usb*) exit 0 ;;
+esac
+
+# Lock acquisition function with retry
+acquire_lock_with_retry() {
+    local lock_file="$1"
+    local max_retry="$2"
+    local retry_delay="$3"
+
+    local retry_count=0
+
+    while [ $retry_count -lt $max_retry ]; do
+        # Attempt non-blocking lock acquisition
+        lock -n "$lock_file"
+
+        if [ $? -eq 0 ]; then
+            # Lock acquired successfully
+            log_debug $LINENO "30_modem" "Lock acquired successfully (attempt $((retry_count+1))/$max_retry): $lock_file"
+            return 0
+        fi
+
+        # Lock acquisition failed, wait and retry
+        retry_count=$((retry_count + 1))
+
+        if [ $retry_count -lt $max_retry ]; then
+            log_debug $LINENO "30_modem" "Lock acquisition failed, waiting ${retry_delay} seconds before retry ($retry_count/$max_retry): $lock_file"
+            sleep $retry_delay
+        fi
+    done
+
+    log_debug $LINENO "30_modem" "Lock acquisition failed, maximum retry attempts reached ($max_retry): $lock_file"
+    return 1
+}
+
+
+[ "$ACTION" = remove -a "$DEVTYPE" = usb_device ] && {
+    (
+        # Device-specific lock
+        LOCK_FILE="/var/lock/cellular_${REMOVENAME}.lock"
+
+        # Non-blocking lock acquisition, exit if failed
+        if ! acquire_lock_with_retry "$LOCK_FILE" "$MAX_RETRY" "$RETRY_DELAY"; then
+            log_debug $LINENO "30_modem" "Device lock acquisition failed, skipping remove event: $REMOVENAME"
+            exit 0
+        fi
+
+        # Record start time
+        START_TIME=$(date +%s)
+
+        # Execute ubus
+        log_debug $LINENO "30_modem" "Asynchronously processing remove event: $REMOVENAME"
+
+        ubus call cellular.status get_event "{\"bus\":\"$REMOVENAME\",\"main_type\":0,\"base_type\":1}" 2>/dev/null
+
+        # Release lock
+        lock -u "$LOCK_FILE"
+    ) &
+
+    # Main script returns immediately
+    exit 0
+}
+
+[ "$ACTION" = bind -a "$DEVTYPE" = usb_device ] && {
+    (
+        LOCK_FILE="/var/lock/cellular_${REMOVENAME}.lock"
+
+        # Non-blocking lock acquisition
+        if ! acquire_lock_with_retry "$LOCK_FILE" "$MAX_RETRY" "$RETRY_DELAY"; then
+            log_debug $LINENO "30_modem" "Device lock acquisition failed, skipping bind event: $REMOVENAME"
+            exit 0
+        fi
+
+        # Check device support
+        pid=$(cat /sys/bus/usb/devices/$REMOVENAME/idProduct 2>/dev/null)
+        vid=$(cat /sys/bus/usb/devices/$REMOVENAME/idVendor 2>/dev/null)
+
+        if [ -n "$pid" -a -n "$vid" ]; then
+            support_vid=$(cat /lib/modem_data/modem_list.json 2>/dev/null | \
+                jsonfilter -e '@.modems[@.pid="'"$pid"'"].vid' 2>/dev/null)
+
+            if [ -n "$support_vid" -a "$vid" = "$support_vid" ]; then
+                START_TIME=$(date +%s)
+                log_debug $LINENO "30_modem" "Asynchronously processing bind event: $REMOVENAME"
+                ubus call cellular.status get_event "{\"bus\":\"$REMOVENAME\",\"main_type\":0,\"base_type\":0}" 2>/dev/null
+            else
+                log_debug $LINENO "30_modem" "Device not supported: $REMOVENAME (pid:$pid, vid:$vid)"
+            fi
+        fi
+
+        # Release lock
+        lock -u "$LOCK_FILE"
+    ) &
+
+    exit 0
+}

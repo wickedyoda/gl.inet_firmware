@@ -1,0 +1,13 @@
+{
+  "index": 15,
+  "view": "acl-view",
+  "title": {
+    "translate": "menu_acl"
+  },
+  "level": 2,
+  "parent": "security",
+  "parent_icon": "security",
+  "parent_index": 50,
+  "hidden_mode": ["agent", "wds", "relay", "ap"],
+  "disables": ["taps2s"]
+}

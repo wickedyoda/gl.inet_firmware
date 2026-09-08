@@ -1,0 +1,6 @@
+/etc/uci-defaults/gl-s2s.defaults
+/etc/config/gl_s2s
+/usr/lib/oui-httpd/rpc/s2s.so
+/usr/bin/echo_server
+/usr/share/gl-validator.d/s2s.lua
+/etc/init.d/gl_s2s

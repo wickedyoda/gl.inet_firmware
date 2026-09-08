@@ -1,0 +1,2 @@
+#!/bin/sh
+sed -i 's/procd_set_param command \$PROG -n/procd_set_param command \$PROG -n -l \/dev\/null/' /etc/init.d/chronyd

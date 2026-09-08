@@ -1,0 +1,64 @@
+#!/bin/sh  /etc/rc.common
+
+START=23
+
+USE_PROCD=1
+
+sync_traffic_to_flash() {
+    local bus_dir="/tmp/gl_modem_traffic"
+    local etc_dir="/etc/gl_modem_traffic"
+    [ -d "$bus_dir" ] || return 0
+
+    for bus_path in "$bus_dir"/*; do
+        [ -d "$bus_path" ] || continue
+
+        local bus
+        bus=$(basename "$bus_path")
+
+        mkdir -p "$etc_dir/$bus"
+
+        for f in total_4g total_5g; do
+            [ -f "$bus_path/$f" ] && cp "$bus_path/$f" "$etc_dir/$bus/$f"
+        done
+
+        for f in total_sim1 total_sim2 total_esim1 total_esim2; do
+            [ -f "$bus_path/$f" ] && cp "$bus_path/$f" "$etc_dir/$bus/$f"
+        done
+    done
+
+    sync
+}
+
+start_service(){
+    [ -e /sbin/fw4 ] && [ ! -d /usr/share/nftables.d/chain-pre/mangle_postrouting ] && \
+        mkdir -p /usr/share/nftables.d/chain-pre/mangle_postrouting
+	#Decompress apn data base
+	mkdir -p /var/run/modem/
+    [ -f "/var/run/modem/apns-full-conf.json" ] || {
+        cp /www/js/apns-full-conf-*.json.gz /var/run/modem/
+        gzip -dc /var/run/modem/apns-full-conf-*.json.gz > /var/run/modem/apns-full-conf.json
+    }
+	
+    [ -f "/var/run/modem/operator-config.json" ] || {
+        if [ -d "/var/run/modem/" ] ;then
+            cp /www/js/operator-config.json.gz /var/run/modem/operator-config.json.gz
+            gzip -d /var/run/modem/operator-config.json.gz
+        else
+            
+            cp /www/js/operator-config.json.gz /var/run/modem/operator-config.json.gz
+            gzip -d /var/run/modem/operator-config.json.gz
+        fi
+    }
+
+    procd_open_instance
+    procd_set_param command /usr/bin/cellular_manager
+    procd_set_param respawn ${respawn_threshold:-3600} ${respawn_timeout:-5} ${respawn_retry:-5}
+    procd_close_instance
+}
+
+
+stop_service(){
+   sync_traffic_to_flash
+   ubus call cellular.status cleanup_resources >/dev/null 2>&1
+}
+

@@ -1,0 +1,9 @@
+/usr/bin/gl_tailscale
+/usr/lib/oui-httpd/rpc/tailscale
+/lib/upgrade/keep.d/gl-sdk4-tailscale
+/etc/config/tailscale
+/usr/bin/ts_killswitch
+/etc/hotplug.d/net/19-tailscale-net
+/etc/firewall.tailscale.sh
+/etc/init.d/tailscale
+/etc/hotplug.d/iface/19-tailscale-iface

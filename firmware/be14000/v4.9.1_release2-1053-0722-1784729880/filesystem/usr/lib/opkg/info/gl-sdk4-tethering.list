@@ -1,0 +1,8 @@
+/usr/sbin/tethering_debug
+/etc/hotplug.d/iface/99-tethering-irq
+/etc/init.d/gl_tethering
+/etc/firewall.tethering_ttl
+/lib/functions/tethering.sh
+/etc/uci-defaults/03_gl_tethering
+/etc/hotplug.d/usb/31-tethering
+/usr/lib/oui-httpd/rpc/tethering

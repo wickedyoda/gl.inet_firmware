@@ -1,0 +1,120 @@
+. /lib/functions/gl_util.sh
+
+if [ -f "/etc/config/nginx" ];then
+    # close nginx uci config
+    uci set nginx.global.uci_enable=false
+    uci commit nginx
+fi
+
+if [ -f "/etc/nginx/nginx.conf" ];then
+    mv /etc/nginx/nginx.conf /etc/nginx/nginx.conf_old
+fi
+
+if [ -f "/etc/nginx/oui_nginx.conf" ];then
+    mv /etc/nginx/oui_nginx.conf /etc/nginx/nginx.conf
+fi
+
+if [ ! -f "/etc/nginx/nginx.key" ]; then
+    NGINX_KEY=/etc/nginx/nginx.key
+    NGINX_CER=/etc/nginx/nginx.cer
+    OPENSSL_BIN=/usr/bin/openssl
+    PX5G_BIN=/usr/sbin/px5g
+
+cat << EOF > /etc/ssl/gl.conf
+[req]
+distinguished_name  = req_distinguished_name
+x509_extensions     = v3_req
+prompt              = no
+string_mask         = utf8only
+
+[req_distinguished_name]
+C                   = HK
+ST                  = Hong Kong
+L                   = Hong Kong
+O                   = GLiNet
+CN                  = console.gl-inet.com
+
+[v3_req]
+keyUsage            = nonRepudiation, digitalSignature, keyEncipherment
+extendedKeyUsage    = serverAuth
+subjectAltName      = @alt_names
+
+[alt_names]
+DNS.1               = console.gl-inet.com
+IP.1                = 192.168.8.1
+EOF
+
+    # Prefer px5g for certificate generation (existence evaluated last)
+    GENKEY_CMD=""
+    [ -x "$OPENSSL_BIN" ] && GENKEY_CMD="$OPENSSL_BIN req -x509 -nodes"
+    [ -x "$PX5G_BIN" ] && GENKEY_CMD="$PX5G_BIN selfsigned"
+    [ -n "$GENKEY_CMD" ] && {
+        $GENKEY_CMD -days 730 -newkey rsa:2048 -keyout "${NGINX_KEY}.new" -out "${NGINX_CER}.new" -config /etc/ssl/gl.conf
+        sync
+        mv "${NGINX_KEY}.new" "${NGINX_KEY}"
+        mv "${NGINX_CER}.new" "${NGINX_CER}"
+    }
+fi
+
+nginx_version=$(nginx -v 2>&1 | sed -e "s/nginx version: nginx\/[0-9]\+\.\([0-9]\+\)\.[0-9]\+.*/\1/g")
+if [ "$nginx_version" -lt "26" ];then
+    sed -i "/\/etc\/nginx\/module\.d/d" /etc/nginx/nginx.conf
+    sed -i "/lua_package_path/d" /etc/nginx/nginx.conf
+fi
+
+sed -i '/lua_code_cache/d' /etc/nginx/conf.d/gl.conf
+
+if [ -e "/usr/share/gl-ngx/oui-ws.lua" ]; then
+    glconf="/etc/nginx/conf.d/gl.conf"
+
+    [ ! $(grep "oui-ws.lua" "$glconf") ] && {
+        sed -i '/location = \/upload/i location = \/ws {\n        content_by_lua_file \/usr\/share\/gl-ngx\/oui-ws.lua;\n    }\n' $glconf
+    }
+
+fi
+
+sed -i 's/keepalive_timeout 0/keepalive_timeout 5/' /etc/nginx/nginx.conf
+sed -i 's/ssl_protocols TLSv1 TLSv1.1 TLSv1.2;/ssl_protocols TLSv1.2 TLSv1.3;/' /etc/nginx/nginx.conf
+grep -q lua_ssl_verify_depth /etc/nginx/conf.d/gl.conf || sed -i '/ssl_protocols/i\    lua_ssl_verify_depth 2;\n    lua_ssl_trusted_certificate /etc/ssl/certs/ca-certificates.crt;' /etc/nginx/conf.d/gl.conf
+
+sed -i 's/resolver 127.0.0.1;/resolver 127.0.0.1 ipv6=off;/' /etc/nginx/conf.d/gl.conf
+
+grep -q "access_log off" /etc/nginx/nginx.conf || sed -i '/^    root \/www;/a \\n    access_log off;' /etc/nginx/nginx.conf
+
+sed -i 's/large_client_header_buffers 2 1k;/large_client_header_buffers 2 2k;/' /etc/nginx/nginx.conf
+
+sed -i 's/error.log error;/error.log notice;/' /etc/nginx/nginx.conf
+
+set_nginx_thread
+
+locations="\/rpc \/ws \/upload \/download"
+for loc in $locations; do
+    exist=$(grep -A1 "$loc" "/etc/nginx/conf.d/gl.conf" | grep "access_by_lua_file")
+    [ "$exist" = "" ] && {
+        sed -i "/location = ${loc} {/a\        access_by_lua_file \/usr\/share\/gl-ngx\/oui-access.lua;" /etc/nginx/conf.d/gl.conf
+    }
+done
+
+[ "$(grep -A1 "/cgi-bin/" "/etc/nginx/conf.d/gl.conf" | grep "access_by_lua_file")" = "" ] && \
+sed -i '/location \/cgi-bin\/ {/a\        access_by_lua_file \/usr\/share\/gl-ngx\/oui-access.lua;' /etc/nginx/conf.d/gl.conf
+
+[ "$(grep -A1 "~.*\.(html|png|jpg|svg)" "/etc/nginx/conf.d/gl.conf" | grep "access_by_lua_file")" = "" ] && \
+sed -i '/location ~.*\\.(html\|png\|jpg\|svg) {/a\        access_by_lua_file \/usr\/share\/gl-ngx\/oui-access.lua;' /etc/nginx/conf.d/gl.conf
+
+section_system_id=$(uci -X show oui-httpd | grep "object='system'" | cut -d . -f 2)
+if [ "$(uci -q get oui-httpd.$section_system_id.method | grep "get_timezone_list")" = "" ]; then
+    uci add oui-httpd no-auth-methods
+    uci set oui-httpd.@no-auth-methods[-1].object='system'
+    uci add_list oui-httpd.@no-auth-methods[-1].method='get_timezone_list'
+    uci commit oui-httpd
+fi
+
+[ "$(uci -q get oui-httpd.main.inited)" = "1" ] || {
+    uci set dropbear.@dropbear[0].enable=0
+    uci commit dropbear
+}
+
+# For rtty run if console disabled
+ln -sf /bin/busybox /usr/bin/login
+
+exit 0

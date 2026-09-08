@@ -1,0 +1,31 @@
+#!/bin/sh
+
+initscript=$1
+
+echo $initscript | grep -q "^\./" && initscript="$(pwd)/${initscript:2}"
+
+action=${2:-help}
+
+shift 2
+
+on() {
+    return 0
+}
+
+off() {
+    return 0
+}
+
+help() {
+    cat <<EOF
+Syntax: $initscript [command]
+
+Available commands:
+    on   Turn on the function
+    off  Turn off the function
+EOF
+}
+
+. "$initscript"
+
+$action "$@"

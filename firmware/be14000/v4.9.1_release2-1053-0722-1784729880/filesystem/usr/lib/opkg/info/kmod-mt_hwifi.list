@@ -1,0 +1,7 @@
+/lib/firmware/WIFI_MT7990_WACPU_RAM_CODE_1_1.bin
+/etc/modules.d/62-mt_hwifi
+/lib/modules/5.4.281/mtk_hwifi.ko
+/lib/firmware/WIFI_RAM_CODE_MT7990_1_1_TESTMODE.bin
+/lib/firmware/WIFI_RAM_CODE_MT7990_1_1.bin
+/lib/firmware/WIFI_MT7990_PATCH_MCU_1_1_hdr.bin
+/lib/firmware/WIFI_MT7990_PHY_RAM_CODE_1_1.bin

@@ -1,0 +1,14 @@
+cat /etc/vsftpd.conf | grep -q '#Initialized' && exit 0
+
+sed -i '/^#.*/d' /etc/vsftpd.conf 
+sed -i '1i#Initialized' /etc/vsftpd.conf
+sed -i 's/listen=YES/listen=NO/' /etc/vsftpd.conf
+sed -i 's/anonymous_enable=NO/anonymous_enable=YES/' /etc/vsftpd.conf
+echo 'no_anon_password=YES' >> /etc/vsftpd.conf
+echo 'anon_mkdir_write_enable=YES' >> /etc/vsftpd.conf
+echo 'anon_other_write_enable=YES' >> /etc/vsftpd.conf
+echo 'allow_writeable_chroot=YES' >> /etc/vsftpd.conf
+echo 'anon_upload_enable=YES' >> /etc/vsftpd.conf
+echo 'pasv_enable=YES' >> /etc/vsftpd.conf
+echo 'pasv_min_port=10090' >> /etc/vsftpd.conf
+echo 'pasv_max_port=10100' >> /etc/vsftpd.conf

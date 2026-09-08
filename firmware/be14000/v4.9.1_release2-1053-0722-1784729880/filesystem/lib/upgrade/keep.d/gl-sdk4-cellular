@@ -1,0 +1,4 @@
+/etc/spool
+/etc/gl_modem_traffic/
+/etc/gl_crontabs/crontabs.d/
+/etc/ssmtp/

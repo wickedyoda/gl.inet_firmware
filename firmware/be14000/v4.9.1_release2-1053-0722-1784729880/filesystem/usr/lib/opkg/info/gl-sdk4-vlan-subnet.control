@@ -1,0 +1,13 @@
+Package: gl-sdk4-vlan-subnet
+Version: 20260703-1
+Depends: libc, gl-sdk4-lua-utils, gl-sdk4-firewall, gl-sdk4-cable, lua
+Source: feeds/glinet/gl-sdk4-vlan-subnet
+SourceName: gl-sdk4-vlan-subnet
+Section: base
+SourceDateEpoch: 1783044662
+Architecture: aarch64_cortex-a53
+Installed-Size: 116602
+Description:  Provides VLAN subnet management RPC interface (vlan_subnet).
+ DSA independent bridge model: br-lan / br-guest / br-iot / br-vlanN.
+ Supports main/guest/IOT/custom subnet CRUD, address reservation,
+ lifecycle migration, mode switching, client view, and VPN interface linkage.

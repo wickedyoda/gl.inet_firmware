@@ -1,0 +1,39 @@
+#!/bin/sh
+
+. /lib/functions/modem.sh
+
+. /lib/functions/gl_log.sh
+
+. /lib/functions/gl_util.sh
+
+set_log_level "$(get_modem_log_level)"
+
+model=$(get_model)
+bus="$(get_modem_bus)"
+
+check_traffic_config(){
+    eval gl_modem -B $bus -C check_traffic_config >/dev/null 2>&1
+}
+
+check_apnprofile_config(){
+    eval gl_modem -B $bus -C check_apnprofile_config >/dev/null 2>&1
+}
+
+check_sms_forward_config(){
+    eval gl_modem -B $bus -C check_sms_forward_config >/dev/null 2>&1
+}
+
+if [ "$(uci -q get oui-httpd.main.inited)" != "1" ] || [ "$model" = "e5800" ]; then
+	log_info "$LINENO" "modem" "oui-httpd not initialized or model is e5800, exiting"
+	exit 0
+else
+    if [ "$(uci -q get glmodem.global.log_level)" = "0" ]; then
+        uci -q set glmodem.global.log_level=1
+        uci commit glmodem
+        sync
+    fi
+
+    check_traffic_config
+    check_apnprofile_config
+    check_sms_forward_config
+fi

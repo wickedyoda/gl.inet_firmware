@@ -1,0 +1,10 @@
+Package: gl-sdk4-lua-utils
+Version: git-2026.160.05466-5ae0014-1
+Depends: libc, libuci-lua, gl-sdk4-utils
+Source: feeds/glinet/gl-sdk4-lua-utils
+SourceName: gl-sdk4-lua-utils
+Section: base
+SourceDateEpoch: 1780968666
+Architecture: aarch64_cortex-a53
+Installed-Size: 14461
+Description:  Hw Info API for Gl.inet

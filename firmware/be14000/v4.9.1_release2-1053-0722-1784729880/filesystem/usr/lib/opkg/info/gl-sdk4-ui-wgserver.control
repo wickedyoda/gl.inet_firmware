@@ -1,0 +1,10 @@
+Package: gl-sdk4-ui-wgserver
+Version: git-2026.187.06782-f9b4e95-1
+Depends: libc, gl-sdk4-ui-core, gl-sdk4-wg-server
+Source: feeds/glinet/gl-ui4.0/module/wgserver
+SourceName: gl-sdk4-ui-wgserver
+Section: base
+SourceDateEpoch: 1783302782
+Architecture: aarch64_cortex-a53
+Installed-Size: 31386
+Description:  gl-sdk4-ui-wgserver

@@ -1,0 +1,10 @@
+#!/bin/sh
+
+#Support web access in relay mode
+uci -q batch <<-EOF
+    set network.policy_relay_lo_rt_lan="rule"
+    set network.policy_relay_lo_rt_lan.lookup="16800"
+    set network.policy_relay_lo_rt_lan.in="loopback"
+    set network.policy_relay_lo_rt_lan.priority="1"
+    commit network
+EOF

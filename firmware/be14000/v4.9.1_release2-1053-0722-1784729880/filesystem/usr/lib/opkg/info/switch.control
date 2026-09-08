@@ -1,0 +1,10 @@
+Package: switch
+Version: 1
+Depends: libc, libnl-tiny1
+Source: feeds/mtk_openwrt_feed/feed/app/switch
+SourceName: switch
+Section: MTK Properties
+SourceDateEpoch: 1763339203
+Architecture: aarch64_cortex-a53
+Installed-Size: 105265
+Description:  An program to config switch.

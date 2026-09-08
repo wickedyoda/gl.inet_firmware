@@ -1,0 +1,14 @@
+Package: smstools3
+Version: 3.1.21-2
+Depends: libc
+Source: feeds/gl_feed_smstools3/smstools3
+SourceName: smstools3
+License: GPL-2.0
+LicenseFiles: LICENSE
+Section: utils
+SourceDateEpoch: 1778060544
+Maintainer: Harald Geyer <harald@ccbib.org>
+Architecture: aarch64_cortex-a53
+Installed-Size: 135323
+Description:  The SMS Server Tools 3 is a SMS Gateway software which can send and receive
+ short messages through GSM modems and mobile phones.

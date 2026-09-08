@@ -1,0 +1,6 @@
+/usr/lib/lua/hardware.lua
+/usr/lib/lua/gl/validator.lua
+/usr/lib/lua/lfactory.so
+/usr/lib/lua/gl/common.lua
+/usr/local/lib/lua/5.4/gl/validator.lua
+/usr/local/lib/lua/5.4/gl/common.lua

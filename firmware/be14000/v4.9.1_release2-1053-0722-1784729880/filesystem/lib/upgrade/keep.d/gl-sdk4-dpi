@@ -1,0 +1,8 @@
+/etc/netifyd/content_protection_stats
+/etc/netifyd/qos_stats
+/etc/netifyd/categories.d/10-gl_content_protection.conf
+/etc/netifyd/categories.d/netify-apps.conf
+/etc/netifyd/categories.d/netify-categories.json
+/etc/netifyd/nfa-block.d/
+/etc/netifyd/nfa-qos.d/
+/etc/netifyd/traffic_data.db

@@ -1,0 +1,6 @@
+/etc/edgerouter.fw
+/etc/uci-defaults/14-fix-edgerouter-keepsetting
+/lib/functions/drop-in-function.sh
+/etc/init.d/edgerouter
+/usr/lib/oui-httpd/rpc/edgerouter
+/etc/config/edgerouter

@@ -1,0 +1,17 @@
+Package: kmod-cst353x
+Version: 5.4.281-3
+Depends: kernel (=5.4.281-1-df4fa332840f56a774a5d60bd140aaf6), kmod-i2c-core, kmod-input-core, kmod-input-evdev
+Source: feeds/gl_feed_common/cst353x
+SourceName: kmod-cst353x
+License: GPL-2.0
+Section: kernel
+SourceDateEpoch: 1762739895
+Architecture: aarch64_cortex-a53
+Installed-Size: 2661
+Description:  This is a replacement for the following in-kernel drivers:
+ 1) gpio_keys (KEYBOARD_GPIO)
+ 2) gpio_keys_polled (KEYBOARD_GPIO_POLLED)
+ 
+ Instead of generating input events (like in-kernel drivers do) it generates
+ uevent-s and broadcasts them. This allows disabling input subsystem which is
+ an overkill for OpenWrt simple needs.

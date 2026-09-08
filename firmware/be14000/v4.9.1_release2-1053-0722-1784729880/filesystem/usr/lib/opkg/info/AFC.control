@@ -1,0 +1,10 @@
+Package: AFC
+Version: 1
+Depends: libc, libkvcutil, libopenssl1.1, libnl-tiny1, libcurl4, libjson-c5, libwpactrl20130104
+Source: feeds/mt7988/applications/AFC
+SourceName: AFC
+Section: MTK Properties
+SourceDateEpoch: 1760147463
+Architecture: aarch64_cortex-a53
+Installed-Size: 22804
+Description:  AFC daemon

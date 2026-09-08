@@ -1,0 +1,10 @@
+Package: gl-sdk4-dns
+Version: git-2026.148.10637-dc562f1-1
+Depends: libc, dnscrypt-proxy2, dnsproxy
+Source: feeds/glinet/gl-sdk4-dns
+SourceName: gl-sdk4-dns
+Section: base
+SourceDateEpoch: 1779937037
+Architecture: aarch64_cortex-a53
+Installed-Size: 15546
+Description:  GL iNet dns server api

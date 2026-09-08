@@ -1,0 +1,290 @@
+--[[
+    @object-name: edgerouter
+    @object-desc: edgerouter
+--]]
+
+local uci = require "uci"
+local lnet = require "oui.network"
+local hardware = require "hardware"
+local validator = require "gl.validator"
+local fs = require "oui.fs"
+
+local M = {}
+
+local function file_exists(path)
+    local file = io.open(path, "rb")
+    if file then file:close() end
+    return file ~= nil
+end
+
+local function split_ip(ip)
+    local fields={}
+    for field in ip:gmatch("[^.]+") do
+        fields[#fields + 1] = field
+    end
+    return fields
+end
+
+local function get_address_pool(gateway,mask)
+    local ret = {}
+    local net = lnet.ipcalc({gateway,mask});
+    local fileds=split_ip(net.network)
+    local start=tonumber(fileds[4])
+    local ending=tonumber(split_ip(net.broadcast)[4])
+    local gw=tonumber(split_ip(gateway)[4])
+    for i=start+1,ending-1,1 do
+        if i ~= gw then
+            ret["start"]= tostring(i)
+            -- ret["start"]= fileds[1] .. "." .. fileds[2] .. "." ..  fileds[3] .. "." ..  tostring(i)
+            break
+        end
+    end
+    for i=ending-1,start+1,-1 do
+        if i ~= gw then
+            ret["end"]= tostring(i)
+            -- ret["end"]= fileds[1] .. "." .. fileds[2] .. "." ..  fileds[3] .. "." ..  tostring(i)
+            break
+        end
+    end
+    return ret
+end
+
+local function check_config_valid(info)
+    local c = uci.cursor()
+
+    local ip = c:get("edgerouter", "wandhcp", "ip") or "0.0.0.0"
+    local mask = c:get("edgerouter", "wandhcp", "netmask")  or "0.0.0.0"
+    local cfg_net = lnet.ipcalc({ip,mask});
+    local info_net = lnet.ipcalc({info.ip,info.netmask});
+    if cfg_net.network == info_net.network then
+        return true
+    else
+        return false
+    end
+end
+
+local function check_params(params)
+    if params.ip == nil or params.netmask == nil or params.gateway == nil  or params.dns == nil then
+        return {
+            err_code = 1,
+            err_msg = "parameter missing"
+        }
+    end
+
+    if not validator.ip4addr(params.ip) or not validator.netmask4(params.netmask) or not validator.ip4addr(params.gateway) then
+        return false
+    end
+
+    if type(params.dns) ~= "table" then return false end
+
+    for _, dns_ip in ipairs(params.dns) do
+        if not validator.ip4addr(dns_ip) then
+            return false
+        end
+    end
+
+    return true
+end
+
+local function restart_vpn_client()
+    if fs.access("/etc/init.d/vpn-client") then
+        os.execute("/etc/init.d/vpn-client restart 2>/dev/null &")
+    end
+end
+
+--[[
+    @method-type: call
+    @method-name: get_status
+    @method-desc: obtain the status of device traffic passing through the edge route in the LAN
+
+    @out number detected          upper-level DHCP server status [0: disable; 1:enabled and have pointed the gateway to the bypass route; 2: enabled; 3：the cable is not connected]
+    @out string ?ip               IP assigned by DHCP server,returned when the detected is 2
+    @out string ?netmask          DHCP server mask,returned when the detected is 2
+    @out string ?gateway          DHCP server address,returned when the detected is 2
+    @out array ?dns               DNS,returned when the detected is 2
+    @out bool ?valid              is the current configuration valid,returned when the detected is 2
+
+    @out number ?err_code         error code
+    @out string ?err_msg          error message
+
+    @in-example: {"jsonrpc":"2.0","id":1,"method":"call","params":["","edgerouter","get_status",{}]}
+    @out-example: {"jsonrpc": "2.0", "id": 1, "result": {"detected":false}}
+--]]
+function M.get_status()
+    local ret = {}
+    local s = hardware.platform_get_wan_status()
+    if s.cable_enabled == false then
+        ret["detected"]=3
+        return ret
+    end
+    os.execute(". /lib/functions/drop-in-function.sh;check_dhcp_server")
+    if file_exists("/tmp/drop-in-dhcp-info") then
+        ret["detected"]=2
+        local dns = {}
+        local c = uci.cursor()
+        local our_ip = c:get("edgerouter", "wandhcp", "ip")
+        for line in io.lines("/tmp/drop-in-dhcp-info") do
+            local fields = {}
+            for field in line:gmatch("%S+") do
+                fields[#fields + 1] = field
+            end
+            if fields[1] == "router:" then
+               if our_ip ~= nil and fields[2] == our_ip then
+                 ret["detected"]=1
+               end
+            end
+            if fields[1] == "yiaddr:" then
+                ret["ip"] = fields[2]
+            end
+            if fields[1] == "giaddr:" then
+                ret["gateway"] = fields[2]
+                -- 使用网关地址作为首先DNS
+                dns[1] = fields[2]
+            end
+            if fields[1] == "netmask:" then
+                ret["netmask"] = fields[2]
+            end
+            -- DHCP 下发的DNS作为备选
+            if fields[1] == "dns1:" and fields[2] ~= "0.0.0.0" and fields[2] ~= dns[1] then
+                dns[2] = fields[2]
+            end
+        end
+        if #dns then
+            ret["dns"] = dns
+        end
+        ret["valid"] = check_config_valid(ret)
+    else
+        ret["detected"]=0
+    end
+
+    return ret
+end
+
+--[[
+    @method-type: call
+    @method-name: set_config
+    @method-desc: modify the configuration file
+
+    @in bool enable           whether to enable
+    @in bool ignore           whether to ignore dhcp
+    @in string ?ip            IP address
+    @in string ?netmask       subnet mask
+    @in string ?gateway       gateway
+    @in array ?dns            DNS
+
+    @out number ?err_code     error code
+    @out string ?err_msg      error message
+
+    @in-example: {"jsonrpc":"2.0","id":1,"method":"call","params":["","edgerouter","set_config",{"enable":true,"ignore":false,"ip":"192.168.99.129","netmask":"255.255.255.0","gateway":"192.168.99.1","dns":["192.168.99.1","114.114.114.114"]}]}
+    @out-example: {"jsonrpc": "2.0", "id": 1, "result": {}}
+--]]
+function M.set_config(params)
+    if type(params.enable) ~= "boolean" then
+        return {
+            err_code = 1,
+            err_msg = "parameter missing"
+        }
+    end
+
+    if params.enable then
+        if params.ip == nil or params.netmask == nil or params.gateway == nil  or params.dns == nil then
+            return {
+                err_code = 1,
+                err_msg = "parameter missing"
+            }
+        end
+    end
+
+    if not check_params(params) then
+        return {
+            err_code = 1,
+            err_msg = "parameter missing"
+        }
+    end
+
+    local c = uci.cursor()
+    local config_name = c:get("network", "ovpnclient", "config")
+    local client_mode = config_name and c:get("ovpnclient", config_name, "mode") or ""
+    if client_mode == "tap-s2s" then
+        local tap_s2s_disabled = c:get("network", "ovpnclient", "disabled") or "1"
+        if tap_s2s_disabled == "0" then
+            return {
+                err_code = 20020002,
+                err_msg = "function does not work because TAP-S2S Mode is enabled"
+            }
+        end
+    end
+
+    c:set("edgerouter", "global", "global")
+    c:set("edgerouter", "global", "enabled", params.enable and "1" or "0")
+
+    if params.enable then
+        if params.ignore then
+            c:set("edgerouter", "wandhcp", "ignore", "1")
+        else
+            c:set("edgerouter", "wandhcp", "ignore", "0")
+        end
+
+        local pool=get_address_pool(params.gateway,params.netmask)
+        c:set("edgerouter", "wandhcp", "dhcp")
+        c:set("edgerouter", "wandhcp", "ip", params.ip)
+        c:set("edgerouter", "wandhcp", "netmask", params.netmask)
+        c:set("edgerouter", "wandhcp", "gateway", params.gateway)
+        c:set("edgerouter", "wandhcp", "dns", params.dns)
+        c:set("edgerouter", "wandhcp", "start", pool.start)
+        c:set("edgerouter", "wandhcp", "end", pool["end"])
+    end
+
+    c:commit("edgerouter")
+
+    os.execute("/usr/bin/atp mode_changed &")
+
+    os.execute("/etc/init.d/edgerouter restart &")
+    restart_vpn_client()
+    return {}
+end
+
+
+--[[
+    @method-type: call
+    @method-name: get_config
+    @method-desc: get the current configuration
+
+    @out bool enable          whether to enable
+    @out bool ignore          whether to ignore
+    @out string ip            IP address
+    @out string netmask       subnet mask
+    @out string gateway       gateway
+    @out array dns            DNS
+
+    @out number ?err_code     error code
+    @out string ?err_msg      error message
+
+    @in-example: {"jsonrpc":"2.0","id":1,"method":"call","params":["","edgerouter","get_config",{}]}
+    @out-example: {"jsonrpc": "2.0", "id": 1, "result": {"enable":true,"ip":"192.168.99.129","netmask":"255.255.255.0","gateway":"192.168.99.1","dns":["192.168.99.1","114.114.114.114"]}}
+--]]
+function M.get_config()
+    local ret = {}
+    local c = uci.cursor()
+    local ip
+    local netmask
+    local gateway
+    local dns
+    local ignore
+    local enable = c:get("edgerouter", "global", "enabled") or '0'
+    ip = c:get("edgerouter", "wandhcp", "ip")
+    netmask = c:get("edgerouter", "wandhcp", "netmask")
+    gateway = c:get("edgerouter", "wandhcp", "gateway")
+    dns = c:get("edgerouter", "wandhcp", "dns")
+    ignore = c:get("edgerouter", "wandhcp", "ignore")
+
+    ret["enable"] = enable ~= "0"
+    ret["ignore"] = ignore ~= "0"
+    ret["ip"] = ip
+    ret["netmask"] = netmask
+    ret["gateway"] = gateway
+    ret["dns"] = dns
+    return ret
+end
+
+return M

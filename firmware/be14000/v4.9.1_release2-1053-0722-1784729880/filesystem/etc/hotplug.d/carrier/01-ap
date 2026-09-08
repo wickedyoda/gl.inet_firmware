@@ -1,0 +1,8 @@
+#!/bin/sh
+
+mode=`uci -q get glconfig.general.mode`
+if [ "$ACTION" = "up" -a "$mode" = "ap" ] || [ "$ACTION" = "up" -a "$mode" = "wds" ];then
+    kill -USR2 $(cat /var/run/udhcpc-br-lan.pid)
+    sleep 1
+    kill -USR1 $(cat /var/run/udhcpc-br-lan.pid)
+fi

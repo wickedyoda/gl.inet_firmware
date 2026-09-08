@@ -1,0 +1,9 @@
+config gl_dpi dpi_config
+    option expire_time '0'
+    option log 'INFO'
+    option lib_auto_upgrade '0'
+    option ota_auto_upgrade '0'
+    option lib_update_time '0'
+    option updateTime '0'
+    option app_close_state '000'
+    option lib_version '20260226_01'

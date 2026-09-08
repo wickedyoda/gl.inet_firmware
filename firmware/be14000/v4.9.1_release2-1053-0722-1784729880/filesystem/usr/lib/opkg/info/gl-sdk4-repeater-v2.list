@@ -1,0 +1,14 @@
+/usr/share/gl-validator.d/repeater.lua
+/etc/gl-reset-network.d/reset-repeater
+/usr/sbin/gl-repeater
+/etc/hotplug.d/ieee80211/99_fix-repeater-phy
+/usr/local/lib/lua/5.4/gl/repeater-portal.lua
+/usr/sbin/repeater-dbg.sh
+/etc/uci-defaults/gl-repeater
+/usr/local/lib/lua/5.4/gl/repeater-vendor.lua
+/etc/init.d/repeater
+/usr/share/gl-ngx/websocket/repeater.lua
+/usr/lib/oui-httpd/rpc/repeater
+/etc/gl-switch.d/repeater.sh
+/etc/config/repeater
+/usr/local/lib/lua/5.4/gl/repeater.lua

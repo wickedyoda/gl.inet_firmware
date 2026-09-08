@@ -1,0 +1,10 @@
+Package: libuci-lua54
+Version: 2
+Depends: libc, libuci20130104, liblua5.4-5.4
+Source: feeds/gl_feed_common/libuci-lua-54
+SourceName: libuci-lua54
+Section: libs
+SourceDateEpoch: 1766662953
+Architecture: aarch64_cortex-a53
+Installed-Size: 7619
+Description:  Lua5.4 plugin for UCI

@@ -1,0 +1,10 @@
+/usr/share/gl_ddns/default/glddns.com.json
+/etc/uci-defaults/zzz-ddns-glsdk4-config
+/etc/hotplug.d/iface/95-gl_ddns
+/usr/lib/gl_ddns/dynamic_dns_functions.sh
+/etc/config/gl_ddns
+/usr/lib/oui-httpd/rpc/ddns.so
+/usr/lib/gl_ddns/get_ddns_post_cmd.lua
+/etc/init.d/gl_ddns
+/usr/lib/gl_ddns/get_ddns_registered_ip.lua
+/usr/lib/gl_ddns/dynamic_dns_updater.sh

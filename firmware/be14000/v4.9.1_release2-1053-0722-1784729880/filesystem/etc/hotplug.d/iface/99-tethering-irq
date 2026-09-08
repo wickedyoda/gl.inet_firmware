@@ -1,0 +1,66 @@
+#!/bin/sh
+. /lib/functions/gl_util.sh
+
+ipq53xx_tethering_irq()
+{
+	[ "$ACTION" = "ifup" ] || return
+	[ "$INTERFACE" = "tethering" ] || return
+
+	if [ -e /sys/class/net/eth2 -o -e /sys/class/net/usb0 ]; then
+		mode=$(uci -q get ecm.global.acceleration_engine)
+		if [ "$mode" = "sfe" ]; then
+			[ -e /sys/class/net/eth1 ] && echo 4 > /sys/class/net/eth1/queues/rx-0/rps_cpus
+			[ -e /sys/class/net/eth2 ] && echo 8 > /sys/class/net/eth2/queues/rx-0/rps_cpus
+				[ -e /sys/class/net/usb0 ] && echo 8 > /sys/class/net/usb0/queues/rx-0/rps_cpus
+		elif [ "$mode" = "auto" ]; then
+			[ -e /sys/class/net/eth1 ] && echo 0 > /sys/class/net/eth1/queues/rx-0/rps_cpus
+			[ -e /sys/class/net/eth2 ] && echo 0 > /sys/class/net/eth2/queues/rx-0/rps_cpus
+			[ -e /sys/class/net/usb0 ] && echo 0 > /sys/class/net/usb0/queues/rx-0/rps_cpus
+		fi
+	fi
+
+}
+
+mtk_tethering_irq()
+{
+	[ "$INTERFACE" = "tethering" ] || return
+
+	irq_usb=$(grep 'xhci-hcd' /proc/interrupts | cut -d: -f1 | tr -d ' ')
+	if [ "$ACTION" = "ifup" ]; then
+		[ -e /sys/class/net/${DEVICE} ] && echo a > /sys/class/net/${DEVICE}/queues/rx-0/rps_cpus
+		[ -e /proc/irq/${irq_usb}/smp_affinity ] && echo 4 > /proc/irq/${irq_usb}/smp_affinity
+	fi
+
+}
+
+mt7621_tethering_irq()
+{
+	[ "$INTERFACE" = "tethering" ] || return
+
+	irq_usb=$(grep 'xhci-hcd' /proc/interrupts | cut -d: -f1 | tr -d ' ')
+	if [ "$ACTION" = "ifup" ]; then
+		[ -e /sys/class/net/${DEVICE} ] && echo 1 > /sys/class/net/${DEVICE}/napi_defer_hard_irqs
+		[ -e /sys/class/net/${DEVICE} ] && echo 1000 > /sys/class/net/${DEVICE}/gro_flush_timeout
+		[ -e /sys/class/net/br-lan ] && echo 1000 > /sys/class/net/br-lan/gro_flush_timeout
+		[ -e /sys/class/net/${DEVICE} ] && echo c > /sys/class/net/${DEVICE}/queues/rx-0/rps_cpus
+		[ -e /sys/class/net/br-lan ] && echo c > /sys/class/net/br-lan/queues/rx-0/rps_cpus
+		[ -e /sys/class/net/lan ] && echo c > /sys/class/net/lan/queues/rx-0/rps_cpus
+	fi
+
+}
+
+model=$(get_model)
+case "$model" in
+    "be3600")
+        ipq53xx_tethering_irq
+    ;;
+    "mt5000" |\
+    "be10000" |\
+    "mt3600be")
+        mtk_tethering_irq
+    ;;
+    "mg1300")
+        mt7621_tethering_irq
+    ;;
+esac
+

@@ -1,0 +1,14 @@
+Package: libustream-openssl20201210
+Version: 2022-01-16-868fd881-2
+Depends: libc, libubox20210516, libopenssl1.1
+Provides: libustream-openssl
+Source: package/libs/ustream-ssl
+SourceName: libustream-openssl
+License: ISC
+Section: libs
+SourceDateEpoch: 1664996990
+ABIVersion: 20201210
+Maintainer: Felix Fietkau <nbd@nbd.name>
+Architecture: aarch64_cortex-a53
+Installed-Size: 4889
+Description:  ustream SSL Library (openssl)

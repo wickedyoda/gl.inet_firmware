@@ -1,0 +1,10 @@
+Package: kmod-gl-sdk4-parental-control
+Version: 5.4.281+git-2026.166.26433-a36127d-1
+Depends: kernel (=5.4.281-1-df4fa332840f56a774a5d60bd140aaf6), kmod-ipt-conntrack
+Source: feeds/glinet/gl-sdk4-parental-control
+SourceName: kmod-gl-sdk4-parental-control
+Section: base
+SourceDateEpoch: 1781508033
+Architecture: aarch64_cortex-a53
+Installed-Size: 610724
+Description:  glinet parental control

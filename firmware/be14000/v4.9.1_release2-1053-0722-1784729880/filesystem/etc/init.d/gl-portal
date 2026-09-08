@@ -1,0 +1,18 @@
+#!/bin/sh /etc/rc.common
+
+START=99
+
+start() {
+    local inited=$(uci -q get oui-httpd.main.inited)
+
+    [ "$inited" != "1" ] || exit 0
+
+    modprobe wifidog-ng
+    echo "port=80" > /proc/net/wifidog-ng/config
+    echo "ssl_port=443" > /proc/net/wifidog-ng/config
+    echo "enabled=1" > /proc/net/wifidog-ng/config
+}
+
+stop() {
+    rmmod wifidog-ng
+}

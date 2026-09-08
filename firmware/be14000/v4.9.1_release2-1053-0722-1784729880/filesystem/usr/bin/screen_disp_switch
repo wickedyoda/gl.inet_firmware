@@ -1,0 +1,40 @@
+#!/bin/sh
+
+action="$1"
+func=$(uci -q get switch-button.@main[0].func)
+sub_func=$(uci -q get switch-button.@main[0].sub_func)
+case "$func" in
+    "repeater")
+        msg="Repeater"
+        ;;
+    "wifi")
+        if [ "$sub_func" = "main_wifi" ];then
+            msg="Main Wi-Fi"
+        elif [ "$sub_func" = "guest_wifi" ];then
+            msg="Guest Wi-Fi"
+        else
+            msg="Toggle Button"
+        fi
+        ;;
+    "vpn")
+        msg="VPN"
+        ;;
+    "tor")
+        msg="Tor"
+        ;;
+    "adguardhome")
+        msg="AdGuard Home"
+        ;;
+    "led")
+        msg="LED"
+        ;;
+    *)
+        msg="Toggle Button"
+        ;;
+esac
+
+if [ "$action" = "on" ]; then
+    ubus call gl_screen set "{\"method\": \"switch\", \"params\": { \"enable\": true, \"mode\": \"$msg\", \"sub_func\": \"$sub_func\"}}"
+else
+    ubus call gl_screen set "{\"method\": \"switch\", \"params\": { \"enable\": false, \"mode\": \"$msg\", \"sub_func\": \"$sub_func\"}}"
+fi

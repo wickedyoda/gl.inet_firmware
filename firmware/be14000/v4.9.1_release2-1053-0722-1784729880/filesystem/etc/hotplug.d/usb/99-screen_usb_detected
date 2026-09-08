@@ -1,0 +1,39 @@
+#!/bin/sh
+
+model=$(cat /proc/gl-hw-info/model)
+if [ "$model" = "e5800" ];then
+	exit
+fi
+
+[ "$ACTION" = add ] && [ "$DEVTYPE" = usb_device ] && {
+	device=`curl -k http://127.0.0.1/rpc -H 'glinet: 1' -d '{"jsonrpc":"2.0","method":"call","params":["","tethering","get_status",{}],"id":1}' | jsonfilter -e @.result.devices[0].device`
+	if [ -n "$device" ];then
+		#action 1 means tethering detected
+		ubus call gl_screen set '{"method": "usb_detected", "params": { "action": 2 }}'
+		exit
+	fi
+}
+
+[ "$ACTION" = bind ] && [ "$DEVTYPE" = usb_interface ] && {
+	if echo "$INTERFACE" | grep -q "^8/"; then
+		sleep 2
+		BLOCK_DEVICES=$(find /sys$DEVPATH -name "sd*" -type d 2>/dev/null | head -1)
+		if [ -n "$BLOCK_DEVICES" ]; then
+			#action 1 means storage detected
+			ubus call gl_screen set '{"method": "usb_detected", "params": { "action": 3 }}'
+			exit
+		fi
+	fi
+}
+
+[ "$ACTION" = bind -a "$DEVTYPE" = usb_device ] && {
+    pid=$(cat /sys$DEVPATH/idProduct)
+    vid=$(cat /sys$DEVPATH/idVendor)
+    product=$(cat /sys$DEVPATH/product)
+    [ "$product" = "Mudi 7 (GL-E5800)" ] && exit 0
+    support_vid=$(cat /lib/modem_data/modem_list.json | jsonfilter -e '@.modems[@.pid="'"$pid"'"]' | jsonfilter -e '@.vid')
+    if [ -n "$support_vid" -a "$vid" = "$support_vid" ];then
+	#action 1 means cellular detected
+	ubus call gl_screen set '{"method": "usb_detected", "params": { "action": 1 }}'
+    fi
+}

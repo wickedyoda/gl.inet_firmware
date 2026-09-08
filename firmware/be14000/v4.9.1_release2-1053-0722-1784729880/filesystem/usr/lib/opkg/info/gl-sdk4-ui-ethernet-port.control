@@ -1,0 +1,10 @@
+Package: gl-sdk4-ui-ethernet-port
+Version: git-2026.183.41199-a8dd299-1
+Depends: libc
+Source: feeds/glinet/gl-ui4.0/module/ethernet-port
+SourceName: gl-sdk4-ui-ethernet-port
+Section: base
+SourceDateEpoch: 1782991599
+Architecture: aarch64_cortex-a53
+Installed-Size: 30227
+Description:  gl-sdk4-ui-ethernet-port

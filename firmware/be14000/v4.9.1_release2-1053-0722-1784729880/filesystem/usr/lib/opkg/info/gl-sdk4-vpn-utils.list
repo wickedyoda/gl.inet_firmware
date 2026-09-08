@@ -1,0 +1,3 @@
+/usr/lib/oui-httpd/rpc/srv_conn_check
+/usr/local/lib/lua/5.4/srv_conn_check.so
+/usr/bin/srv_conn_check

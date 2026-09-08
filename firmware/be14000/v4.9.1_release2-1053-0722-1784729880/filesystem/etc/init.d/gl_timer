@@ -1,0 +1,286 @@
+#!/bin/sh /etc/rc.common
+# Copyright (C) 2006-2011 OpenWrt.org
+
+# shellcheck disable=SC2045
+
+START=50
+
+USE_PROCD=1
+PROG=/usr/sbin/crond
+
+validate_cron_section() {
+	uci_validate_section system system "${1}" \
+		'cronloglevel:uinteger'
+}
+
+convert_led_to_crond() {
+    config_get enable $1 enable
+    if [ "$enable" != "1" ];then
+        return
+    fi
+
+    config_get turnon_hour $1 turnon_hour
+    config_get turnon_min $1 turnon_min
+    config_get turnoff_hour $1 turnoff_hour
+    config_get turnoff_min $1 turnoff_min
+    #turnon_hour=`uci -q get gl_led.global.turnon_hour`
+    #turnon_min=`uci -q get gl_led.global.turnon_min`
+    #turnoff_hour=`uci -q get gl_led.global.turnoff_hour`
+    #turnoff_min=`uci -q get gl_led.global.turnoff_min`
+    local week=`uci -q get gl_timer.$1.week | sed 's/ /,/g'`
+    if [ -n "$turnon_hour" -a -n "$turnon_min" -a -n "$turnoff_hour" -a -n "$turnoff_min" -a -n "$week" ];then
+        echo "$turnon_min $turnon_hour * * $week /etc/init.d/gl_led turnon" >> /tmp/gl_crontabs/crontabs.d/led
+        echo "$turnoff_min $turnoff_hour * * $week /etc/init.d/gl_led turnoff" >> /tmp/gl_crontabs/crontabs.d/led
+    fi
+}
+
+convert_disk_to_crond() {
+    config_get enable $1 enable
+    if [ "$enable" != "1" ];then
+        return
+    fi
+
+    config_get turnon_hour $1 turnon_hour
+    config_get turnon_min $1 turnon_min
+    config_get turnoff_hour $1 turnoff_hour
+    config_get turnoff_min $1 turnoff_min
+    #turnon_hour=`uci -q get gl_led.global.turnon_hour`
+    #turnon_min=`uci -q get gl_led.global.turnon_min`
+    #turnoff_hour=`uci -q get gl_led.global.turnoff_hour`
+    #turnoff_min=`uci -q get gl_led.global.turnoff_min`
+    local week=`uci -q get gl_timer.$1.week | sed 's/ /,/g'`
+    if [ -n "$turnon_hour" -a -n "$turnon_min" -a -n "$turnoff_hour" -a -n "$turnoff_min" -a -n "$week" ];then
+        echo "$turnon_min $turnon_hour * * $week gl_timer_control_disk turnon" >> /tmp/gl_crontabs/crontabs.d/disk
+        echo "$turnoff_min $turnoff_hour * * $week gl_timer_control_disk turnoff" >> /tmp/gl_crontabs/crontabs.d/disk
+    fi
+}
+
+convert_screen_to_crond() {
+    config_get enable $1 enable
+    if [ "$enable" != "1" ];then
+        return
+    fi
+
+    config_get turnon_hour $1 turnon_hour
+    config_get turnon_min $1 turnon_min
+    config_get turnoff_hour $1 turnoff_hour
+    config_get turnoff_min $1 turnoff_min
+    local week=`uci -q get gl_timer.$1.week | sed 's/ /,/g'`
+    if [ -n "$turnon_hour" -a -n "$turnon_min" -a -n "$turnoff_hour" -a -n "$turnoff_min" -a -n "$week" ];then
+        echo "$turnon_min $turnon_hour * * $week gl_timer_control_screen turnon" >> /tmp/gl_crontabs/crontabs.d/screen
+        echo "$turnoff_min $turnoff_hour * * $week gl_timer_control_screen turnoff" >> /tmp/gl_crontabs/crontabs.d/screen
+    fi
+}
+
+convert_reboot_to_crond() {
+    config_get enable $1 enable
+    if [ "$enable" != "1" ];then
+        return
+    fi
+
+    config_get min $1 min
+    config_get hour $1 hour
+    #local min=`uci -q get gl_timer.$1.min`
+    #local hour=`uci -q get gl_timer.$1.hour`
+    local week=`uci -q get gl_timer.$1.week | sed 's/ /,/g'`
+    if [ -n "$min" -a -n "$hour" -a -n "$week" ];then
+        echo "$min $hour * * $week reboot" > /tmp/gl_crontabs/crontabs.d/reboot
+    fi
+}
+
+convert_wifi_turn_onoff_to_crond() {
+    config_get func $1 func
+    if [ "$func" != "turn_onoff" ];then
+        return
+    fi
+
+    config_get band $1 band
+    config_get guest $1 guest
+    config_get enable $1 enable
+    if [ -z "$func" -o -z "$band" -o -z "$guest" -o "$enable" != "1" ];then
+        return
+    fi
+
+    config_get turnon_hour $1 turnon_hour
+    config_get turnon_min $1 turnon_min
+    config_get turnoff_hour $1 turnoff_hour
+    config_get turnoff_min $1 turnoff_min
+    local week=`uci -q get gl_timer.$1.week | sed 's/ /,/g'`
+    local lan_ip=`uci -q get network.lan.ipaddr`
+    local guest_ip=`uci -q get network.guest.ipaddr`
+
+    if [ "$lan_ip" != "$guest_ip" ]; then
+        if [ -n "$turnon_hour" -a -n "$turnon_min" -a -n "$turnoff_hour" -a -n "$turnoff_min" -a -n "$week" ];then
+            echo "$turnon_min $turnon_hour * * $week gl_timer_control_wifi turn_onoff turnon $band $guest" >> /tmp/gl_crontabs/crontabs.d/wifi
+            echo "$turnoff_min $turnoff_hour * * $week gl_timer_control_wifi turn_onoff turnoff $band $guest" >> /tmp/gl_crontabs/crontabs.d/wifi
+        fi
+    else
+        if [ "$guest" = "0" ]; then
+            if [ -n "$turnon_hour" -a -n "$turnon_min" -a -n "$turnoff_hour" -a -n "$turnoff_min" -a -n "$week" ];then
+                echo "$turnon_min $turnon_hour * * $week gl_timer_control_wifi turn_onoff turnon $band $guest" >> /tmp/gl_crontabs/crontabs.d/wifi
+                echo "$turnoff_min $turnoff_hour * * $week gl_timer_control_wifi turn_onoff turnoff $band $guest" >> /tmp/gl_crontabs/crontabs.d/wifi
+            fi
+        fi
+    fi
+}
+
+convert_wifi_power_switch_to_crond() {
+    config_get func $1 func
+    if [ "$func" != "power_switch" ];then
+        return
+    fi
+
+    config_get band $1 band
+    config_get enable $1 enable
+    if [ -z "$band" -o "$enable" != "1" ];then
+        return
+    fi
+
+    config_get switch_hour $1 switch_hour
+    config_get switch_min $1 switch_min
+    config_get switch_power $1 switch_power
+    config_get restore_hour $1 restore_hour
+    config_get restore_min $1 restore_min
+    config_get restore_power $1 restore_power
+    local week=`uci -q get gl_timer.$1.week | sed 's/ /,/g'`
+    if [ -n "$switch_hour" -a -n "$switch_min" -a -n "$restore_hour" -a -n "$restore_min" -a -n "$week" -a -n "$restore_power" -a -n "$switch_power" ];then
+        echo "$switch_min $switch_hour * * $week gl_timer_control_wifi power_switch $switch_power $band" >> /tmp/gl_crontabs/crontabs.d/wifi
+        echo "$restore_min $restore_hour * * $week gl_timer_control_wifi power_switch $restore_power $band" >> /tmp/gl_crontabs/crontabs.d/wifi
+    fi
+}
+
+convert_wifi_to_crond() {
+    config_get band $1 band
+
+    local wifi_func=`uci -q get gl_timer.global.${band}_func`
+    if [ "$wifi_func" = "turn_onoff" ];then
+        convert_wifi_turn_onoff_to_crond $1
+    elif [ "$wifi_func" = "power_switch" ];then
+        convert_wifi_power_switch_to_crond $1
+    fi
+}
+
+convert_langs_to_crond() {
+    config_get enable $1 enable
+    if [ "$enable" != 1 ]; then
+        return
+    fi
+
+    config_get min $1 min
+    config_get hour $1 hour
+    local week=`uci -q get gl_timer.$1.week | sed 's/ /,/g'`
+    if [ -n "$min" -a -n "$hour" -a -n "$week" ];then
+        echo "$min $hour * * $week gl_timer_control_langs 1 $week $hour $min" >> /tmp/gl_crontabs/crontabs.d/langs
+    fi
+}
+
+convert_netifydupdate_to_crond() {
+    config_get enable $1 enable
+    if [ "$enable" != "1" ];then
+        return
+    fi
+    config_get min $1 min
+    config_get hour $1 hour
+    if [ -n "$min" -a -n "$hour" ];then
+        echo "$min $hour * * * gl_timer_control_netifydupdate" > /tmp/gl_crontabs/crontabs.d/netifydupdate
+    fi
+}
+
+convert_config_to_crond() {
+    res=`echo $1 | grep led`
+    if [ -n "$res" ];then
+        convert_led_to_crond $1
+    fi
+
+    res=`echo $1 | grep reboot`
+    if [ -n "$res" ];then
+        convert_reboot_to_crond $1
+    fi
+
+    res=`echo $1 | grep wifi`
+    if [ -n "$res" ];then
+        convert_wifi_to_crond $1
+    fi
+
+    res=`echo $1 | grep disk`
+    if [ -n "$res" ];then
+        convert_disk_to_crond $1
+    fi
+
+    res=`echo $1 | grep screen`
+    if [ -n "$res" ];then
+        convert_screen_to_crond $1
+    fi
+
+    res=`echo $1 | grep langs`
+    if [ -n "$res" ];then
+        convert_langs_to_crond $1
+    fi
+
+    res=`echo $1 | grep netifyd`
+    if [ -n "$res" ];then
+        convert_netifydupdate_to_crond $1
+    fi
+}
+
+convert_crond_to_cron() {
+    for file in `ls /tmp/gl_crontabs/crontabs.d/`
+    do
+        cat /tmp/gl_crontabs/crontabs.d/$file >> /tmp/gl_crontabs/root
+    done
+
+    if [ ! -f /tmp/gl_crontabs/root ];then
+        touch /tmp/gl_crontabs/root
+    fi
+}
+
+rm_crond_files() {
+    rm /tmp/gl_crontabs/root 2>/dev/null
+    rm /tmp/gl_crontabs/crontabs.d/led 2>/dev/null
+    rm /tmp/gl_crontabs/crontabs.d/reboot 2>/dev/null
+    rm /tmp/gl_crontabs/crontabs.d/wifi 2>/dev/null
+    rm /tmp/gl_crontabs/crontabs.d/disk 2>/dev/null
+    rm /tmp/gl_crontabs/crontabs.d/screen 2>/dev/null
+    rm /tmp/gl_crontabs/crontabs.d/langs 2>/dev/null
+    rm /tmp/gl_crontabs/crontabs.d/netifydupdate 2>/dev/null
+}
+
+start_service() {
+	[ ! -d /tmp/gl_crontabs/crontabs.d ] && mkdir -p /tmp/gl_crontabs/crontabs.d
+	[ ! -d /etc/gl_crontabs/crontabs.d ] && mkdir -p /etc/gl_crontabs/crontabs.d
+	cp /etc/gl_crontabs/crontabs.d/* /tmp/gl_crontabs/crontabs.d/  2>/dev/null
+
+	loglevel="$(uci_get "system.@system[0].cronloglevel")"
+
+	[ -z "${loglevel}" ] || {
+		/sbin/validate_data uinteger "${loglevel}" 2>/dev/null
+		[ "$?" -eq 0 ] || {
+			echo "validation failed"
+			return 1
+		}
+	}
+
+	mkdir -p /var/spool/cron
+	ln -s /tmp/gl_crontabs /var/spool/cron/ 2>/dev/null
+
+	crontab=`uci -q get gl_timer.global.enable`
+    if [ "$crontab" = "1" ];then
+        rm_crond_files
+        config_load gl_timer
+        config_foreach convert_config_to_crond timer
+        convert_crond_to_cron
+        # Do not start crond when no effective cron entries exist.
+        if ! grep -qE '^[[:space:]]*[^#[:space:]]' /tmp/gl_crontabs/root 2>/dev/null; then
+            return 0
+        fi
+
+        procd_open_instance
+        procd_set_param command "$PROG" -f -c /tmp/gl_crontabs -l "${loglevel:-5}"
+        procd_set_param respawn
+        procd_close_instance
+    fi
+}
+
+service_triggers() {
+	procd_add_validation validate_cron_section
+}

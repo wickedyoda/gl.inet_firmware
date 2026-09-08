@@ -1,0 +1,90 @@
+#!/bin/sh /etc/rc.common
+# shellcheck disable=SC2034
+START=10
+
+model=$(cat /proc/gl-hw-info/model)
+
+gl_get_mtd_art() {
+    mtd_art=$(lsblk -o NAME,LABEL | grep -E "factory|art|ART" | awk '{print $1}')
+	if [ "$mtd_art" = "" ]; then
+		mtd_art=$(blkid | tee | grep factory | cut -d ':' -f1 | cut -d '/' -f3)
+		if [ "$mtd_art" = "" ]; then
+			mtd_art=$(ls /dev/mmcblk0p* 2>/dev/null | grep -E "factory|art" | cut -d '/' -f3)
+		fi
+	fi
+    echo "$mtd_art"
+}
+
+reset_factory() {
+	mtd_art=$(gl_get_mtd_art)
+
+	dd if=/dev/$mtd_art of=/tmp/art_bak 2>/dev/null
+
+	printf "\x00" |dd of=/tmp/art_bak bs=1 count=1 seek=$((0xB91)) conv=notrunc 2>/dev/null
+	printf "\x00" |dd of=/tmp/art_bak bs=1 count=1 seek=$((0xB99)) conv=notrunc 2>/dev/null
+	printf "\x01" |dd of=/tmp/art_bak bs=1 count=1 seek=$((0x1af)) conv=notrunc 2>/dev/null
+
+	dd if=/tmp/art_bak of=/dev/$mtd_art 1>/dev/null 2>/dev/null
+
+	firstboot -y
+	reboot
+}
+
+check_mt7988_art_status() {
+	mtd_art=$(gl_get_mtd_art)
+	v1=$(hexdump -s $((0xB91)) -n 1 -C /dev/$mtd_art | awk 'NR==1{print $2}')
+	v2=$(hexdump -s $((0xB99)) -n 1 -C /dev/$mtd_art | awk 'NR==1{print $2}')
+
+	if [ "$v2" = "00" ]; then
+		if [ "$v1" = "00" ]; then
+			echo -1
+		else
+			v1=0x"$v1"
+			v1=$(echo $v1|	awk  '{print and($1,0x80)}')
+			if [ "$v1" = "128" ]; then
+				echo 0
+			else
+				echo -1
+			fi
+		fi
+	else
+		echo 0
+	fi
+}
+
+check_art_status() {
+	if [ "$model" = "be14000" ]; then
+		art_status=$(check_mt7988_art_status)
+	fi
+
+	echo $art_status
+}
+
+prepare_calibration_tools() {
+	if [ "$model" = "be14000" ]; then
+		ated_status=$(ps| grep ated|grep -v grep)
+		if [ "$ated_status" = "" ]; then
+			/usr/bin/ated
+		fi
+	fi
+}
+
+init_config() {
+	uci set network.lan.ipaddr='192.168.1.1'
+	uci commit
+	/etc/init.d/network reload
+	telnetd -l /bin/sh
+}
+
+start() {
+	art_status=$(check_art_status)
+	if [ "$art_status" = "0" ]; then
+		exit
+	fi
+	init_config
+	prepare_calibration_tools
+}
+
+stop() {
+	reset_factory
+}

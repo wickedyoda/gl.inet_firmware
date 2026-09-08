@@ -1,0 +1,15 @@
+Package: libid3tag
+Version: 0.16.3-1
+Depends: libc, zlib
+Source: feeds/gl_feed_common/libid3tag
+SourceName: libid3tag
+License: GPL-2
+LicenseFiles: COPYING
+Section: libs
+SourceDateEpoch: 1764847991
+CPE-ID: cpe:/a:media-libs:libid3tag
+Maintainer: Ted Hess <thess@kitschensync.net>
+Architecture: aarch64_cortex-a53
+Installed-Size: 30219
+Description:  libid3tag is a library for reading and (eventually) writing ID3 tags, both
+ ID3v1 and the various versions of ID3v2.

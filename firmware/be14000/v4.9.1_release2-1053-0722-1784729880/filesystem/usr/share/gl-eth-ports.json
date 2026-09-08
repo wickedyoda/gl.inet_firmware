@@ -1,0 +1,83 @@
+{
+    "be14000": {
+        "wan_lan": { "port": "eth2", "support_wan": "1", "wan_type": "wan", "silk": "WAN/LAN1" },
+        "sfp": { "type": "gsw", "port": "4", "main_interface": "eth1", "support_wan": "1", "wan_type": "secondwan", "cpu_port": "5t", "silk": "SFP+", "switch": "switch0", "default_vlan": "2" },
+        "lans": {
+          "lan1": { "type": "gsw", "port": "0", "main_interface": "eth1", "support_wan": "1", "cpu_port": "5t", "silk": "WAN/LAN2", "switch": "switch0", "default_vlan": "3" },
+          "lan2": { "type": "gsw", "port": "1", "main_interface": "eth1", "support_wan": "0", "cpu_port": "5t", "silk": "LAN3", "switch": "switch0" },
+          "lan3": { "type": "gsw", "port": "2", "main_interface": "eth1", "support_wan": "0", "cpu_port": "5t", "silk": "LAN4", "switch": "switch0" },
+          "lan4": { "type": "gsw", "port": "3", "main_interface": "eth1", "support_wan": "0", "cpu_port": "5t", "silk": "LAN5", "switch": "switch0" },
+          "lan5": { "type": "dsa", "port": "lan5", "support_wan": "0", "silk": "LAN6" },
+          "lan6": { "type": "dsa", "port": "lan6", "support_wan": "0", "silk": "LAN7" },
+          "lan7": { "type": "dsa", "port": "lan7", "support_wan": "0", "silk": "LAN8" },
+          "lan8": { "type": "dsa", "port": "lan8", "support_wan": "0", "silk": "LAN9" }
+        },
+        "port_orientation": "up"
+    },
+    "mg1300": {
+        "wan": { "port": "wan", "support_wan": "1", "wan_type": "wan", "silk": "WAN" },
+        "lans": {
+          "secondwan": { "type":"dsa", "port": "lan", "support_wan": "1", "silk": "LAN"}
+        },
+        "port_orientation": "up"
+    },
+    "be10000": {
+        "wan": { "port": "eth0", "support_wan": "1", "wan_type": "wan", "silk": "WAN" },
+        "lans": {
+          "secondwan": { "type":"dsa", "port": "eth1", "support_wan": "1", "silk": "LAN"}
+        },
+        "port_orientation": "up"
+    },
+    "be9300": {
+      "wan": { "port": "eth0", "support_wan": "1", "wan_type": "wan", "silk": "WAN" },
+      "lans": {
+        "secondwan": { "type": "gsw", "port": "7", "main_interface": "eth1", "support_wan": "1", "cpu_port": "3t", "silk": "LAN1", "switch": "switch1"},
+        "lan2": { "type": "gsw", "port": "6", "main_interface": "eth1", "support_wan": "0", "cpu_port": "3t", "silk": "LAN2", "switch": "switch1" },
+        "lan3": { "type": "gsw", "port": "5", "main_interface": "eth1", "support_wan": "0", "cpu_port": "3t", "silk": "LAN3", "switch": "switch1" },
+        "lan4": { "type": "gsw", "port": "4", "main_interface": "eth1", "support_wan": "0", "cpu_port": "3t", "silk": "LAN4", "switch": "switch1" }
+      },
+      "port_orientation": "up"
+    },
+    "be6500": {
+      "wan": { "port": "eth0", "support_wan": "1", "wan_type": "wan", "silk": "WAN" },
+      "lans": {
+        "secondwan": { "type": "gsw", "port": "7", "main_interface": "eth1", "support_wan": "1", "cpu_port": "3t", "silk": "LAN1", "switch": "switch1"},
+        "lan2": { "type": "gsw", "port": "6", "main_interface": "eth1", "support_wan": "0", "cpu_port": "3t", "silk": "LAN2", "switch": "switch1" },
+        "lan3": { "type": "gsw", "port": "5", "main_interface": "eth1", "support_wan": "0", "cpu_port": "3t", "silk": "LAN3", "switch": "switch1" },
+        "lan4": { "type": "gsw", "port": "4", "main_interface": "eth1", "support_wan": "0", "cpu_port": "3t", "silk": "LAN4", "switch": "switch1" }
+      },
+      "port_orientation": "up"
+    },
+    "be3600": {
+      "wan": { "port": "eth0", "support_wan": "1", "wan_type": "wan", "silk": "WAN" },
+      "lans": {
+        "secondwan": { "type":"dsa", "port": "eth1", "support_wan": "1", "silk": "LAN"}
+      },
+      "port_orientation": "up"
+    },
+    "e5800": {
+      "wan": { "port": "eth0", "support_wan": "1", "mode": "lan", "wan_type": "wan", "silk": "Ethernet" },
+      "port_orientation": "up"
+    },
+    "mt6000": {
+      "wan": { "port": "eth1","support_wan": "1", "wan_type": "wan", "silk": "WAN" },
+      "lans": {
+        "secondwan": { "type": "dsa", "port": "lan1", "support_wan": "1","silk": "WAN/LAN1" },
+        "lan2":{"type": "dsa", "port": "lan2", "support_wan": "0", "silk": "LAN2" },
+        "lan3":{"type": "dsa", "port": "lan3", "support_wan": "0", "silk": "LAN3" },
+        "lan4":{"type": "dsa", "port": "lan4", "support_wan": "0", "silk": "LAN4" },
+        "lan5":{"type": "dsa", "port": "lan5", "support_wan": "0", "silk": "LAN5" }
+      },
+      "port_orientation": "up"
+    },
+    "ba7200be": {
+      "wan": { "port": "eth1", "support_wan": "1", "wan_type": "wan", "silk": "WAN" },
+      "lans": {
+        "secondwan": { "type": "gsw", "port": "0", "main_interface": "eth2", "support_wan": "1", "cpu_port": "5t", "silk": "LAN1", "switch": "switch0" },
+        "lan2": { "type": "gsw", "port": "1", "main_interface": "eth2", "support_wan": "0", "cpu_port": "5t", "silk": "LAN2", "switch": "switch0" },
+        "lan3": { "type": "gsw", "port": "2", "main_interface": "eth2", "support_wan": "0", "cpu_port": "5t", "silk": "LAN3", "switch": "switch0" },
+        "lan4": { "type": "gsw", "port": "3", "main_interface": "eth2", "support_wan": "0", "cpu_port": "5t", "silk": "LAN4", "switch": "switch0" }
+      },
+      "port_orientation": "up"
+    }
+}

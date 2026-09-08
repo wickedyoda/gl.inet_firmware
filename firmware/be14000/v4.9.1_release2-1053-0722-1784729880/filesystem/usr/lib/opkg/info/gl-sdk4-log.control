@@ -1,0 +1,10 @@
+Package: gl-sdk4-log
+Version: git-2024.360.32136-e57000a-1
+Depends: libc, liblua5.1.5
+Source: feeds/glinet/gl-sdk4-log
+SourceName: gl-sdk4-log
+Section: base
+SourceDateEpoch: 1735116936
+Architecture: aarch64_cortex-a53
+Installed-Size: 3888
+Description:  Log lib for gl

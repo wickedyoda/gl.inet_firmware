@@ -1,0 +1,15 @@
+#!/bin/sh /etc/rc.common
+
+START=99
+
+start() {
+    model=$(cat /proc/gl-hw-info/model)
+
+    case $model in
+    be3600|\
+    be6500|\
+    be9300)
+        /usr/bin/hostapd_log.sh&
+        ;;
+    esac
+}

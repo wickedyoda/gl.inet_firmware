@@ -1,0 +1,39 @@
+#!/bin/sh
+# GL.iNet VLAN lifecycle helper (OR0089)
+# Called by upgrade/downgrade scripts, netmode, and reset-button handlers.
+#
+# Usage: gl-vlan-lifecycle <command>
+#   Commands: migrate_to_subnet, migrate_from_subnet,
+#             netmode_to_ap, netmode_to_router,
+#             tap_s2s_enter, tap_s2s_exit, network_reset
+
+CMD="$1"
+
+if [ -z "$CMD" ]; then
+    echo "Usage: $0 <command>" >&2
+    echo "Commands: migrate_to_subnet, migrate_from_subnet, netmode_to_ap," >&2
+    echo "          netmode_to_router, tap_s2s_enter, tap_s2s_exit, network_reset" >&2
+    exit 1
+fi
+
+VALID_CMDS="migrate_to_subnet migrate_from_subnet netmode_to_ap netmode_to_router tap_s2s_enter tap_s2s_exit network_reset"
+FOUND=0
+for v in $VALID_CMDS; do
+    [ "$v" = "$CMD" ] && FOUND=1 && break
+done
+
+if [ "$FOUND" = "0" ]; then
+    echo "Error: unknown command '$CMD'" >&2
+    exit 1
+fi
+
+RESULT=$(curl -s -H 'glinet:1' 127.0.0.1/rpc -d \
+    "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"call\",\"params\":[\"\",\"vlan_subnet\",\"${CMD}\",{}]}" \
+    2>/dev/null)
+
+if echo "$RESULT" | grep -q '"err_code"'; then
+    echo "Error: $RESULT" >&2
+    exit 1
+fi
+
+exit 0

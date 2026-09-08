@@ -1,0 +1,46 @@
+#!/bin/sh /etc/rc.common
+
+START=90
+STOP=10
+
+MODULE=port_forward
+PROC_NODE=/proc/port_forward
+LUA=/usr/bin/port_forward.lua
+
+ensure_firewall_include() {
+    if uci show firewall | grep -q "path='/etc/firewall.pf'"; then
+        return 0
+    fi
+
+    uci add firewall include >/dev/null
+    uci set firewall.@include[-1].type='script'
+    uci set firewall.@include[-1].path='/etc/firewall.pf'
+    uci set firewall.@include[-1].reload='0'
+
+    uci commit firewall
+}
+
+start() {
+    modprobe $MODULE 2>/dev/null || true
+
+    for i in 1 2 3 4 5; do
+        [ -e $PROC_NODE ] && break
+        sleep 1
+    done
+
+    if [ ! -e $PROC_NODE ]; then
+        return 1
+    fi
+
+    ensure_firewall_include
+    $LUA
+
+    if [ -x /etc/firewall.pf ]; then
+        /etc/firewall.pf
+    fi
+}
+
+stop() {
+    rmmod $MODULE 2>/dev/null || true
+}
+

@@ -1,0 +1,10 @@
+Package: gl-sdk4-iot-wifi
+Version: git-2026.139.08902-a49869b-1
+Depends: libc
+Source: feeds/glinet/gl-sdk4-iot-wifi
+SourceName: gl-sdk4-iot-wifi
+Section: base
+SourceDateEpoch: 1779157702
+Architecture: aarch64_cortex-a53
+Installed-Size: 3462
+Description:  iot wifi support for Gl.inet

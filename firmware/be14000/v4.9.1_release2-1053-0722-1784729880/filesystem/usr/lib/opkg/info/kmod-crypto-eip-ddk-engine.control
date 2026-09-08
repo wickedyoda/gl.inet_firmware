@@ -1,0 +1,10 @@
+Package: kmod-crypto-eip-ddk-engine
+Version: 5.4.281-1
+Depends: kernel (=5.4.281-1-df4fa332840f56a774a5d60bd140aaf6), kmod-crypto-eip-ddk-ctrl-app
+Source: feeds/mtk_openwrt_feed/feed/kernel/crypto-eip
+SourceName: kmod-crypto-eip-ddk-engine
+Section: kernel
+SourceDateEpoch: 1766125924
+Architecture: aarch64_cortex-a53
+Installed-Size: 93101
+Description:  Porting DDK source code to package.

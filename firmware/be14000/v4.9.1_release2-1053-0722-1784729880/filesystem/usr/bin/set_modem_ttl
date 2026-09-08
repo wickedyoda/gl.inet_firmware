@@ -1,0 +1,92 @@
+#!/bin/sh
+
+. /lib/functions.sh
+. /lib/functions/modem.sh
+
+set_log_level "$(get_modem_log_level)"
+
+resolve_force_ttl_dev()
+{
+    local section="$1"
+    local dev=""
+
+    config_get dev "$section" dev
+
+    case "$dev" in
+        3g-modem_*)
+            echo "3g-m_${dev#3g-modem_}"
+            return 0
+            ;;
+    esac
+
+    echo "$dev"
+}
+
+init_modem_force()
+{
+    iptables -t mangle -N MODEM_FORCE_TTL 2>/dev/null
+    iptables -t mangle -C POSTROUTING -j MODEM_FORCE_TTL
+    [ ! "$?" = "0" ] && iptables -t mangle -I POSTROUTING -j MODEM_FORCE_TTL
+    iptables -t mangle -F MODEM_FORCE_TTL
+
+    ip6tables -t mangle -N MODEM_FORCE_TTL 2>/dev/null
+    ip6tables -t mangle -C POSTROUTING -j MODEM_FORCE_TTL
+    [ ! "$?" = "0" ] && ip6tables -t mangle -I POSTROUTING -j MODEM_FORCE_TTL
+    ip6tables -t mangle -F MODEM_FORCE_TTL
+    
+    log_debug $LINENO "modem" "(init_modem_force)Create a MODEM_FORCE_TTL chain"
+}
+
+force_modem_ttl()
+{
+    local dev
+    local ttl
+    local ttl_ipv6
+    dev="$(resolve_force_ttl_dev "$1")"
+    config_get ttl $1 ttl
+
+    [ "$ttl" != "" ] && iptables -t mangle -A  MODEM_FORCE_TTL -o $dev -j TTL --ttl-set $ttl
+
+    config_get ttl_ipv6 $1 ttl_ipv6
+    [ "$ttl_ipv6" != "" ] && ip6tables -t mangle -A MODEM_FORCE_TTL -o $dev -m hl ! --hl-eq 255 -j HL --hl-set $ttl_ipv6
+
+    log_debug $LINENO "modem" "(force_modem_ttl)dev:$dev ttl:$ttl ttl_ipv6:$ttl_ipv6"
+}
+
+delete_modem_force()
+{
+    log_debug $LINENO "modem" "Delete MODEM_FORCE_TTL chain"
+    iptables -t mangle -F MODEM_FORCE_TTL 2>/dev/null
+    iptables -t mangle -D POSTROUTING -j MODEM_FORCE_TTL 2>/dev/null
+    iptables -t mangle -X MODEM_FORCE_TTL 2>/dev/null
+
+    ip6tables -t mangle -F MODEM_FORCE_TTL 2>/dev/null
+    ip6tables -t mangle -D POSTROUTING -j MODEM_FORCE_TTL 2>/dev/null
+    ip6tables -t mangle -X MODEM_FORCE_TTL 2>/dev/null
+}
+
+has_force_ttl_rule=0
+
+has_effective_force_ttl()
+{
+    local ttl=""
+    local ttl_ipv6=""
+
+    config_get ttl "$1" ttl
+    config_get ttl_ipv6 "$1" ttl_ipv6
+
+    if [ -n "$ttl" ] || [ -n "$ttl_ipv6" ]; then
+        has_force_ttl_rule=1
+    fi
+}
+
+config_load glmodem
+config_foreach has_effective_force_ttl forceTTL
+
+if [ "$has_force_ttl_rule" = "1" ]; then
+    log_debug $LINENO "modem" "Start setting TTL、HL"
+    init_modem_force
+    config_foreach force_modem_ttl forceTTL
+else
+    delete_modem_force
+fi

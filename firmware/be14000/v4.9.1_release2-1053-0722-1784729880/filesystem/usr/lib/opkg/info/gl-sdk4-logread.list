@@ -1,0 +1,11 @@
+/etc/config/gl_logread
+/usr/bin/net_dbg.sh
+/usr/bin/oopslog
+/usr/share/gl-upload.d/log_feedback
+/etc/nginx/gl-conf.d/log_feedback.conf
+/usr/bin/export_logs
+/usr/lib/oui-httpd/rpc/logread
+/usr/share/gl-download.d/logread
+/etc/init.d/gl_logread
+/etc/init.d/gl_crash_log
+/usr/share/gl-ngx/oui-log-feedback.lua

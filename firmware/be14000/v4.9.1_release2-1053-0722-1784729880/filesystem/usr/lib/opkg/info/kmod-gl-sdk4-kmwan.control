@@ -1,0 +1,10 @@
+Package: kmod-gl-sdk4-kmwan
+Version: 5.4.281+git-2026.131.32969-c882b9c-1
+Depends: kernel (=5.4.281-1-df4fa332840f56a774a5d60bd140aaf6), kmod-nf-conntrack, kmod-nf-nat
+Source: feeds/glinet/gl-sdk4-kmwan
+SourceName: kmod-gl-sdk4-kmwan
+Section: base
+SourceDateEpoch: 1778490569
+Architecture: aarch64_cortex-a53
+Installed-Size: 34781
+Description:  glinet kmwan

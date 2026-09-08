@@ -1,0 +1,30 @@
+#!/bin/sh
+
+blkdev=`dirname $DEVPATH`
+device=`basename $DEVPATH`
+hdorsd=`echo "$device" | grep -E '[sh]d*|mmcblk0*' `
+
+#echo "===> hdorsd = $hdorsd" >/dev/console
+
+uptime=$(cat /proc/uptime | awk -F. '{print $1}')
+
+model=$(cat /proc/gl-hw-info/model)
+
+if [ "$model" = "mt3600be" ]; then
+    [ $uptime -lt 20 ] && exit 0
+elif [ "$model" = "be3600" -o "$model" = "be9300" -o "$model" = "be6500" ]; then
+    [ $uptime -lt 40 ] && exit 0
+else
+    [ $uptime -lt 60 ] && exit 0
+fi
+
+if [ -z $hdorsd ]
+then
+        #echo "not deal dev=$device" >/dev/console
+        exit 1
+fi
+
+[ $ACTION = remove ] || [ $ACTION = add ] && {
+    /etc/init.d/gl_nas_diskmanager restart
+}
+

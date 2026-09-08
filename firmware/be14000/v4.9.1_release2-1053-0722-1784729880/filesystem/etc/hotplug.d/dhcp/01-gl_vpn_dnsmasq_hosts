@@ -1,0 +1,25 @@
+#!/bin/sh
+
+[ -n "$IPADDR" ] || exit 0
+
+throttle_command() {
+    local CMD_ID="$1"
+    local DELAY="$2"
+    local CMD="$3"
+
+    if lock -n "/var/lock/throttle_${CMD_ID}.lock"; then
+        (
+            sleep "$DELAY"
+            eval "$CMD" 2>/dev/null
+            lock -u "/var/lock/throttle_${CMD_ID}.lock"
+        ) &
+    fi
+}
+
+if [ "$ACTION" = "remove" -o "$ACTION" = "add" ]; then
+    # ensure hosts.vpn exist
+    mkdir -p /tmp/hosts.vpn/
+    awk '{print $3, $4}' /tmp/dhcp.leases >/tmp/hosts.vpn/lan_hosts
+    # trigger dnsmasq load hosts, maximum once in 3 seconds, in the case online/offline event flood, eg when booting
+    throttle_command "dnsmasq_reload" 3 "kill -SIGHUP \$(pgrep -f /var/run/dnsmasq/dnsmasq.wgclient) \$(pgrep -f /var/run/dnsmasq/dnsmasq.ovpnclient)"
+fi

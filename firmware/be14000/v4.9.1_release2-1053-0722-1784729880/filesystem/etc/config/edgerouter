@@ -1,0 +1,7 @@
+config global 'global'
+    option enabled '0'
+    option force_dns '1'
+
+config dhcp 'wandhcp'
+    option leasetime '43200'
+    option ignore '1'

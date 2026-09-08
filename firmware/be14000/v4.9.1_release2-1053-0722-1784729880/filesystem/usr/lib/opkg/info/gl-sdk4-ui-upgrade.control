@@ -1,0 +1,10 @@
+Package: gl-sdk4-ui-upgrade
+Version: git-2026.183.23603-dfffd51-1
+Depends: libc, gl-sdk4-ui-core, gl-sdk4-upgrade
+Source: feeds/glinet/gl-ui4.0/module/upgrade
+SourceName: gl-sdk4-ui-upgrade
+Section: base
+SourceDateEpoch: 1782974003
+Architecture: aarch64_cortex-a53
+Installed-Size: 25627
+Description:  gl-sdk4-ui-upgrade

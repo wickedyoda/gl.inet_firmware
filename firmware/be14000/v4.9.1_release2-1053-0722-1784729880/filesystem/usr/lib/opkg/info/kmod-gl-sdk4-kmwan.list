@@ -1,0 +1,12 @@
+/etc/init.d/kmwan
+/lib/modules/5.4.281/kmwan.ko
+/etc/modules.d/40-gl-sdk4-kmwan
+/etc/modules-boot.d/40-gl-sdk4-kmwan
+/etc/udhcpc.user.d/kmwan_sync_route.sh
+/etc/hotplug.d/kmwan/kmwan_status_change
+/lib/functions/kmwan.sh
+/usr/lib/lua/gl/kmwan.lua
+/usr/lib/oui-httpd/rpc/kmwan
+/etc/config/kmwan
+/usr/bin/gen_weight_route
+/etc/hotplug.d/iface/01-kmwan

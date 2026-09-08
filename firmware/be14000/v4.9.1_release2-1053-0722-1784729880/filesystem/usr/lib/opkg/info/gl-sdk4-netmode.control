@@ -1,0 +1,10 @@
+Package: gl-sdk4-netmode
+Version: git-2026.188.23066-f2fa2f2-1
+Depends: libc, lua-cjson, relayd
+Source: feeds/glinet/gl-sdk4-netmode
+SourceName: gl-sdk4-netmode
+Section: base
+SourceDateEpoch: 1783405466
+Architecture: aarch64_cortex-a53
+Installed-Size: 11801
+Description:  Network mode API for Gl.inet

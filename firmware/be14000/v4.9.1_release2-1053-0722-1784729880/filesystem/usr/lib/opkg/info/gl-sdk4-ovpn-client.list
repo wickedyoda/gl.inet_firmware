@@ -1,0 +1,14 @@
+/etc/openvpn/scripts/ovpnclient-ipchange
+/etc/gl-switch.d/openvpn.sh
+/usr/share/gl-validator.d/ovpn-client.lua
+/usr/lib/oui-httpd/rpc/ovpn_client
+/etc/config/ovpnclient
+/usr/lib/oui-httpd/rpc/ovpn-client.so
+/usr/share/gl-download.d/ovpnclient
+/etc/hotplug.d/iface/99-ovpn-irq
+/etc/init.d/openvpn_init_tap_s2s
+/lib/netifd/proto/ovpnclient.sh
+/etc/openvpn/scripts/ovpnclient-up
+/usr/share/gl-upload.d/ovpnclient
+/etc/openvpn/scripts/ovpnclient-down
+/usr/share/gl-validator.d/ovpn_client.lua

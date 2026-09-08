@@ -1,0 +1,9 @@
+/usr/bin/gl_timer_control_wifi
+/etc/init.d/gl_timer
+/etc/uci-defaults/99-gl_timer
+/usr/bin/gl_timer_control_screen
+/etc/config/gl_timer
+/usr/bin/gl_timer_control_netifydupdate
+/usr/bin/gl_timer_control_langs
+/usr/bin/gl_timer_control_disk
+/usr/lib/oui-httpd/rpc/timer

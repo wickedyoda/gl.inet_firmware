@@ -1,0 +1,50 @@
+#!/bin/sh  /etc/rc.common
+
+START=99
+
+EXTRA_COMMANDS="$EXTRA_COMMANDS delay_restart"
+
+sort_queue() {
+    cfg=$1
+    sum=$((sum+1))
+    uci set qos.$cfg.cnt="$sum"
+}
+
+add_queue() {
+    cfg=$1
+    upload=""
+    download=""
+    mac=""
+    config_get upload "$cfg" upload
+    config_get download "$cfg" download
+    config_get mac "$cfg" mac
+    if [ -n "$upload" -a -n "$download" -a -n "$mac" ];then
+        gl_eqos add $mac $download $upload
+    fi
+}
+
+delay_restart() {
+    sleep 12
+    /etc/init.d/gl_eqos restart
+}
+
+start() {
+    if [ -z "$(grep queue /etc/config/qos  |grep -v "#")" ]; then
+        exit 0
+    fi
+    status=`tc class list dev br-lan`
+    [ -z "$status" ] && gl_eqos start 312500 312500
+
+    sum=0
+    config_load qos
+    config_foreach sort_queue queue
+    uci set qos.general.sum="$sum"
+    uci commit qos
+
+    config_load qos
+    config_foreach add_queue queue
+}
+
+stop() {
+    gl_eqos stop
+}

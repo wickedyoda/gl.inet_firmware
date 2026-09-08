@@ -1,0 +1,10 @@
+Package: ControlAppC
+Version: 1.0
+Depends: libc, libcurl4, libjson-c5
+Source: feeds/mt7988/applications/ControlAppC
+SourceName: ControlAppC
+Section: MTK Properties
+SourceDateEpoch: 1760147463
+Architecture: aarch64_cortex-a53
+Installed-Size: 30742
+Description:  ControlAppC Daemon

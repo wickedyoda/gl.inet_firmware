@@ -1,0 +1,10 @@
+Package: gl-sdk4-tethering
+Version: git-2026.147.24133-80329a6-1
+Depends: libc, kmod-usb-net-ipheth, usbmuxd, kmod-usb-net-rndis
+Source: feeds/glinet/gl-sdk4-tethering
+SourceName: gl-sdk4-tethering
+Section: base
+SourceDateEpoch: 1779864133
+Architecture: aarch64_cortex-a53
+Installed-Size: 9084
+Description:  Oui Support for tethering

@@ -1,0 +1,240 @@
+#!/bin/sh
+
+# shellcheck disable=SC3037,SC3043
+
+. /lib/functions/gl_util.sh
+
+DEVS=""
+IFB_TXQUEUELEN=1000
+IFB_PARENT_BURST="256k"
+IFB_CLIENT_BURST="128k"
+IFB_CLIENT_QUEUE_LIMIT=500
+
+wan=$(get_wan)
+
+[ -d /sys/class/net/br-lan ] && DEVS="$DEVS br-lan"
+[ -d /sys/class/net/br-guest ] && DEVS="$DEVS br-guest"
+[ -d /sys/class/net/br-iot ] && DEVS="$DEVS br-iot"
+[ -d /sys/class/net/$wan ] && DEVS="$DEVS $wan"
+
+# gl-sdk4-vlan-subnet: custom subnets use bridges br-vlan<vlan_id> (e.g. br-vlan100).
+if [ -d /sys/class/net ]; then
+    for path in /sys/class/net/br-vlan*; do
+        [ -d "$path" ] || continue
+        n=${path##*/}
+        case "$n" in
+            *-ifb) continue ;;
+        esac
+        DEVS="$DEVS $n"
+    done
+fi
+
+stop_qos() {
+	for dev in $DEVS; do
+		tc qdisc del dev $dev root 2>/dev/null
+		tc qdisc del dev $dev clsact 2>/dev/null
+		tc qdisc del dev ${dev}-ifb root 2>/dev/null
+		ip link del dev ${dev}-ifb 2>/dev/null
+	done
+	# 每设备循环内重启 bridger 会导致桥/转发被连续重置，易与 DHCP 抢包；只执行一次。
+	[ -f /etc/init.d/bridger ] && /etc/init.d/bridger restart
+}
+
+start_qos() {
+	local dl=`echo $1 | awk '{printf("%d",$1*8)}'`
+	local up=`echo $2 | awk '{printf("%d",$1*8)}'`
+	local lan_ipaddr=`uci -q get network.lan.ipaddr`
+	local br_gw
+
+	for dev in $DEVS; do
+		tc qdisc add dev $dev root handle 1: htb
+		tc class add dev $dev parent 1: classid 1:1 htb rate ${dl}kbit
+		ip link add dev ${dev}-ifb name ${dev}-ifb type ifb
+		ip link set dev ${dev}-ifb up
+		ip link set dev ${dev}-ifb txqueuelen $IFB_TXQUEUELEN
+		tc qdisc add dev ${dev}-ifb root handle 1: htb
+		tc class add dev ${dev}-ifb parent 1: classid 1:1 htb rate ${up}kbit burst $IFB_PARENT_BURST cburst $IFB_PARENT_BURST
+		tc qdisc show dev ${dev} | grep -q clsact || tc qdisc add dev $dev clsact
+		# IPv4 DHCP 客户端→服务端（UDP dport 67）：勿 mirred 到 IFB，否则本机 dnsmasq 可能收不到 Discover/Request
+		tc filter add dev $dev ingress protocol ip prio 1 u32 \
+			match u8 17 0xff at 9 \
+			match u16 0x0043 0xffff at 22 \
+			action gact pass 2>/dev/null || true
+		tc filter add dev $dev ingress protocol ip prio 10 u32 match u32 0 0 flowid 1:1 action mirred egress redirect dev ${dev}-ifb
+		tc filter add dev $dev ingress protocol ipv6 prio 10 u32 match u32 0 0 flowid 1:1 action mirred egress redirect dev ${dev}-ifb
+		#access to the gateway is not restricted
+		tc filter add dev $dev parent 1:0 prio 1 protocol ip u32 match ip src $lan_ipaddr flowid 1:1
+		tc filter add dev ${dev}-ifb parent 1:0 prio 1 protocol ip u32 match ip dst $lan_ipaddr flowid 1:1
+		br_gw=""
+		case "$dev" in
+		br-guest) br_gw=$(uci -q get network.guest.ipaddr) ;;
+		br-iot) br_gw=$(uci -q get network.iot.ipaddr) ;;
+		br-vlan*) br_gw=$(uci -q get network.vlan${dev#br-vlan}.ipaddr) ;;
+		esac
+		if [ -n "$br_gw" ]; then
+			tc filter add dev $dev parent 1:0 prio 2 protocol ip u32 match ip src $br_gw flowid 1:1
+			tc filter add dev ${dev}-ifb parent 1:0 prio 2 protocol ip u32 match ip dst $br_gw flowid 1:1
+		fi
+	done
+}
+
+add_dev() {
+	mac="$1"
+	dl=`echo $2 | awk '{printf("%d",$1*8)}'`
+	up=`echo $3 | awk '{printf("%d",$1*8)}'`
+	cnt=0
+
+	mac_id=$(echo $mac | sed 's/://g')
+	if [ "$(uci -q get qos.$mac_id)" = "queue" ];then
+		cnt=`uci -q get qos.$mac_id.cnt`
+	else
+		uci set qos.$mac_id="queue"
+		uci set qos.$mac_id.mac="$mac"
+	fi
+
+	if [ -z "$cnt" -o "$cnt" = "0" ];then
+		cnt=$(($(uci -q get qos.general.sum) + 1))
+		[ -z "$cnt" ] && cnt=1
+		uci set qos.general.sum="$cnt"
+		uci set qos.$mac_id.cnt="$cnt"
+	fi
+
+	uci set qos.$mac_id.upload="$3"
+	uci set qos.$mac_id.download="$2"
+	uci commit qos
+
+	mach=$(echo $mac | sed 's/://g' | cut -c1-4)
+	macl=$(echo $mac | sed 's/://g' | cut -c5-12)
+	if [ $dl -gt 0 ]; then
+		for dev in $DEVS; do
+			tc class add dev $dev parent 1:1 classid 1:1$cnt htb rate ${dl}kbit ceil ${dl}kbit
+			tc filter add dev $dev parent 1:0 protocol ip u32 match u16 0x0800 0xffff at -2 match u32 0x$macl 0xffffffff at -12 match u16 0x$mach 0xffff at -14 flowid 1:1$cnt
+			tc filter add dev $dev parent 1:0 protocol ipv6 u32 match u16 0x86dd 0xffff at -2 match u32 0x$macl 0xffffffff at -12 match u16 0x$mach 0xffff at -14 flowid 1:1$cnt
+		done
+	fi
+
+	mach=$(echo $mac | sed 's/://g' | cut -c1-8)
+	macl=$(echo $mac | sed 's/://g' | cut -c9-12)
+	if [ $up -gt 0 ];then
+		for dev in $DEVS; do
+			tc class add dev ${dev}-ifb parent 1:1 classid 1:1$cnt htb rate ${up}kbit ceil ${up}kbit burst $IFB_CLIENT_BURST cburst $IFB_CLIENT_BURST
+			tc qdisc replace dev ${dev}-ifb parent 1:1$cnt pfifo limit $IFB_CLIENT_QUEUE_LIMIT
+			tc filter add dev ${dev}-ifb parent 1:0 protocol ip u32 match u16 0x0800 0xffff at -2 match u16 0x$macl 0xffff at -4 match u32 0x$mach 0xffffffff at -8 flowid 1:1$cnt
+			tc filter add dev ${dev}-ifb parent 1:0 protocol ipv6 u32 match u16 0x86dd 0xffff at -2 match u16 0x$macl 0xffff at -4 match u32 0x$mach 0xffffffff at -8 flowid 1:1$cnt
+		done
+	fi
+}
+
+del_dev() {
+	mac="$1"
+	mac_id=$(echo $mac | sed 's/://g')
+	cnt=$(uci get qos.$mac_id.cnt)
+	dl=`echo $(uci get qos.$mac_id.download) | awk '{printf("%d",$1*8)}'`
+	up=`echo $(uci get qos.$mac_id.upload) | awk '{printf("%d",$1*8)}'`
+
+
+	mach=$(echo $mac | sed 's/://g' | cut -c1-4)
+	macl=$(echo $mac | sed 's/://g' | cut -c5-12)
+	if [ $dl -gt 0 ]; then
+		for dev in $DEVS; do
+			for prio in $(tc filter list dev $dev | grep "flowid 1:1$cnt"| awk '{print $7}')
+			do
+				tc filter del dev $dev parent 1: prio $prio u32
+			done
+			tc class del dev $dev parent 1:1 classid 1:1$cnt htb rate ${dl}kbit ceil ${dl}kbit
+		done
+	fi
+
+	mach=$(echo $mac | sed 's/://g' | cut -c1-8)
+	macl=$(echo $mac | sed 's/://g' | cut -c9-12)
+	if [ $up -gt 0 ];then
+		for dev in $DEVS; do
+			for ifb_prio in $(tc filter list dev ${dev}-ifb | grep "flowid 1:1$cnt"| awk '{print $7}')
+			do
+				tc filter del dev ${dev}-ifb parent 1: prio $ifb_prio u32
+			done
+			tc qdisc del dev ${dev}-ifb parent 1:1$cnt 2>/dev/null
+			tc class del dev ${dev}-ifb parent 1:1 classid 1:1$cnt htb rate ${up}kbit ceil ${up}kbit
+		done
+	fi
+
+	if [ "$2" != "only_remove_ts" ];then
+		uci -q delete qos.$mac_id
+		uci commit qos
+	fi
+}
+
+case "$1" in
+	"stop")
+		stop_qos
+	;;
+	"start")
+		stop_qos
+		start_qos $2 $3
+	;;
+	"add")
+		add_dev $2 $3 $4
+		[ -f /etc/init.d/shortcut-fe ] && /etc/init.d/shortcut-fe restart
+		[ -f /etc/config/mtkhnat ] && /etc/init.d/mtk-hwnat-post restart
+	;;
+	"del")
+		del_dev $2 $3
+		[ -f /etc/init.d/shortcut-fe ] && /etc/init.d/shortcut-fe restart
+		[ -f /etc/config/mtkhnat ] && /etc/init.d/mtk-hwnat-post restart
+		[ -z "$(grep queue /etc/config/qos  |grep -v "#")" ] && /etc/init.d/gl_eqos stop
+	;;
+	"status")
+		case "$2" in
+			"qdisc")
+				for dev in $DEVS; do
+					echo -e "\n******* $dev *******\n"
+					tc qdisc list dev $dev
+					tc qdisc list dev ${dev}-ifb
+				done
+			;;
+			"class")
+				for dev in $DEVS; do
+					echo -e "\n******* $dev *******\n"
+					tc class list dev $dev
+					tc class list dev ${dev}-ifb
+				done
+			;;
+			"filter")
+				for dev in $DEVS; do
+					echo -e "\n******* $dev *******\n"
+					tc filter list dev $dev
+					tc filter list dev ${dev}-ifb
+				done
+			;;
+			"all")
+				for dev in $DEVS; do
+					echo -e "\n******* $dev *******\n"
+					tc qdisc list dev $dev
+					tc class list dev $dev
+					tc filter list dev $dev
+					tc qdisc list dev ${dev}-ifb
+					tc class list dev ${dev}-ifb
+					tc filter list dev ${dev}-ifb
+				done
+			;;
+			*)
+				for dev in $DEVS; do
+					echo -e "\n******* $dev *******\n"
+					tc filter list dev $dev
+					tc filter list dev ${dev}-ifb
+				done
+			;;
+		esac
+	;;
+	*)
+		echo "Usage: $0 <command> [options]"
+		echo "Commands:"
+		echo "  start dl_rate up_rate              		# Total bandwidth (KB/S)"
+		echo "  stop"
+		echo "  add mac dl_rate up_rate            		# Limiting the bandwidth of a single IP (KB/S)"
+		echo "Example:"
+		echo "  $0 start 125000 125000                  # Total bandwidth: down 125000 KB/S up 125000 KB/S"
+		echo "  $0 add 18:c0:4d:dc:4f:cc 2048 1024  	# down 2048 KB/S  up 1024 KB/S"
+		echo "  $0 del 18:c0:4d:dc:4f:cc "
+	;;
+esac

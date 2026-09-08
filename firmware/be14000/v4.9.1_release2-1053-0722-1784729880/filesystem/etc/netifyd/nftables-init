@@ -1,0 +1,37 @@
+#!/bin/bash
+
+nft flush table inet netify 2>/dev/null
+nft flush table inet filter 2>/dev/null
+nft delete table inet netify 2>/dev/null
+nft delete table inet filter 2>/dev/null
+
+nft add table inet netify
+nft add table inet filter
+nft add counter inet filter block
+nft add counter inet filter qos
+nft add chain inet filter postrouting '{ type filter hook postrouting priority 0; policy accept; }'
+nft add chain inet netify forward '{ type filter hook forward priority mangle; policy accept; }'
+
+qos_enable=$(uci -q get gl_dpi_qos.qos.prio_enable)
+flow_statistics_enable=$(uci -q get gl_dpi_flow_statistics.global.enable)
+content_protection_enable=$(uci -q get gl_dpi_content_protection.content_protection.enabled)
+
+if [ "$qos_enable" = "1" ] || [ "$flow_statistics_enable" = "1" ] || [ "$content_protection_enable" = "1" ]; then
+    nft add rule inet netify forward 'ct label set netify-init counter'
+    nft add rule inet netify forward 'ct packets > 32 counter return'
+    nft add rule inet netify forward 'counter queue num 0-1 fanout, bypass'
+fi
+
+if [ "$qos_enable" = "1" ]; then
+    nft add rule inet filter postrouting 'ct label "netify-priority-high" counter name "qos" mark set meta mark | 0x60'
+    nft add rule inet filter postrouting 'ct label "netify-priority-middle" counter mark set meta mark | 0x70'
+    nft add rule inet filter postrouting 'ct label "netify-priority-low" counter mark set meta mark | 0x80'
+fi
+
+nft add set inet filter GL_DPI_BLOCK '{ type ipv4_addr; flags timeout; }'
+nft add chain inet filter parental_control '{ type filter hook forward priority mangle -10; policy accept; }'
+if [ "$content_protection_enable" = "1" ]; then
+    nft add rule inet filter parental_control 'ip daddr @GL_DPI_BLOCK counter name "block" drop'
+    nft add rule inet filter parental_control 'ct label "netify-allow" counter accept'
+    nft add rule inet filter parental_control 'ct label "netify-block" counter name "block" drop'
+fi

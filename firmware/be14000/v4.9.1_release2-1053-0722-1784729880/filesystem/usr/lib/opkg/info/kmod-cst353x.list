@@ -1,0 +1,3 @@
+/etc/modules-boot.d/30-cst353x
+/etc/modules.d/30-cst353x
+/lib/modules/5.4.281/cst353x.ko

@@ -1,0 +1,4 @@
+/etc/uci-defaults/04_gl_atp
+/etc/init.d/atp
+/usr/bin/atp
+/etc/hotplug.d/kmwan/99-atp

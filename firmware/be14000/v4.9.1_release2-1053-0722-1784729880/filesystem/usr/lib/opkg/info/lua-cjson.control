@@ -1,0 +1,13 @@
+Package: lua-cjson
+Version: 2.1.0-1
+Depends: libc, liblua5.1.5
+Source: feeds/gl_feed_common/lua-cjson
+SourceName: lua-cjson
+License: MIT
+LicenseFiles: LICENSE
+Section: lang
+SourceDateEpoch: 1744255804
+Maintainer: Dirk Chang <dirk@kooiot.com>
+Architecture: aarch64_cortex-a53
+Installed-Size: 13773
+Description:  Lua CJSON parser

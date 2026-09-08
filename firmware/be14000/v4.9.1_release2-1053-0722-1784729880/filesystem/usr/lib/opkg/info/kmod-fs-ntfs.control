@@ -1,0 +1,12 @@
+Package: kmod-fs-ntfs
+Version: 5.4.281-1
+Depends: kernel (=5.4.281-1-df4fa332840f56a774a5d60bd140aaf6), kmod-nls-base
+Source: package/kernel/linux
+SourceName: kmod-fs-ntfs
+License: GPL-2.0
+Section: kernel
+SourceDateEpoch: 1784728420
+Architecture: aarch64_cortex-a53
+Installed-Size: 55031
+Description:  Kernel module for limited NTFS filesystem support. Support for writing
+ is extremely limited and disabled as a result.

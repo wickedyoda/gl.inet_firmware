@@ -1,0 +1,117 @@
+--[[
+    @object-name: bark
+    @object-desc: bark router client settings
+--]]
+local uci = require "uci"
+local fs = require "oui.fs"
+local M = {}
+
+--[[
+    @method-type: call
+    @method-name: get_status
+    @method-desc: Get bark status
+
+    @out number   status                    The current status of the running router client, [1：connecting; 2: ready; 3: online]
+    @out string   pairing_code              Pairing code between device and bark account
+    @out number   err_code   Error code,-1:Failed to get status.
+    @out string   err_msg    Error message
+    @in-example:  {"jsonrpc":"2.0","id":1,"method":"call","params":["","bark","get_status"]}
+    @out-example: {"id":1,"jsonrpc":"2.0","result":{"status":3, "pairing_code": "945712135847788"}}
+--]]
+
+function M.get_status()
+    local c = uci.cursor()
+    local res = {}
+
+    local status = c:get("TRL","TRL", "status")
+    if status == "connecting" then
+        res.status = 1
+    elseif status == "ready" then
+        res.status = 2
+    elseif status == "online" then
+        res.status = 3
+    else
+        res.err_code = -1
+        res.err_msg = "get bark status failed"
+    end
+
+    res.pairing_code = c:get("TRL", "TRL", "pairingCode") or ""
+
+    return res
+end
+
+--[[
+    @method-name: get_config
+    @method-type: call
+    @method-desc: Get bark settings
+
+    @out bool   enable                      Whether bark router client is enabled，[false：disable; true：enable]
+    @out bool   ipv6_enable                 Whether IPv6 support is enabled, [false：disable; true：enable]
+    @out number   err_code                     Error code,-1:Failed to get config.
+    @out string   err_msg                      Error message
+
+    @in-example:  {"jsonrpc":"2.0","id":1,"method":"call","params":["","bark","get_config"]}
+    @out-example: {"jsonrpc":"2.0","id":1,"result":{"ipv6_enable":false,"enable":true}}
+--]]
+
+function M.get_config()
+    local res = {}
+    local c = uci.cursor()
+
+    res.enable = c:get("TRL", "TRL", "enable") == "1"
+    res.ipv6_enable = c:get("TRL", "TRL", "ipv6") == "1"
+
+    return res
+end
+
+--[[
+    @method-name: set_config
+    @method-type: call
+    @method-desc: Set bark settings
+
+    @in bool   enable                      Whether to enable bark router client，[false：disable; true：enable]
+    @in bool   ipv6_enable                 Whether to enable IPv6 support, [false：disable; true：enable]
+    @out number   err_code                     Error code, -1:Setup failed
+    @out string   err_msg                      Error message
+
+    @in-example:  {"jsonrpc":"2.0","id":1,"method":"call","params":["","bark","set_config",{"enable":true,"ipv6_enable":true}]}
+
+    @out-example: {"jsonrpc": "2.0", "id": 1, "result": null}
+--]]
+
+function M.set_config(params)
+    local c = uci.cursor()
+
+    c:set("TRL", "TRL", "enable", params.enable and 1 or 0)
+    c:set("TRL", "TRL", "ipv6", params.ipv6_enable and 1 or 0)
+
+    c:commit("TRL")
+    fs.sync()
+    ngx.pipe.spawn({"/usr/sbin/gl_bark"})
+end
+
+--[[
+    @method-type: call
+    @method-name: logout
+    @method-desc: Logout from current bark account
+
+    @out number   ?err_code          Error code,-1:Logout failed.
+    @out string   ?err_msg           Error message
+
+    @in-example:  {"jsonrpc":"2.0","id":1,"method":"call","params":["","bark","logout"]}
+    @out-example: {"jsonrpc": "2.0", "id": 1, "result": null}
+--]]
+
+function M.logout()
+    local c = uci.cursor()
+
+    c:set("TRL", "TRL", "apiKey", "")
+    c:set("TRL", "TRL", "pairingCode", "")
+    c:commit("TRL")
+    fs.sync()
+
+    ngx.pipe.spawn({"/usr/sbin/gl_bark"})
+end
+
+return M
+

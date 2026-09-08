@@ -1,0 +1,19 @@
+
+config expressvpn 'global'
+	# Activation flow phase: idle / redeeming / redeemed
+	option phase 'idle'
+	option agreement_accepted '0'
+	# Eligibility probe result: unknown / eligible / ineligible / probe_failed
+	option eligibility 'unknown'
+	# option activation_email 'jes***age@gmail.com'
+	# option activation_time '2026-04-13T08:00:00Z'
+	# OIDC login settings: cloud config first, local defaults as fallback
+	option oidc_realm 'https://auth.expressvpn.com/realms/xvpn'
+	option oidc_client_id 'xv_partner_gli_router'
+	option oidc_scopes 'openid'
+	# WireGuard control plane: cloud config first, local defaults as fallback
+	option cp_base 'https://cp.expressapisv2.net'
+	# Endpoint selection mode: auto=follow IDS2 order; obfuscated=prefer Amnezia endpoints
+	option endpoint_mode 'auto'
+	# Subscription query base: cloud config first, local defaults as fallback
+	option subscriptions_base 'https://www.expressvpn.com'

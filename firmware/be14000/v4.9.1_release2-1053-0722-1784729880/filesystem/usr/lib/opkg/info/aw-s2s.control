@@ -1,0 +1,10 @@
+Package: aw-s2s
+Version: git-2026.149.29743-2b8d5f3-1
+Depends: libc
+Source: feeds/mptcp_feeds/aw-s2s
+SourceName: aw-s2s
+Section: base
+SourceDateEpoch: 1780042543
+Architecture: aarch64_cortex-a53
+Installed-Size: 30132
+Description:  AstroWarp s2s API

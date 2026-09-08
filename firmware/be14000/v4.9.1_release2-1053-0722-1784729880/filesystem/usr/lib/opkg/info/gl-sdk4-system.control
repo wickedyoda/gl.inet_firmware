@@ -1,0 +1,10 @@
+Package: gl-sdk4-system
+Version: git-2026.160.28394-fe493c5-1
+Depends: libc, libiwinfo-lua, libuci-lua, kmod-gl-sdk4-kmwan, gl-sdk4-lua-utils
+Source: feeds/glinet/gl-sdk4-system
+SourceName: gl-sdk4-system
+Section: base
+SourceDateEpoch: 1780991594
+Architecture: aarch64_cortex-a53
+Installed-Size: 20938
+Description:  glinet SDK4 system module

@@ -1,0 +1,6 @@
+/etc/chrony/chrony.conf
+/usr/bin/chronyc
+/etc/config/chrony
+/etc/hotplug.d/iface/20-chrony
+/etc/init.d/chronyd
+/usr/sbin/chronyd

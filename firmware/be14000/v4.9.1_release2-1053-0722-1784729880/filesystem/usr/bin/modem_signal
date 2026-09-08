@@ -1,0 +1,96 @@
+#!/bin/sh
+. /lib/functions/modem.sh
+. /lib/functions/gl_util.sh
+. /usr/share/libubox/jshn.sh
+
+reset_leds()
+{
+                for i in `seq 4`
+                do
+                        echo 0 > /sys/class/leds/5G:signal:led$i/brightness
+                done
+                strength_tmp=" "
+                sleep 10
+                continue
+}
+
+
+
+PORT=$(cat /etc/nginx/conf.d/gl.conf |grep -E "    listen [0-9]+;" |grep -oE '[0-9]+'| head -1)
+
+if [ "$PORT" != "" -a "$PORT" != "80" ];then
+    URL="http://127.0.0.1:$PORT/rpc"
+else
+    URL="http://127.0.0.1/rpc"
+fi
+
+while :
+do
+
+if [ -n "$(cat /etc/config/network | grep simo)" ]; then
+        dial_successful_simo=`get_interface_status.lua | grep simo -A3| grep online`
+        if [ -z "$dial_successful_simo" ];then
+                reset_leds
+        fi
+
+        for i in `seq 3`
+        do
+                cells_info=$(curl -H 'glinet: 1' -k "$URL" -d "{\"jsonrpc\":\"2.0\",\"method\":\"call\",\"params\":[\"\",\"mvas\",\"get_connect_info\",{}],\"id\":1}")
+                strength=`echo ${cells_info}| jsonfilter -e @.result.cells_info.rsrp_level`
+                if [ -n "$strength" ];then
+                        signal=`echo ${cells_info}| jsonfilter -e @.result.rsrp`
+                        break
+                fi
+                sleep 1
+       done
+
+else
+        dial_successful=`get_interface_status.lua | grep modem -A3| grep online`
+
+        if [ -z "$dial_successful" ];then
+                reset_leds
+        fi
+
+        for i in `seq 3`
+        do
+                sim_info=$(curl -H 'glinet: 1' -k "$URL" -d "{\"jsonrpc\":\"2.0\",\"method\":\"call\",\"params\":[\"\",\"modem\",\"get_sim_signal\",{}],\"id\":1}")
+                strength=`echo ${sim_info}| jsonfilter -e @.result.signal.strength`
+                if [ -n "$strength" ];then
+                        signal=`echo ${sim_info}| jsonfilter -e @.result.signal`
+                        break
+                fi
+                sleep 1
+        done
+fi
+
+
+if [ "$strength_tmp" != "$strength" ];then
+        strength_tmp="$strength"
+        if [ -z "$strength" ];then
+                for i in `seq 4`
+                do
+                        echo 0 > /sys/class/leds/5G:signal:led$i/brightness
+                done
+        else
+                for i in `seq 4`
+                do
+                        echo 0 > /sys/class/leds/5G:signal:led$i/brightness
+                done
+
+                led_enable=$(uci  -q get gl_led.global.led_enable)
+                if [ "$led_enable" = "1" ];then
+                        for i in `seq "$strength"`
+                        do
+                                echo 255 > /sys/class/leds/5G:signal:led$i/brightness
+                        done
+                fi
+        fi
+fi
+
+#result=`echo ${sim_info}| jsonfilter -e @.result`
+#data="'{\"type\": \"modem/signal\", \"qos\":2, \"data\":$result}'"
+#eval ubus call gl-cloud notify $data
+
+sleep 10
+
+done

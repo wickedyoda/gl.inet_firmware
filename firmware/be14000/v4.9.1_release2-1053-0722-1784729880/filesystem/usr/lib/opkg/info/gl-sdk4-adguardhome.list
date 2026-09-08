@@ -1,0 +1,7 @@
+/etc/nginx/gl-conf.d/adg.conf
+/usr/lib/oui-httpd/rpc/adguardhome
+/etc/config/adguardhome
+/etc/gl-switch.d/adguardhome.sh
+/etc/uci-defaults/99-adguardhome
+/etc/init.d/adguardhome
+/etc/AdGuardHome/config.yaml

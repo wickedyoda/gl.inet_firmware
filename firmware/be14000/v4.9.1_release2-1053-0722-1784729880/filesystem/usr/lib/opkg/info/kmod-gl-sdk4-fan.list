@@ -1,0 +1,7 @@
+/etc/config/glfan
+/etc/modules-boot.d/81-gl-sdk4-fan
+/etc/modules.d/81-gl-sdk4-fan
+/lib/modules/5.4.281/gl_fan_driver.ko
+/usr/lib/oui-httpd/rpc/fan
+/etc/init.d/gl_fan
+/usr/bin/gl_fan

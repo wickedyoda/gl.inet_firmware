@@ -1,0 +1,260 @@
+{
+  "reprocess_flows": true,
+  "targets": {
+    "log.games": {
+      "target_type": "log",
+      "target_enabled": false,
+      "prefix": "netify-games",
+      "interval": 60
+    },
+    "log.external": {
+      "target_type": "log",
+      "target_enabled": false,
+      "prefix": "netify-external",
+      "interval": 60
+    },
+    "sink.games": {
+      "target_type": "sink",
+      "target_enabled": false,
+      "sink": "sink-socket",
+      "channel": "default",
+      "flow_events": "new | updated | expired",
+      "format": "json",
+      "compressor": "none",
+      "header": true
+    },
+    "ipset.games": {
+      "target_type": "ipset",
+      "target_enabled": false,
+      "set_name": "nfa.games",
+      "set_family": "ipv4",
+      "type": "hash:ip,port,ip",
+      "ttl": 60,
+      "flush_on_destroy": true
+    },
+    "ctlabel.auto": {
+      "target_type": "ctlabel",
+      "target_enabled": false,
+      "auto_label": true
+    },
+    "ctlabel.games": {
+      "target_type": "ctlabel",
+      "target_enabled": false,
+      "auto_label": false,
+      "labels": [
+        "netify-games"
+      ]
+    },
+    "ctmark.games": {
+      "target_type": "ctmark",
+      "target_enabled": false,
+      "mark": "0x00000001",
+      "mask": "0xffffffff",
+      "shift": 0
+    },
+    "ctmark.auto": {
+      "target_type": "ctmark",
+      "target_enabled": false,
+      "auto_mark": "applications",
+      "mask": "0xffffffff",
+      "shift": 0
+    },
+    "ctmark.auto-user": {
+      "target_type": "ctmark",
+      "target_enabled": false,
+      "auto_mark": "applications",
+      "auto_mark_user": "${path_state_persistent}/ctmark-user.games.json",
+      "mask": "0xffffffff",
+      "shift": 0
+    },
+    "nftset.games": {
+      "target_type": "nftset",
+      "target_enabled": false,
+      "set_name": "nfa.games",
+      "set_family": "ipv4",
+      "type": [
+        "local_addr",
+        "ip_proto",
+        "other_port",
+        "other_addr"
+      ],
+      "ttl": 60,
+      "flush_on_create": true
+    },
+    "pftable.games": {
+      "target_type": "pftable",
+      "target_enabled": false,
+      "table_name": "nfa.games",
+      "address_type": "other",
+      "ttl": 60,
+      "managed": true
+    },
+    "ctmark_priority_high": {
+      "target_type": "ctmark",
+      "target_enabled": true,
+      "mark": "0x00000060",
+      "mask": "0x000000f0",
+      "shift": 0
+    },
+    "ctmark_priority_middle": {
+      "target_type": "ctmark",
+      "target_enabled": true,
+      "mark": "0x00000070",
+      "mask": "0x000000f0",
+      "shift": 0
+    },
+    "ctmark_priority_low": {
+      "target_type": "ctmark",
+      "target_enabled": true,
+      "mark": "0x00000080",
+      "mask": "0x000000f0",
+      "shift": 0
+    },
+    "ctmark_block": {
+      "target_type": "ctmark",
+      "target_enabled": true,
+      "mark": "0x00200000",
+      "mask": "0x00f00000",
+      "shift": 0
+    },
+    "ctmark_allow": {
+      "target_type": "ctmark",
+      "target_enabled": true,
+      "mark": "0x00000300",
+      "mask": "0x00000f00",
+      "shift": 0
+    }
+  },
+  "target_defaults": {
+    "log": {
+      "path": "/tmp",
+      "prefix": "netify-flow-actions",
+      "suffix": ".json",
+      "interval": 300
+    },
+    "ipset": {
+      "set_family": "*",
+      "ttl": 600
+    },
+    "nftset": {
+      "table_name": "netify",
+      "table_family": "inet",
+      "size": 65535,
+      "ttl": 300,
+      "managed": true,
+      "flush_on_destroy": true
+    },
+    "pftable": {
+      "target_type": "pftable",
+      "anchor_name": "*",
+      "address_type": "other"
+    },
+    "sink": {
+      "flow_events": "new",
+      "format": "json",
+      "compressor": "none"
+    }
+  },
+  "target_globals": {
+    "ctlabel": {
+      "max_bits": 127,
+      "connlabel_conf": "/etc/xtables/connlabel.conf"
+    },
+    "pftable": {
+      "device": "/dev/pf"
+    }
+  },
+  "actions": {
+    "games": {
+      "enabled": false,
+      "priority": 100,
+      "interface": "*",
+      "criteria": [
+        "category == 'games';",
+        "${path_state_persistent}/nfa-games.d"
+      ],
+      "targets": [
+        "log.games",
+        "ipset.games",
+        "ctlabel.games",
+        "nftset.games"
+      ],
+      "exemptions": [
+        "127.0.0.1",
+        "app == 'netify.playstation';"
+      ],
+      "halt_on_match": true
+    },
+    "external": {
+      "enabled": false,
+      "priority": 200,
+      "interface": "*",
+      "criteria": [
+        "${path_state_persistent}/nfa-external.conf"
+      ],
+      "targets": [
+        "log.external"
+      ]
+    },
+    "auto_label": {
+      "enabled": false,
+      "interface": "lan",
+      "criteria": "*",
+      "targets": [
+        "ctlabel.auto"
+      ]
+    },
+    "qos-high": {
+      "enabled": true,
+      "interface": "*",
+      "criteria": "${path_state_persistent}/nfa-qos.d/10-app-qos-high.conf",
+      "targets": [
+        "ctmark_priority_high"
+      ]
+    },
+    "qos-middle": {
+      "enabled": true,
+      "interface": "*",
+      "criteria": "${path_state_persistent}/nfa-qos.d/10-app-qos-middle.conf",
+      "targets": [
+        "ctmark_priority_middle"
+      ]
+    },
+    "qos-low": {
+      "enabled": true,
+      "interface": "*",
+      "criteria": "${path_state_persistent}/nfa-qos.d/10-app-qos-low.conf",
+      "targets": [
+        "ctmark_priority_low"
+      ]
+    },
+    "block": {
+      "enabled": true,
+      "interface": "*",
+      "criteria": "${path_state_persistent}/nfa-block.d/10-app-block.conf",
+      "targets": [
+        "ctmark_block"
+      ]
+    },
+    "content-protection": {
+      "enabled": true,
+      "interface": "*",
+      "criteria": "${path_state_persistent}/nfa-block.d/10-app-content-protection.conf",
+      "targets": [
+        "ctmark_block"
+      ]
+    },
+    "allow": {
+      "enabled": true,
+      "interface": "*",
+      "criteria": "${path_state_persistent}/nfa-block.d/10-app-allow.conf",
+      "targets": [
+        "ctmark_allow"
+      ]
+    }
+  },
+  "exemptions": [
+    "192.168.1.1",
+    "protocol == 'dns';"
+  ]
+}

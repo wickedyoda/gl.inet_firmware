@@ -1,0 +1,119 @@
+#!/bin/sh /etc/rc.common
+
+# shellcheck disable=SC3014
+
+START=99
+
+# Check if hardware info file exists
+if [ ! -f "/proc/gl-hw-info/usb3-bus-dev" ]; then
+    return
+fi
+
+USB_POWER_GPIO="/sys/class/gpio/usb_power/value"
+
+# Force specific bus-device-port to USB2 mode
+# Args: $1=bus, $2=device, $3=port (optional, default is 1)
+force_usb2_single() {
+    local bus="$1"
+    local dev="$2"
+    local port="${3:-1}"
+    local disable_file="/sys/bus/usb/devices/usb${bus}/${bus}-0:${dev}.0/usb${bus}-port${port}/disable"
+
+    if [ -f "$disable_file" ]; then
+        echo 1 > "$disable_file"
+    fi
+}
+
+# Enable USB3 mode for specific bus-device-port
+# Args: $1=bus, $2=device, $3=port (optional, default is 1)
+enable_usb3_single() {
+    local bus="$1"
+    local dev="$2"
+    local port="${3:-1}"
+    local disable_file="/sys/bus/usb/devices/usb${bus}/${bus}-0:${dev}.0/usb${bus}-port${port}/disable"
+
+    if [ -f "$disable_file" ]; then
+        echo 0 > "$disable_file"
+    fi
+}
+
+# Parse a single item, format: bus-device.port or bus-device
+# Args: $1=item string
+# Sets global variables: PARSED_BUS, PARSED_DEV, PARSED_PORT
+parse_item() {
+    local item="$1"
+    local bus_dev_part port_part
+
+    # Split by '.' to get port part
+    port_part="${item#*.}"
+    if [ "$port_part" = "$item" ]; then
+        # No '.' found, use default port 1
+        PARSED_PORT="1"
+        bus_dev_part="$item"
+    else
+        PARSED_PORT="$port_part"
+        bus_dev_part="${item%%.*}"
+    fi
+
+    # Split by '-' to get bus and device
+    PARSED_BUS="${bus_dev_part%%-*}"
+    PARSED_DEV="${bus_dev_part##*-}"
+}
+
+# Process all USB buses
+# Args: $1=action type (force_usb2 or enable_usb3)
+process_all_buses() {
+    local action="$1"
+    local usb3_bus_dev_list
+
+    usb3_bus_dev_list=$(cat /proc/gl-hw-info/usb3-bus-dev)
+
+    # Iterate through comma-separated items
+    local IFS=','
+    for item in $usb3_bus_dev_list; do
+        # Parse the item
+        parse_item "$item"
+
+        # Validate parsed values
+        [ -z "$PARSED_BUS" ] || [ -z "$PARSED_DEV" ] || [ -z "$PARSED_PORT" ] && continue
+
+        case "$action" in
+            force_usb2)
+                force_usb2_single "$PARSED_BUS" "$PARSED_DEV" "$PARSED_PORT"
+                ;;
+            enable_usb3)
+                enable_usb3_single "$PARSED_BUS" "$PARSED_DEV" "$PARSED_PORT"
+                ;;
+        esac
+    done
+
+    # Toggle USB power GPIO when enabling
+    if [ "$action" = "enable_usb3" ] && [ -f "$USB_POWER_GPIO" ]; then
+        (echo 0 > "$USB_POWER_GPIO"; sleep 1; echo 1 > "$USB_POWER_GPIO") &
+    fi
+}
+
+force_usb2() {
+    process_all_buses "force_usb2"
+}
+
+enable_usb3() {
+    process_all_buses "enable_usb3"
+}
+
+start() {
+    if [ "$(uci get glconfig.general.usb3_disable)" = "true" ]; then
+        force_usb2
+    fi
+}
+
+stop() {
+    if [ "$(uci get glconfig.general.usb3_disable)" != "true" ]; then
+        enable_usb3
+    fi
+}
+
+boot() {
+    start
+}
+

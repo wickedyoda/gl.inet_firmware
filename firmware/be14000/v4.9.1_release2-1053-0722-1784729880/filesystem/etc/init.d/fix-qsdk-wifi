@@ -1,0 +1,13 @@
+#!/bin/sh /etc/rc.common
+
+START=99
+
+start() {
+    model=$(cat /proc/gl-hw-info/model)
+
+    case $model in
+    be9300)
+        /usr/bin/fix_qsdk_wifi.sh&
+        ;;
+    esac
+}

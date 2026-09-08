@@ -1,0 +1,10 @@
+Package: gl-sdk4-p2p-daemon
+Version: git-2026.034.25410-f60b04a-1
+Depends: libc
+Source: feeds/glinet/gl-sdk4-p2p-daemon
+SourceName: gl-sdk4-p2p-daemon
+Section: base
+SourceDateEpoch: 1770102210
+Architecture: aarch64_cortex-a53
+Installed-Size: 1422445
+Description:  glinet p2p daemon

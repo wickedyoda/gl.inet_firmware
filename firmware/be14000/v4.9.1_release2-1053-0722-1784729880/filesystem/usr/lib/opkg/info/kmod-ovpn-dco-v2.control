@@ -1,0 +1,13 @@
+Package: kmod-ovpn-dco-v2
+Version: 5.4.281+0.2.20241216-1
+Depends: kernel (=5.4.281-1-df4fa332840f56a774a5d60bd140aaf6), kmod-udptunnel4, kmod-udptunnel6, kmod-crypto-aead, kmod-crypto-gcm, kmod-crypto-chacha20poly1305
+Source: feeds/gl_vpn_extra/ovpn-dco
+SourceName: kmod-ovpn-dco-v2
+License: GPL-2.0-only
+Section: kernel
+SourceDateEpoch: 1774438661
+Maintainer: Jianhui Zhao <zhaojh329@gmail.com>
+Architecture: aarch64_cortex-a53
+Installed-Size: 30846
+Description:  This module enhances the performance of the OpenVPN userspace software
+ by offloading the data channel processing to kernelspace.

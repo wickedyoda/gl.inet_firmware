@@ -1,0 +1,35 @@
+#!/bin/sh
+
+# delete sft1200 tor configuration
+delete_tor_configuration()
+{
+    rm -rf /etc/config/tor
+    rm -rf /etc/tor
+}
+
+delete_tor_firewall_configuration()
+{
+    local enable=$(uci -q get tor.global.enable)
+    [ "$enable" = "1" ] && {
+        uci -q delete firewall.tor_dhcp
+        uci -q delete firewall.tor_dns
+        uci -q delete firewall.tor_tras
+        uci -q delete firewall.tor_socks
+        uci -q delete firewall.tor_allow_http
+        uci -q delete firewall.tor_allow_https
+        uci -q delete firewall.tor_allow_ssh
+        uci -q delete firewall.tor_allow_luci_http
+        uci -q delete firewall.tor_allow_luci_https
+        uci -q delete firewall.tor_allow
+        uci -q delete firewall.dns_int
+        uci -q delete firewall.tcp_int
+    }
+}
+
+model=$(cat /proc/gl-hw-info/model)
+[ "$model" = "sft1200" ] && {
+    delete_tor_firewall_configuration
+    delete_tor_configuration
+}
+
+uci commit

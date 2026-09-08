@@ -1,0 +1,69 @@
+#!/bin/sh
+. /lib/functions.sh
+
+uci set gl_ddns.global.ddns_loglevel=6
+http=$(uci get gl_ddns.ddns.enabled_http)
+ssh=$(uci get gl_ddns.ddns.enabled_ssh)
+https=$(uci get gl_ddns.ddns.enabled_https)
+
+if [ "$http" -eq 1 ]; then
+    uci set gl_ddns.ddns.enabled_http="0"
+    uci set firewall.glservice_rule.enabled="0"
+    
+    uci set gl_ddns.ddns.enabled_https="1"
+    uci set firewall.https_wan="rule"
+    uci set firewall.https_wan.src="wan"
+    uci set firewall.https_wan.proto="tcp"
+    uci set firewall.https_wan.dest_port="443"
+    uci set firewall.https_wan.target="ACCEPT"
+
+    uci commit firewall
+    uci commit gl_ddns
+fi
+
+if [ "$ssh" -eq 1 ]; then
+    uci set gl_ddns.ddns.enabled_ssh="1"
+    uci set firewall.ssh_wan="rule"
+    uci set firewall.ssh_wan.src="wan"
+    uci set firewall.ssh_wan.proto="tcp"
+    uci set firewall.ssh_wan.dest_port="22"
+    uci set firewall.ssh_wan.target="ACCEPT"
+
+    uci commit firewall
+    uci commit gl_ddns
+fi 
+
+if [ "$https" -eq 1 ]; then
+    uci set gl_ddns.ddns.enabled_https="1"
+    uci set firewall.https_wan="rule"
+    uci set firewall.https_wan.src="wan"
+    uci set firewall.https_wan.proto="tcp"
+    uci set firewall.https_wan.dest_port="443"
+    uci set firewall.https_wan.target="ACCEPT"
+
+    uci commit firewall
+    uci commit gl_ddns
+fi
+
+fix_ddns() {
+    uci -q show  ddns.$1 | while read line
+    do
+        ddns=$(echo $line | cut -d '.' -f 2-)
+        uci_cmd=gl_ddns.$ddns
+        eval uci set $uci_cmd
+    done
+
+    if expr "$1" : ".*ddns"; then
+        uci_cmd=gl_ddns.$1.update_url
+        eval uci delete  $uci_cmd
+        uci_cmd=gl_ddns.$1.force_ipversion=1
+        eval uci set $uci_cmd
+    fi
+}
+
+[ -e /etc/config/ddns ] || exit 0
+
+config_load ddns
+config_foreach fix_ddns ddns
+config_foreach fix_ddns service
+uci commit gl_ddns

@@ -1,0 +1,10 @@
+Package: gl-sdk4-cable
+Version: git-2026.183.12484-1f1b424-1
+Depends: libc, gl-sdk4-lua-utils
+Source: feeds/glinet/gl-sdk4-cable
+SourceName: gl-sdk4-cable
+Section: base
+SourceDateEpoch: 1782962884
+Architecture: aarch64_cortex-a53
+Installed-Size: 73411
+Description:  Oui Support for cable

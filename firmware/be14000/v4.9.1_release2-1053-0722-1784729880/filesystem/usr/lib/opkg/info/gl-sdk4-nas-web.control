@@ -1,0 +1,10 @@
+Package: gl-sdk4-nas-web
+Version: git-2026.026.36015-a86a9e1-1
+Depends: libc, jansson4, gl-sdk4-uci, gl-sdk4-utils, libuci20130104, libcurl4, libpthread, libsqlite3-0, blkid, kmod-fs-ext4, kmod-fs-ntfs, kmod-fs-vfat, kmod-fs-exfat, ntfs-3g, ntfs-3g-utils, dosfstools, e2fsprogs
+Source: feeds/glinet/gl-sdk4-nas-web
+SourceName: gl-sdk4-nas-web
+Section: base
+SourceDateEpoch: 1769421615
+Architecture: aarch64_cortex-a53
+Installed-Size: 52006
+Description:  gl sdk4 nas web config

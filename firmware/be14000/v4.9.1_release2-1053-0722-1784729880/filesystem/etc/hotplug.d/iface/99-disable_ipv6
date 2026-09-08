@@ -1,0 +1,20 @@
+if [ "$ACTION" == "ifup" ];then
+        [ "$(uci -q get glipv6.globals.enabled)" != "1" ] && {
+                interfaces=$(ifconfig -a | grep "Link encap" | awk '{print $1}' | grep -v "^lo$")
+                for interface in $interfaces; do
+                        sysctl -w net.ipv6.conf."$interface".disable_ipv6=1
+                done
+        } || {
+                wan_device=$(uci -q get network.wan.device)
+                secondwan_device=$(uci -q get network.secondwan.device)
+                [ "$wan_device" != "" ] && sysctl -w net.ipv6.conf."$wan_device".disable_ipv6=0
+                [ "$secondwan_device" != "" ] && sysctl -w net.ipv6.conf."$secondwan_device".disable_ipv6=0
+        }
+fi
+
+if [ "$ACTION" == "ifdown" ];then
+        [ "$(uci -q get glipv6.globals.enabled)" == "1" -a "$INTERFACE" == "tethering" ] && {
+                device=`ifstatus $INTERFACE | jsonfilter -e @.device`
+                [ -n "$device" -a -e "/sys/class/net/$device" ]  && ip -6 addr flush dev $device
+        }
+fi

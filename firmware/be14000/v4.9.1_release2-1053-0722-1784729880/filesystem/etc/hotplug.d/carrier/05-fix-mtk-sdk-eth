@@ -1,0 +1,44 @@
+[ -d /proc/mtketh ] || exit 0
+
+model=$(cat /proc/gl-hw-info/model)
+
+[ "$model" = "mt6000" ] || exit 0
+
+[ "$ACTION" = "up" ] || exit 0
+[ "$INTERFACE" = "eth1" ] || exit 0
+
+do_fix() {
+    local cnt=0
+
+    rx0=$(cat /sys/class/net/eth1/statistics/rx_packets)
+
+    while [ $cnt -lt 35 ];
+    do
+        let cnt=cnt+1
+
+        sleep 1
+
+        rx1=$(cat /sys/class/net/eth1/statistics/rx_packets)
+
+        [ $rx1 -gt $rx0 ] && {
+            rm /var/run/fix-mtk-sdk-eth.pid
+            return
+        }
+    done
+
+    logger "mtk-sdk eth halted detected, now reset it..."
+    ifconfig eth1 down
+    sleep 1
+    ifconfig eth1 up
+
+    rm /var/run/fix-mtk-sdk-eth.pid
+}
+
+[ -f /var/run/fix-mtk-sdk-eth.pid ] && {
+    pid=$(cat /var/run/fix-mtk-sdk-eth.pid)
+    kill -9 $pid
+}
+
+do_fix &
+
+echo $! > /var/run/fix-mtk-sdk-eth.pid

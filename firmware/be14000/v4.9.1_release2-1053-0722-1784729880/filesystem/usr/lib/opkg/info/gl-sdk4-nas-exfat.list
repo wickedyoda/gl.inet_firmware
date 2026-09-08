@@ -1,0 +1,4 @@
+/usr/bin/fsck.exfat
+/usr/bin/mkfs.exfat
+/usr/lib/libexfat.so
+/usr/lib/gl/libexfat.so

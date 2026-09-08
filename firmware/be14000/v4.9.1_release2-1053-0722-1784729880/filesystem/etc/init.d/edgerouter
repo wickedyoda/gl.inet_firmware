@@ -1,0 +1,36 @@
+#!/bin/sh /etc/rc.common
+
+START=99
+STOP=1
+USE_PROCD=1
+INTERFACE=wan
+
+. /lib/functions/drop-in-function.sh
+
+start_service() {
+    local enabled=`uci -q get edgerouter.global.enabled`
+    local netmode=`uci -q get glconfig.general.mode`
+    if [ "$enabled" != "1" -o "$netmode" != "router" ];then
+            return
+    fi
+
+    setup_drop_in_interface
+    setup_dhcp_for_drop_in
+    /etc/edgerouter.fw create
+    sync
+}
+
+
+stop_service() {
+    remove_dhcp_for_drop_in
+    remove_drop_in_interface
+    /etc/edgerouter.fw remove
+    sync
+}
+
+shutdown() {
+    remove_dhcp_for_drop_in "shutdown"
+    remove_drop_in_interface "shutdown"
+    /etc/edgerouter.fw "shutdown"
+    return 0
+}

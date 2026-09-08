@@ -1,0 +1,87 @@
+#!/bin/sh
+BARK_IPK_PATH=/etc/bark-router-client.ipk
+OEM="glinet"
+
+flush_bark_firewall()
+{
+        iptables -w -D FORWARD -p all -i br-lan -j RouterLimits 2>/dev/null
+        iptables -w -F RouterLimits 2>/dev/null
+        iptables -w -X RouterLimits 2>/dev/null
+
+        iptables -w -D FORWARD -p all -i br-lan -d 198.51.100.34 -j RouterLimitsReject 2>/dev/null
+        iptables -w -F RouterLimitsReject 2>/dev/null
+        iptables -w -X RouterLimitsReject 2>/dev/null
+
+        iptables -w -t nat -D PREROUTING -p all -i br-lan -j RouterLimits 2>/dev/null
+        iptables -w -t nat -F RouterLimits 2>/dev/null
+        iptables -w -t nat -X RouterLimits 2>/dev/null
+
+        iptables -w -t nat -D PREROUTING -p all -i br-lan -d 198.51.100.34 -j RouterLimitsReject 2>/dev/null
+        iptables -w -t nat -F RouterLimitsReject 2>/dev/null
+        iptables -w -t nat -X RouterLimitsReject 2>/dev/null
+
+        ip6tables -w -D FORWARD -i br-lan -j RouterLimits 2>/dev/null
+        ip6tables -w -F RouterLimits 2>/dev/null
+        ip6tables -w -X RouterLimits 2>/dev/null
+
+        ip6tables -w -D FORWARD -i br-lan -d 2001:db8:102:304:506:708:90a:b0c -j RouterLimitsReject 2>/dev/null
+        ip6tables -w -F RouterLimitsReject 2>/dev/null
+        ip6tables -w -X RouterLimitsReject 2>/dev/null
+
+        ip6tables -w -t nat -D PREROUTING -i br-lan -j RouterLimits 2>/dev/null
+        ip6tables -w -t nat -F RouterLimits 2>/dev/null
+        ip6tables -w -t nat -X RouterLimits 2>/dev/null
+
+        ip6tables -w -t nat -D PREROUTING -i br-lan -d 2001:db8:102:304:506:708:90a:b0c -j RouterLimitsReject 2>/dev/null
+        ip6tables -w -t nat -F RouterLimitsReject 2>/dev/null
+        ip6tables -w -t nat -X RouterLimitsReject 2>/dev/null
+}
+
+count=1
+while [ $count -le 5 ]
+do
+        bark_installed=`/bin/opkg list-installed | grep bark-router-client`
+        if [ "$bark_installed" = "" ];then
+                sleep 10
+                if [ -f "$BARK_IPK_PATH" ]; then
+                        [ -f "/etc/config/TRL" ] && [ -n "$(uci -q get TRL.TRL.oem)" ] && [ -n "$(uci -q get TRL.TRL.modelNum)" ] && mv /etc/config/TRL /etc/config/TRL_back
+                        /bin/opkg install "$BARK_IPK_PATH" > /dev/null
+                fi
+                uci set TRL.TRL.enable=0
+                uci set TRL.TRL.oem="$OEM"
+
+                sed -i '/start_service() {/a\
+                enable=$(uci -q get TRL.TRL.enable)\
+                if [ "$enable" = "0" ]; then\
+                        exit\
+                fi
+                ' /etc/init.d/trl-client
+
+                model=$(uci -q get system.@system[0].hostname | sed 's/GL-//g')
+                if [ -n "$model" ]; then
+                        uci set TRL.TRL.modelNum="$model"
+                fi
+                uci commit TRL
+                sync
+        else
+                break
+        fi
+        count=$(($count+1))
+done
+
+if [ -n "$bark_installed" ];then
+	[ -f "/etc/config/TRL_back" ] && mv /etc/config/TRL_back /etc/config/TRL
+        enable=$(uci -q get TRL.TRL.enable)
+        if [ "$enable" = "1" ]; then
+                /etc/init.d/trl-client stop
+                /etc/init.d/trl-client start
+        else
+                /etc/init.d/trl-client stop
+                flush_bark_firewall
+                uci set TRL.TRL.status="connecting"
+                uci commit TRL 
+                sync
+        fi
+
+fi
+

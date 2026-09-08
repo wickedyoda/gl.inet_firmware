@@ -1,0 +1,10 @@
+Package: gl-sdk4-local-access
+Version: git-2026.078.07200-fa95d1b-1
+Depends: libc
+Source: feeds/glinet/gl-sdk4-local-access
+SourceName: gl-sdk4-local-access
+Section: base
+SourceDateEpoch: 1773885600
+Architecture: aarch64_cortex-a53
+Installed-Size: 4261
+Description:  Support for local-access config

@@ -1,0 +1,10 @@
+Package: gl-sdk4-guest
+Version: git-2026.089.05146-1309040-1
+Depends: libc
+Source: feeds/glinet/gl-sdk4-guest
+SourceName: gl-sdk4-guest
+Section: base
+SourceDateEpoch: 1774833946
+Architecture: aarch64_cortex-a53
+Installed-Size: 1021
+Description:  guest network support

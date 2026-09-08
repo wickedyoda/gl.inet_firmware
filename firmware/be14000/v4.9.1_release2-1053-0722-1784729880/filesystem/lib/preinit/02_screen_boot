@@ -1,0 +1,5 @@
+do_screen_boot() {
+        screen_boot &
+}
+
+boot_hook_add preinit_main do_screen_boot

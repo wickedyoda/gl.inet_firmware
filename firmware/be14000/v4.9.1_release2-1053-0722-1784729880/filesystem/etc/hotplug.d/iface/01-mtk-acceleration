@@ -1,0 +1,25 @@
+#!/bin/sh
+
+[ ! -f "/etc/init.d/shortcut-fe" ] && exit
+[ ! -f "/etc/config/mtkhnat" ] && exit
+
+enable=`uci -q get mtkhnat.global.enable`
+actype=`uci -q get mtkhnat.global.actype`
+[ "$enable" != "1" ] && exit
+[ "$actype" != "" ] && [ "$actype" != "0" ] && exit
+
+acceleration_switch()
+{
+    if [ "$INTERFACE" = "wan" ];then
+        [ "$ACTION" = "ifup" ] && {
+            [ -f "/etc/init.d/shortcut-fe" ] && /etc/init.d/shortcut-fe stop
+            echo '1' > /sys/kernel/debug/hnat/hook_toggle
+        }
+        [ "$ACTION" = "ifdown" ] && {
+            echo '0' > /sys/kernel/debug/hnat/hook_toggle
+            [ -f "/etc/init.d/shortcut-fe" ] && /etc/init.d/shortcut-fe start
+        }
+    fi
+}
+
+acceleration_switch

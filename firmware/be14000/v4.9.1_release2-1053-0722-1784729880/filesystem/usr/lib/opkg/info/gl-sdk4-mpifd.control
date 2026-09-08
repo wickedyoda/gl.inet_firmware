@@ -1,0 +1,10 @@
+Package: gl-sdk4-mpifd
+Version: git-2026.009.45503-3e0f6df-1
+Depends: libc, lua-eco-log, lua-eco-ubus, lua-eco-netlink, lua-eco-socket
+Source: feeds/glinet/gl-sdk4-mpifd
+SourceName: gl-sdk4-mpifd
+Section: base
+SourceDateEpoch: 1767962303
+Architecture: aarch64_cortex-a53
+Installed-Size: 7621
+Description:  GL sdk4 mptcp daemon

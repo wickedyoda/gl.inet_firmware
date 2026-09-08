@@ -1,0 +1,506 @@
+#!/bin/sh
+
+. /lib/functions.sh
+. /lib/functions/vpn_func/route_policy_func.sh
+
+use_fw4='0'
+DNS_TABLE="inet dns_table"
+DNS_TMP_DIR="/tmp/run/dns_tmp_dir"
+mkdir -p ${DNS_TMP_DIR}
+DNS_TABLE_PATH="${DNS_TMP_DIR}/dns_table.nft"
+FILE_DNS_RAW_RULE="${DNS_TMP_DIR}/dns_raw_table"
+
+FILE_VPN_DNS_RULE="/tmp/run/vpn_tmp_dir/vpn_dns_rule"
+
+FILE_AW_DNS_RULE="/tmp/run/aw_tmp_dir/aw_dns_rule"
+
+[ -n "$(which fw4)" ] && use_fw4='1'
+
+NFT_DNS_INPUT_FILE="${DNS_TMP_DIR}/dns_accept.nft"
+
+dns_intercept=$(uci -q get gl-dns-v2.@dns[0].force_dns)
+if [ "$dns_intercept" = "0" -o -z "$dns_intercept" ]; then
+    local_type="-m addrtype --dst-type LOCAL"
+    local_type_fw4="fib daddr type local"
+    echo "0" > /proc/dns_mark/intercept_forward 2>/dev/null
+else
+    echo "1" > /proc/dns_mark/intercept_forward 2>/dev/null
+fi
+
+adg_handle_dns='0'
+[ "$(uci -q get adguardhome.config.enabled)" = "1" ] && [ "$(uci -q get adguardhome.config.dns_enabled)" = "1" ] && adg_handle_dns='1'
+
+vpn_enable='0'
+[ "$(uci -q get route_policy.global.enabled)" = "1" ] && vpn_enable='1'
+
+nonevpn_mark=0x8000
+vpn_mark_mask=0xf000
+
+fw3_set_dns_raw_rule () {
+    echo "$1" >>${FILE_DNS_RAW_RULE}
+}
+
+# 默认downstream接口列表
+default_downstream_interfaces="br-lan br-guest ovpnserver wgserver"
+
+fw4_add_statement() {
+    local content="$1"
+    echo -e "${content}\n" >> ${DNS_TABLE_PATH}
+}
+
+get_source_device_list() {
+    get_if_s_l3_device() {
+        local if_name="$1";shift
+        local devices="$(ubus call network.interface.${if_name} status 2>/dev/null | grep '"l3_device' | awk -F '"' '{print $4}')"
+        echo "${devices}"
+    }
+
+    if_is_valid_source() {
+        local if_name="$1"
+        local ret="$(ubus call network.interface.${if_name} status 2>/dev/null)"
+        if [ -n "${ret}" ] ;then
+            return 1
+        else
+            return 0
+        fi
+    }
+
+    get_vpn_source_if_list() {
+        local list='ovpnserver wgserver lan guest'
+        add_if_to_list(){
+            local new_if="$1"
+            case " $list " in
+                *" $new_if "*)
+                return 0 ;;
+            esac
+            if_is_valid_source "$new_if"
+            [ $? -eq 1 ] && {
+                list="${list} ${new_if}"
+            }
+        }
+        local extra_list="$(uci -q get route_policy.global.append_source_if)"
+        for per_if in ${extra_list} ;do
+            add_if_to_list "${per_if}"
+        done
+
+        echo "$list"
+    }
+
+    local device_list=''
+    local if_list="$(get_vpn_source_if_list)"
+    for per_if in ${if_list} ;do
+       local device="$(get_if_s_l3_device "${per_if}")"
+       [ -n "${device}" ] && {
+           case " $device_list " in
+                *" $device "*)
+                continue ;;
+           esac
+           device_list="${device_list:+$device_list }$device"
+       }
+    done
+    echo "$device_list"
+}
+
+# 获取downstream接口列表
+get_downstream_interfaces() {
+    local interfaces="$(get_source_device_list)"
+    [ -z "${interfaces}" ] && interfaces="$default_downstream_interfaces"
+    local edge_router_enabled="$(uci -q get edgerouter.global.enabled)"
+
+    # 如果旁路由模式开启，将wan添加到downstream接口列表
+    if [ "$edge_router_enabled" = "1" ]; then
+        . /lib/functions/gl_util.sh
+        local wan=$(get_wan)
+        interfaces="$interfaces $wan"
+    fi
+    echo "$interfaces"
+}
+
+# 生成所有downstream接口到dns_dispatcher的规则
+generate_interface_rules() {
+    local interfaces=$(get_downstream_interfaces)
+    local rules=""
+    local if_list=""
+
+    for interface in $interfaces; do
+        local fw4_interface="${interface//+/*}"
+        if_list="${if_list}${if_list:+, }${fw4_interface}"
+        # 为每个接口生成TCP和UDP的DNS转发规则
+        rules="${rules}-A PREROUTING -p tcp -m tcp --dport 53 -i $interface -j dns_dispatcher
+-A PREROUTING -p udp -m udp --dport 53 -i $interface -j dns_dispatcher
+"
+    done
+
+    . /etc/os-release
+    local major=$(echo "$VERSION" | awk -F. '{print $1}')
+    case $major in
+        '22')
+            for ifname in ${if_list} ;do
+                fw4_add_statement "add rule ${DNS_TABLE} PREROUTING iifname { ${ifname} } tcp dport 53 jump dns_dispatcher"
+                fw4_add_statement "add rule ${DNS_TABLE} PREROUTING iifname { ${ifname} } udp dport 53 jump dns_dispatcher"
+                echo "insert rule inet fw4 input iifname { ${ifname} } jump dns_accept" >>$NFT_DNS_INPUT_FILE
+            done
+        ;;
+        *)
+            fw4_add_statement "add rule ${DNS_TABLE} PREROUTING iifname { ${if_list} } tcp dport 53 jump dns_dispatcher"
+            fw4_add_statement "add rule ${DNS_TABLE} PREROUTING iifname { ${if_list} } udp dport 53 jump dns_dispatcher"
+            echo "insert rule inet fw4 input iifname { ${if_list} } jump dns_accept" >>$NFT_DNS_INPUT_FILE
+        ;;
+    esac
+
+    echo "$rules"
+}
+
+# 写入aw的dns规则
+generate_aw_dns_rules() {
+    local rules=""
+    local chain option target
+
+    [ -f "$FILE_AW_DNS_RULE" ] && {
+
+        while read -r line; do
+            table=''
+            chain=''
+            option=''
+            target=''
+            eval "$line"
+            [ -z "${chain}" -o -z "${option}" -o -z "${target}" ] && continue
+
+            if [ "${use_fw4}" = '1' ] ;then
+                if [ "$chain" = "dns_accept" ] ;then
+                    echo "add rule inet fw4 ${chain} ${option} ${target}" >>$NFT_DNS_INPUT_FILE
+                else
+                    fw4_add_statement "add rule ${DNS_TABLE} ${chain} ${option} ${target}"
+                fi
+            else
+                rules="${rules}-A ${chain} ${option} ${target}
+"
+            fi
+        done < "${FILE_AW_DNS_RULE}"
+    }
+    echo "$rules"
+}
+
+# adguardhome处理DNS规则
+generate_adguard_rules() {
+    local rules=""
+    local append=''
+    local fw4_option=''
+
+    local override_vpn_dns="$(uci -q get gl-dns-v2.@dns[0].override_vpn)"
+    [ "${override_vpn_dns}" != '1' ] && {
+        append="${append} -m mark --mark $nonevpn_mark/$vpn_mark_mask"
+        fw4_option="${fw4_option} meta mark and $vpn_mark_mask == $nonevpn_mark"
+    }
+
+    [ "$adg_handle_dns" = "1" ] && {
+        fw4_add_statement "add rule ${DNS_TABLE} adg_redirect meta l4proto { tcp, udp } ${local_type_fw4} ${fw4_option} redirect to :3053"
+        [ "$vpn_enable" = "1" ] && {
+            echo "add rule inet fw4 dns_accept tcp dport 3053 meta mark and 0x0000f000 != 0x0 accept" >>$NFT_DNS_INPUT_FILE
+            echo "add rule inet fw4 dns_accept udp dport 3053 meta mark and 0x0000f000 != 0x0 accept" >>$NFT_DNS_INPUT_FILE
+        } || {
+            echo "add rule inet fw4 dns_accept tcp dport 3053 accept" >>$NFT_DNS_INPUT_FILE
+            echo "add rule inet fw4 dns_accept udp dport 3053 accept" >>$NFT_DNS_INPUT_FILE
+        }
+
+        rules="-A adg_redirect -p tcp $local_type $append -j REDIRECT --to-ports 3053
+-A adg_redirect -p udp $local_type $append -j REDIRECT --to-ports 3053"
+    }
+    echo "$rules"
+}
+
+# tcp dns分流：非vpn dnsmasq实例，获取其服务器端口，用于转发给vpn dnsmasq实例; dns页面配置后需调用
+# fw4: chain="policy_output";option="tcp dport { 3053 } meta mark and 0xf000 == 0xa000 skuid == dnsmasq";target="redirect to :4153"
+# fw3: table="nat";chain="policy_output";option="-p tcp -m mark --mark 0x1000/0xf000 -m owner --uid-owner dnsmasq -m tcp --dport 3053";target="-j REDIRECT --to-ports 2153"
+update_vpn_dns_ports() {
+    local upstream_ports="53"
+    local server_ports
+    server_ports=$(uci -q get dhcp.@dnsmasq[0].server | grep -o '#[0-9]*' | sed 's/#//' | sort -u | tr '\n' ' ')
+    [ -n "$server_ports" ] && upstream_ports="$server_ports"
+
+    [ -f "${FILE_VPN_DNS_RULE}" ] || return
+    local new_rules=""
+
+    local upstream_ports_csv=""
+    for p in $upstream_ports; do
+        upstream_ports_csv="${upstream_ports_csv:+${upstream_ports_csv}, }${p}"
+    done
+
+    while read -r line; do
+        if [ "${use_fw4}" = '1' ] ;then
+            if echo "$line" | grep -q 'chain="policy_output".*option="tcp dport'; then
+                echo "$line" | sed "s/dport[[:space:]]*{[^}]*}/dport { ${upstream_ports_csv} }/"
+            else
+                echo "$line"
+            fi
+        else
+            if echo "$line" | grep -q 'chain="policy_output".*-p tcp'; then
+                for port in $upstream_ports; do
+                    echo "$line" | sed "s/--dport [0-9]\+/--dport ${port}/"
+                done
+            else
+                echo "$line"
+            fi
+        fi
+    done < "${FILE_VPN_DNS_RULE}" > "${FILE_VPN_DNS_RULE}.tmp"
+    mv "${FILE_VPN_DNS_RULE}.tmp" "${FILE_VPN_DNS_RULE}"
+}
+
+# 策略路由规则，转发到vpn实例的dnsmasq
+generate_policy_rules() {
+    local rules=""
+    local policy_dns=$(uci -q get route_policy.global.instance_on)
+    local aw_override=0
+    local aw_use_exit="$(uci -q get mptun.global.use_exit)"
+    local aw_enable="$(uci -q get mptun.global.enable)"
+    [ "$aw_use_exit" = 1 -a "$aw_enable" = 1 ] && aw_override=1
+
+    local chain option target
+    [ "$policy_dns" = "1" -a "$aw_override" = 0 ] && {
+        update_vpn_dns_ports
+
+        while read -r line; do
+            table=''
+            chain=''
+            option=''
+            target=''
+            eval "$line"
+            [ -z "${chain}" -o -z "${option}" -o -z "${target}" ] && continue
+
+            if [ "${use_fw4}" = '1' ] ;then
+                [ "${chain}" = "policy_redirect" -o "${chain}" = "prerouting_vpn_deal_conn_zone" ] && option="${option} $local_type_fw4"
+                if [ "$chain" = "dns_accept" ] ;then
+                    echo "add rule inet fw4 ${chain} ${option} ${target}" >>$NFT_DNS_INPUT_FILE
+                else
+                    fw4_add_statement "add rule ${DNS_TABLE} ${chain} ${option} ${target}"
+                fi
+            else
+                [ "${chain}" = "policy_redirect" -o "${chain}" = "pre_dns_deal_conn_zone" ] && option="${option} $local_type"
+                if [ "$table" = "raw" ] ;then
+                    fw3_set_dns_raw_rule "-A ${chain} ${option} ${target}"
+                else
+                    rules="${rules}-A ${chain} ${option} ${target}
+"
+                fi
+            fi
+        done < "${FILE_VPN_DNS_RULE}"
+    }
+
+    if [ "${use_fw4}" = '1' ] ;then
+        :
+    else
+        rules="${rules}-A OUTPUT -p tcp -j policy_output
+-A OUTPUT -p udp -j policy_output
+"
+    fi
+
+    echo "$rules"
+}
+
+# DNS拦截规则（Override DNS Settings of All Clients），已使用REDIRECT替代DNAT
+generate_intercept_rules() {
+    local rules=""
+
+    [ "$dns_intercept" = "1" ] && {
+        fw4_add_statement "add rule ${DNS_TABLE} dns_redirect meta l4proto { tcp, udp } redirect to :53"
+        rules="-A dns_redirect -p tcp -j REDIRECT --to-ports 53
+-A dns_redirect -p udp -j REDIRECT --to-ports 53"
+    }
+    echo "$rules"
+}
+
+fw4_prepare()
+{
+cat > ${DNS_TABLE_PATH} << EOF
+table ${DNS_TABLE} {
+	chain dns_redirect {
+
+	}
+	chain adg_redirect {
+
+	}
+	chain aw_redirect {
+
+	}
+	chain policy_redirect {
+
+	}
+	chain dns_dispatcher {
+		jump aw_redirect
+		jump adg_redirect
+		jump policy_redirect
+		jump dns_redirect
+	}
+	chain PREROUTING {
+		type nat hook prerouting priority dstnat;
+	}
+	chain prerouting_vpn_deal_conn_zone {
+
+	}
+	chain PREROUTING_deal_conn_zone {
+		type filter hook prerouting priority raw;
+	}
+	chain output_vpn_deal_conn_zone {
+
+	}
+	chain OUTPUT_deal_conn_zone {
+		type filter hook output priority -350;
+	}
+	chain policy_output {
+		type nat hook output priority 0;
+	}
+}
+EOF
+
+    echo "add chain inet fw4 dns_accept" >$NFT_DNS_INPUT_FILE
+
+    [ "$vpn_enable" = "1" ] && {
+    echo "add rule inet fw4 dns_accept tcp dport 53 meta mark and 0x0000f000 == 0x00008000 accept" >>$NFT_DNS_INPUT_FILE
+    echo "add rule inet fw4 dns_accept udp dport 53 meta mark and 0x0000f000 == 0x00008000 accept" >>$NFT_DNS_INPUT_FILE
+    } || {
+    echo "add rule inet fw4 dns_accept tcp dport 53 accept" >>$NFT_DNS_INPUT_FILE
+    echo "add rule inet fw4 dns_accept udp dport 53 accept" >>$NFT_DNS_INPUT_FILE
+    }
+}
+fw3_dns_raw_table_init() {
+    echo "
+*raw
+:out_dns_deal_conn_zone - [0:0]
+:pre_dns_deal_conn_zone - [0:0]
+" >${FILE_DNS_RAW_RULE}
+}
+
+fw3_dns_raw_table_apply() {
+    fw3_set_dns_raw_rule "COMMIT"
+    iptables-restore -w 5 -n <${FILE_DNS_RAW_RULE}
+
+    iptables -w 5 -t raw -D PREROUTING -p udp --dport 53 -j pre_dns_deal_conn_zone 2>/dev/null
+    iptables -w 5 -t raw -D OUTPUT -p udp -j out_dns_deal_conn_zone 2>/dev/null
+
+    [ "${adg_handle_dns}" != "1" ] && {
+        iptables -w 5 -t raw -C PREROUTING -p udp --dport 53 -j pre_dns_deal_conn_zone 2>/dev/null || \
+            iptables -w 5 -t raw -A PREROUTING -p udp --dport 53 -j pre_dns_deal_conn_zone
+
+        iptables -w 5 -t raw -C OUTPUT -p udp -j out_dns_deal_conn_zone 2>/dev/null || \
+            iptables -w 5 -t raw -A OUTPUT -p udp -j out_dns_deal_conn_zone
+    }
+
+    [ "$v6_enabled" = '1' ] && {
+        ip6tables-restore -w 5 -n <${FILE_DNS_RAW_RULE}
+
+        ip6tables -w 5 -t raw -D PREROUTING -p udp --dport 53 -j pre_dns_deal_conn_zone 2>/dev/null
+        ip6tables -w 5 -t raw -D OUTPUT -p udp -j out_dns_deal_conn_zone 2>/dev/null
+
+        [ "${adg_handle_dns}" != "1" ] && {
+
+            ip6tables -w 5 -t raw -C PREROUTING -p udp --dport 53 -j pre_dns_deal_conn_zone 2>/dev/null || \
+                ip6tables -w 5 -t raw -A PREROUTING -p udp --dport 53 -j pre_dns_deal_conn_zone
+
+            ip6tables -w 5 -t raw -C OUTPUT -p udp -j out_dns_deal_conn_zone 2>/dev/null || \
+                ip6tables -w 5 -t raw -A OUTPUT -p udp -j out_dns_deal_conn_zone
+        }
+    }
+}
+
+setup_rules() {
+
+    fw4_prepare
+
+    fw3_dns_raw_table_init
+
+    local v6_enabled="$(uci -q get glipv6.globals.enabled)"
+    local aw_dns_rules=$(generate_aw_dns_rules)
+    local interface_rules=$(generate_interface_rules)
+    local policy_rules=$(generate_policy_rules)
+    local adg_rules=$(generate_adguard_rules)
+    local intercept_rules=$(generate_intercept_rules)
+
+    # 删除所有 DNS 转发规则
+
+    clean_dns_rules() {
+        local cmd="$1"
+
+        timeout 5 sh -c "
+            # 使用 iptables-save 找出所有包含 dns_dispatcher 的规则
+            rules=\$($cmd-save -t nat | grep '^-A PREROUTING.*--dport 53.*-j dns_dispatcher' | sed 's/^-A//')
+            if [ -n \"\$rules\" ]; then
+                echo \"\$rules\" | while read -r rule; do
+                    $cmd -w 5 -t nat -D \$rule 2>/dev/null
+                done
+            fi
+
+            rules=\$($cmd-save -t nat | grep '^-A OUTPUT.*-j policy_output' | sed 's/^-A//')
+            if [ -n \"\$rules\" ]; then
+                echo \"\$rules\" | while read -r rule; do
+                    $cmd -w 5 -t nat -D \$rule 2>/dev/null
+                done
+            fi
+        "
+    }
+
+    if [ "${use_fw4}" = '1' ] ;then
+        [ "${adg_handle_dns}" != '1' ] && {
+            fw4_add_statement "add rule ${DNS_TABLE} PREROUTING_deal_conn_zone udp dport 53 jump prerouting_vpn_deal_conn_zone"
+            fw4_add_statement "add rule ${DNS_TABLE} OUTPUT_deal_conn_zone meta l4proto udp jump output_vpn_deal_conn_zone"
+        }
+
+        nft delete table ${DNS_TABLE}
+    fi
+
+    clean_dns_rules "iptables"
+    [ "$v6_enabled" = '1' ] && clean_dns_rules "ip6tables"
+
+    if [ "${use_fw4}" = '1' ] ;then
+        nft -f ${DNS_TABLE_PATH}
+        nft -f ${NFT_DNS_INPUT_FILE}
+    else
+
+        fw3_dns_raw_table_apply
+
+        iptables-restore -w 5 -n <<-EOF
+*nat
+:dns_dispatcher - [0:0]
+:aw_redirect - [0:0]
+:dns_redirect - [0:0]
+:adg_redirect - [0:0]
+:policy_redirect - [0:0]
+:policy_output - [0:0]
+$interface_rules
+-A dns_dispatcher -j aw_redirect
+-A dns_dispatcher -j adg_redirect
+-A dns_dispatcher -j policy_redirect
+-A dns_dispatcher -j dns_redirect
+$aw_dns_rules
+$adg_rules
+$policy_rules
+$intercept_rules
+COMMIT
+EOF
+
+        [ "$v6_enabled" = '1' ] && {
+            ip6tables-restore -w 5 -n <<-EOF
+*nat
+:dns_dispatcher - [0:0]
+:aw_redirect - [0:0]
+:policy_output - [0:0]
+:dns_redirect - [0:0]
+:adg_redirect - [0:0]
+:policy_redirect - [0:0]
+$interface_rules
+-A dns_dispatcher -j aw_redirect
+-A dns_dispatcher -j adg_redirect
+-A dns_dispatcher -j policy_redirect
+-A dns_dispatcher -j dns_redirect
+$aw_dns_rules
+$adg_rules
+$policy_rules
+$intercept_rules
+COMMIT
+EOF
+        }
+    fi
+}
+
+setup_rules
+clean_conntrack >/dev/null 2>&1
+exit 0

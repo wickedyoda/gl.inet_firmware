@@ -1,0 +1,110 @@
+#!/bin/sh /etc/rc.common
+
+USE_PROCD=1
+
+# Stubby executable and config paths
+STUBBY_BIN="/usr/sbin/stubby"
+BASE_CONFIG="/var/etc/stubby/stubby.yml"
+VPN_CONFIG_DIR="/var/etc/stubby-vpn"
+
+# Get port number based on VPN type and instance number
+get_port() {
+    local via="$1"
+    local instance_num="$2"
+    
+    # Check if instance number is valid (1-5)
+    if [ "$instance_num" -lt 1 ] || [ "$instance_num" -gt 5 ]; then
+        return 1
+    fi
+    
+    # WireGuard clients: 2154, 2254, 2354, 2454, 2554
+    if echo "$via" | grep -q "^wgclient"; then
+        echo "$((2054 + instance_num * 100))"
+        return 0
+    fi
+    
+    # OpenVPN clients: 4154, 4254, 4354, 4454, 4554
+    if echo "$via" | grep -q "^ovpnclient"; then
+        echo "$((4054 + instance_num * 100))"
+        return 0
+    fi
+    
+    return 1
+}
+
+# Get instance number from name (e.g., wgclient1 -> 1)
+get_instance_num() {
+    local instance_name="$1"
+    echo "$instance_name" | grep -o '[0-9]\+'
+}
+
+# Start a stubby instance for a VPN client
+start_vpn_instance() {
+    local via="$1"
+    local instance_num=$(get_instance_num "$via")
+    [ -z "$instance_num" ] && instance_num=1
+    
+    # Check if process is already running
+    local config_file="$VPN_CONFIG_DIR/stubby-$via.yml"
+    if pgrep -f "$STUBBY_BIN -C $config_file" >/dev/null; then
+        return 0
+    fi
+    
+    # Create config directory if not exists
+    mkdir -p "$VPN_CONFIG_DIR"
+    
+    # Set config file path and port
+    local port=$(get_port "$via" "$instance_num")
+    if [ $? -ne 0 ]; then
+        echo "Invalid instance number or VPN type: $via ($instance_num)"
+        return 1
+    fi
+    
+    # Copy base config and update port
+    cp "$BASE_CONFIG" "$config_file"
+    sed -i "s/5453/$port/g" "$config_file"
+    
+    # Start stubby process with correct group
+    procd_open_instance "$via"
+    procd_set_param command "$STUBBY_BIN" -C "$config_file"
+    procd_set_param group $via
+    procd_close_instance
+}
+
+# Handle each rule in route_policy
+handle_rule() {
+    local config="$1"
+    local enabled
+    local via
+    
+    config_get enabled "$config" enabled "0"
+    [ "$enabled" = "1" ] || return 0
+    
+    config_get via "$config" via ""
+    [ -n "$via" ] || return 0
+    
+    # Add via to the list if not already present
+    if ! echo "$started_instances" | grep -q "^$via$"; then
+        started_instances="$started_instances $via"
+        start_vpn_instance "$via"
+    fi
+}
+
+start_vpn_s() {
+    local override_vpn
+    override_vpn=$(uci -q get gl-dns.@dns[0].override_vpn)
+    [ "$override_vpn" = "1" ] || return 0
+
+    # Initialize empty list of started instances
+    started_instances=""
+    
+    # Load route_policy configuration
+    config_load route_policy
+    
+    # Process each rule
+    config_foreach handle_rule rule
+}
+
+start_service() {
+    start_vpn_s
+}

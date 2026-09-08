@@ -1,0 +1,13 @@
+Package: mmc-utils
+Version: 2019-10-10-73d6c59a-2
+Depends: libc
+Source: feeds/gl_feed_common/mmc-utils
+SourceName: mmc-utils
+License: GPL-2.0
+Section: utils
+SourceDateEpoch: 1661843258
+Maintainer: Michael Heimpold <mhei@heimpold.de>
+Architecture: aarch64_cortex-a53
+Installed-Size: 34266
+Description:  This package contains the userspace mmc utils, the userspace
+ counterpart to the Linux MMC/SD subsystem.
