@@ -1,0 +1,4 @@
+#Used to configure the whitelist function. The configuration file cannot be upgraded.
+#Segments with the "quec" field do not require customer changes, customers change the "cust" field
+#Requirements: 1. Write in fixed format 2. Start with "/data/" or "/etc/" 3. Only "/data/" or "/etc/" can be configured.
+
