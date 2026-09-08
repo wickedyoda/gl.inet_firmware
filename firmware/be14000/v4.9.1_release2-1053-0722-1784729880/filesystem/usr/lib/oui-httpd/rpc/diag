@@ -1,0 +1,127 @@
+--[[
+    @object-name: diag
+    @object-desc: network diagnosis
+--]]
+
+local M = {}
+
+local function isValidDomain(domain)
+    if not domain then
+        return false
+    end
+
+    -- Remove leading and trailing spaces
+    domain = domain:gsub("^%s+", ""):gsub("%s+$", "")
+    local len = #domain
+    if len < 1 or len > 253 then
+        return false
+    end
+
+    -- Check for illegal characters (only letters, numbers, hyphens, and dots)
+    if domain:find("[^a-zA-Z0-9%-%.]") then
+        return false
+    end
+
+    -- Check for leading/trailing dots and consecutive dots
+    if domain:sub(1, 1) == "." or domain:sub(-1) == "." or domain:find("%.%.") then
+        return false
+    end
+
+    -- Split labels and validate
+    local labels = {}
+    for label in domain:gmatch("([^%.]+)") do
+        table.insert(labels, label)
+    end
+    if #labels < 2 then
+        return false  -- At least two labels are required (e.g., example.com)
+    end
+
+    for _, label in ipairs(labels) do
+        local label_len = #label
+        -- Check label length
+        if label_len < 1 or label_len > 63 then
+            return false
+        end
+        -- Check hyphen position
+        if label:find("^%-") or label:find("%-$") then
+            return false
+        end
+        -- Check valid character combination
+        if not label:find("^[a-zA-Z0-9][a-zA-Z0-9-]*$") then
+            return false
+        end
+    end
+
+    return true
+end
+
+local function isValidIPv4(ip)
+    local pattern = "^%d+%.%d+%.%d+%.%d+$"  -- Match four numbers and three dots
+    if not ip:match(pattern) then
+        return false
+    end
+
+    -- Split each part and check range
+    for octet in ip:gmatch("%d+") do
+        local num = tonumber(octet)
+        if num < 0 or num > 255 then
+            return false
+        end
+    end
+    return true
+end
+
+
+--[[
+    @method-type: call
+    @method-name: ping
+    @method-desc: test network connection
+
+    @in string addr target IP address
+
+    @out string ping_result results of the ping command
+
+    @in-example: {"jsonrpc":"2.0","id":1,"method":"call","params":["","diag","ping",{"addr":"192.168.8.1"}]}
+    @out-example: {"jsonrpc": "2.0", "id": 1, "result": {"ping_result":"PING 192.168.8.1 (192.168.8.1): 56 data bytes\n64 bytes from 192.168.8.1: seq=0 ttl=64 time=0.213 ms\n64 bytes from 192.168.8.1: seq=1 ttl=64 time=0.166 ms\n64 bytes from 192.168.8.1: seq=2 ttl=64 time=0.165 ms\n64 bytes from 192.168.8.1: seq=3 ttl=64 time=0.169 ms\n\n--- 192.168.8.1 ping statistics ---\n4 packets transmitted, 4 packets received, 0% packet loss\nround-trip min/avg/max = 0.165/0.178/0.213 ms\n"}}
+--]]
+M.ping = function(params)
+    local addr = params.addr
+    if not isValidIPv4(addr) and not isValidDomain(addr) then
+        return {ping_result = "ip address is not correct"}
+    end
+    local cmd = {"ping", "-c4", addr}
+    local proc = ngx.pipe.spawn(cmd)
+    local str = proc:stdout_read_all()
+    if #str == 0 then
+        str = "destination host unreachable"
+    end
+    return {ping_result = str}
+end
+
+--[[
+    @method-type: call
+    @method-name: traceroute
+    @method-desc: trace network path
+
+    @in string addr target IP address
+
+    @out string trace_result results of the traceroute command
+
+    @in-example: {"jsonrpc":"2.0","id":1,"method":"call","params":["","diag","traceroute",{"addr":"192.168.8.1"}]}
+    @out-example: {"jsonrpc": "2.0", "id": 1, "result": {"trace_result":"traceroute to 192.168.8.1 (192.168.8.1), 30 hops max, 46 byte packets\n 1  192.168.8.1  0.022 ms\n"}}
+--]]
+M.traceroute = function(params)
+    local addr = params.addr
+    if not isValidIPv4(addr) and not isValidDomain(addr)  then
+        return {trace_result = "ip address is not correct"}
+    end
+    local cmd = {"traceroute", "-4", "-q", "1", "-w", "1", "-n", addr}
+    local proc = ngx.pipe.spawn(cmd, { stdout_read_timeout = 30000 })
+    local str = proc:stdout_read_all()
+    if #str == 0 then
+        str = "destination host unreachable"
+    end
+    return {trace_result = str}
+end
+
+return M

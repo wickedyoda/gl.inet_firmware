@@ -1,0 +1,9 @@
+#!/bin/sh
+
+# dhcpv6 hotplug added by glinet
+# code at /lib/netifd/dhcpv6.script
+
+mode=`uci -q get glipv6.lan.mode`
+if [ "$ACTION" = "ifup" -a -n "$ADDR" -a -n "$MASK" -a "$mode" = "relay" ];then
+        ip -6 route add $ADDR/$MASK dev br-lan proto static metric 128 pref medium 2>/dev/null
+fi

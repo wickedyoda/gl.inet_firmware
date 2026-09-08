@@ -1,0 +1,10 @@
+Package: libiwinfo-lua54
+Version: 2
+Depends: libc, libiwinfo20230701, liblua5.4-5.4
+Source: feeds/gl_feed_common/libiwinfo-lua54
+SourceName: libiwinfo-lua54
+Section: lang
+SourceDateEpoch: 1766662953
+Architecture: aarch64_cortex-a53
+Installed-Size: 2735
+Description:  libiwinfo Lua5.4 binding

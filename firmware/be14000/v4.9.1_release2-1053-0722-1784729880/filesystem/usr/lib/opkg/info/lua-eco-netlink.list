@@ -1,0 +1,5 @@
+/usr/local/lib/lua/5.4/eco/nl.lua
+/usr/local/lib/lua/5.4/eco/genl.lua
+/usr/local/lib/lua/5.4/eco/core/nl.so
+/usr/local/lib/lua/5.4/eco/rtnl.so
+/usr/local/lib/lua/5.4/eco/core/genl.so

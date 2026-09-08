@@ -1,0 +1,4 @@
+uci set firewall.nat6="include"
+uci set firewall.nat6.path="/etc/firewall.nat6"
+uci set firewall.nat6.reload="1"
+uci commit firewall

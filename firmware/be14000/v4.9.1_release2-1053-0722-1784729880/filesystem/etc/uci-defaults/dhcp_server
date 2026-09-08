@@ -1,0 +1,19 @@
+#!/bin/sh
+
+. /lib/functions/gl_util.sh
+
+uci -q batch <<-EOF >/dev/null
+	set dhcp.lan.force=1
+	commit dhcp
+EOF
+
+remove_quotation() {
+	cfg=$1
+	config_get tag "$cfg" tag
+	[ "$tag" ] && uci set dhcp.$cfg.tag="$(echo "$tag" | sed 's/"//g')"
+}
+
+config_load dhcp
+config_foreach remove_quotation host
+
+exit 0

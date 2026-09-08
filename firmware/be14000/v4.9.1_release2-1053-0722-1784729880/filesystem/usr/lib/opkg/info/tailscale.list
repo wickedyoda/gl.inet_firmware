@@ -1,0 +1,3 @@
+/usr/sbin/tailscale
+/lib/upgrade/keep.d/tailscale
+/usr/sbin/tailscaled

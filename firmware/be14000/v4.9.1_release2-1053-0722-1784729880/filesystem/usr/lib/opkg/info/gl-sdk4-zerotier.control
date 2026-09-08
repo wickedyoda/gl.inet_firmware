@@ -1,0 +1,10 @@
+Package: gl-sdk4-zerotier
+Version: git-2026.023.15346-855450a-1
+Depends: libc, zerotier, libuci-lua
+Source: feeds/glinet/gl-sdk4-zerotier
+SourceName: gl-sdk4-zerotier
+Section: base
+SourceDateEpoch: 1769141746
+Architecture: aarch64_cortex-a53
+Installed-Size: 4775
+Description:  ZEROTIER Info API for Gl.inet

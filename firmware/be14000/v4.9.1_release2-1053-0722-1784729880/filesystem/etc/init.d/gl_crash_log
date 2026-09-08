@@ -1,0 +1,23 @@
+#!/bin/sh /etc/rc.common
+
+START=99
+
+start() {
+	model=$(cat /proc/gl-hw-info/model)
+	case "$model" in
+		*)
+			mtd=$(cat /proc/mtd | grep "log" | cut -d ':' -f1 | sed 's/mtd/mtdblock/')
+			[ -z "$mtd" ] && mtd=$(blkid | grep "log" | cut -d ':' -f1 | cut -d '/' -f3)
+			count=$(cat /proc/partitions | grep $mtd | awk '{print $3}')
+
+			[ -f "/sys/fs/pstore/dmesg-ramoops-0" -a -n "$mtd" ] && {
+				cat /sys/fs/pstore/dmesg-ramoops-0 | dd of=/dev/$mtd bs=1024 count=$count conv=notrunc
+				sync
+				rm /sys/fs/pstore/*
+			}
+
+			strings /dev/$mtd > /tmp/log/crash_log
+			[ -z "$(cat /tmp/log/crash_log)" ] && rm /tmp/log/crash_log
+			;;
+	esac
+}

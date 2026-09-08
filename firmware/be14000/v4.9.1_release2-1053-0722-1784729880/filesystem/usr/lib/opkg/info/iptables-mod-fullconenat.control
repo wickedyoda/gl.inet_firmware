@@ -1,0 +1,12 @@
+Package: iptables-mod-fullconenat
+Version: 2023-01-01-74c5e6f3-1
+Depends: libc, iptables, kmod-ipt-fullconenat
+Source: feeds/gl_feed_common/fullconenat
+SourceName: iptables-mod-fullconenat
+License: GPL-2.0
+LicenseFiles: LICENSE
+Section: net
+SourceDateEpoch: 1769600767
+Architecture: aarch64_cortex-a53
+Installed-Size: 3631
+Description:  FULLCONENAT iptables extension

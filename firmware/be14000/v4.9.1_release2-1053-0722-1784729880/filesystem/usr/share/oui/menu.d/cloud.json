@@ -1,0 +1,15 @@
+{
+  "index": 10,
+  "view": "cloud",
+  "title": {
+    "2c": "GoodCloud",
+    "2b": "Cloud"
+  },
+  "level": 2,
+  "parent": "cloud",
+  "parent_title": {
+    "translate": "cloud.service_label"
+  },
+  "parent_icon": "cloud-services",
+  "parent_index": 39
+}

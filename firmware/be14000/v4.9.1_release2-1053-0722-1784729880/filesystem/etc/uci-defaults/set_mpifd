@@ -1,0 +1,42 @@
+. /lib/functions/gl_util.sh
+. /lib/functions/system.sh
+
+mptun_cfg_init(){
+    local model=$(get_model)
+    case "$model" in
+        "mt2500")
+            uci -q delete mptun.wwan
+            uci -q delete mptun.secondwan
+            uci commit mptun
+            sync
+            ;;
+        "mt3000"|\
+        "axt1800"|\
+        "ax1800"|\
+        "sft1200")
+            uci -q delete mptun.secondwan
+            uci commit mptun
+            sync
+            ;;
+        "mt5000")
+            uci -q delete mptun.wwan
+            uci commit mptun
+            sync
+            ;;
+        "e5800")
+            uci -q delete mptun.secondwan
+            uci set mptun.usbwan=interface
+            uci set mptun.usbwan.enable='1'
+            uci set mptun.usbwan.metric='2'
+            uci set mptun.usbwan.device='eth1'
+            uci add_list mptun.usbwan.mptcp_flags='subflow'
+            uci commit mptun
+            sync
+            ;;
+        *)
+            ;;
+    esac
+}
+
+mptun_cfg_init
+

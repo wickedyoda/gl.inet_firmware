@@ -1,0 +1,5 @@
+/etc/hotplug.d/carrier/01-ap
+/usr/bin/carrier-monitor
+/etc/init.d/carrier-monitor
+/etc/hotplug.d/carrier/02-sf1200-led
+/etc/hotplug.d/carrier/03-ipv6-route

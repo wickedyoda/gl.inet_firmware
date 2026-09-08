@@ -1,0 +1,13 @@
+Package: mptun-core
+Version: 2024-01-04-52c8e708
+Depends: libc, ca-bundle, kmod-ipt-tproxy, bind-dig
+Source: feeds/mptcp_feeds/v2ray-core
+SourceName: mptun-core
+License: MIT
+LicenseFiles: LICENSE
+Section: net
+SourceDateEpoch: 1774252118
+Maintainer: Tianling Shen <cnsztl@immortalwrt.org>
+Architecture: aarch64_cortex-a53
+Installed-Size: 8996575
+Description:  A platform for building proxies to bypass network restrictions

@@ -1,0 +1,388 @@
+. /lib/functions/gl_util.sh
+. /lib/functions/system.sh
+. /usr/share/libubox/jshn.sh
+
+band2ifname() {
+    case $1 in
+    2g)
+        echo "wlan0"
+        ;;
+    5g)
+        echo "wlan1"
+        ;;
+    6g)
+        echo "wlan2"
+        ;;
+    esac
+}
+
+fix_wifi_ifname_mtk_iot() {
+    local band=$1
+    local mode=$2
+    local ifname=$3
+    local iot=$4
+    local idx=1
+
+    echo "$ifname" | grep -q ra && return
+    echo "$ifname" | grep -q apcli && return
+
+    ifname=ra
+
+    [ "$mode" = "sta" ] && ifname=apcli
+
+    echo "$band" | grep -q 5 && ifname="$ifname"x
+
+    [ "$iot" = "1" ] && let idx=idx+2
+
+    echo $ifname$idx
+}
+
+fix_wifi_ifname_mtk() {
+    local band=$1
+    local mode=$2
+    local ifname=$3
+    local iot=$4
+    local idx=0
+
+    echo "$ifname" | grep -q ra && return
+    echo "$ifname" | grep -q apcli && return
+
+    ifname=ra
+
+    [ "$mode" = "sta" ] && ifname=apcli
+
+    if [ "$type" = "mtkwifi" ]; then
+        echo "$band" | grep -q 5 && ifname="$ifname"i
+    else
+        echo "$band" | grep -q 5 && ifname="$ifname"x
+    fi
+
+    [ "$iot" = "1" ] && let idx=idx+2
+
+    echo $ifname$idx
+}
+
+fix_wifi_ifname() {
+    local gifname=""
+    local iot_ifname=""
+    local ifname
+    local iot="iot2g"
+    local type
+    local index=1
+    local iot_index=6
+
+    config_get device "$1" device
+    config_get iot "$1" iot
+
+    config_get band "$device" band
+    config_get type "$device" type
+
+    [ "$type" = "mtk" -o "$type" = "mtkwifi" ] && {
+        config_get ifname "$1" ifname
+        config_get mode "$1" mode
+        ifname=$(fix_wifi_ifname_mtk_iot $band $mode $ifname $iot)
+        return
+    }
+
+    [ -e /bin/sfwifi ] && return
+    [ "$iot" = "1" ] && return
+
+    echo "$band" | grep -q 5 && iot="iot5g"
+
+    if [ -e /lib/wifi/qcawificfg80211.sh ]; then
+        config_get mode "$1" mode
+        [ "$mode" != "ap" ] && return
+        ifname=$(band2ifname $band)
+        iot_ifname="$ifname$iot_index"
+    elif [ -e /lib/wifi/qcacld32.sh ]; then
+        config_get mode "$1" mode
+        [ "$mode" != "ap" ] && return
+        ifname=$(band2ifname $band)
+        iot_ifname="$ifname$iot_index"
+    else
+        ifname=$(band2ifname $band)
+        iot_ifname=$ifname-6
+    fi
+
+    uci set wireless.$iot.ifname="$iot_ifname"
+
+}
+
+[ "$(uci get wireless.iot5g)" = "wifi-iface" ] && {
+    exit 0
+}
+
+touch /tmp/.gl-wifi-default-load
+. /etc/uci-defaults/03_gl_random-bssid
+rm /tmp/.gl-wifi-default-load
+
+touch /tmp/.gl-wifi-default
+
+model=$(get_model  | awk '{ print toupper($1) }')
+[ -f /proc/gl-hw-info/device_mac ] && mac=$(cat /proc/gl-hw-info/device_mac | sed 's/://g' | cut -c10-12)
+
+[ -n "$mac" ] || mac=$(cat /proc/sys/kernel/random/uuid | cut -c1-3)
+
+fix_wifi_iface() {
+    local iot
+    local iot_ifname=""
+    local ifname
+    local encryption="psk-mixed"
+    local sae_pwe
+    local key
+    local mtk_iot_index=3
+    local iot_index=6
+    local macaddr
+    local iot_mac
+    local random_iot_mac
+    local random_bssid
+    local acs_freq_list
+    local model
+
+    config_get device "$1" device
+    config_get band "$device" band
+    config_get type "$device" type
+
+    local ssid=$(generate_default_ssid $band $mac)
+    iot="iot$band"
+    if [ "$band" = "6g" ]; then
+        return
+    fi
+
+    if [ "$type" = "mtk" ]; then
+        mtk_iot_index=2
+    fi
+
+    config_get ifname "$1" ifname
+    if [ "${ifname:0:2}" = "ra" ]; then
+        iot_ifname="${ifname%[0-9]}${mtk_iot_index}"
+    elif [ -e /bin/sfwifi ]; then
+        iot_ifname="${ifname%[0-9]}$((${ifname##wlan}+3))"
+    elif [ -e /lib/wifi/qcawificfg80211.sh ]; then
+        ifname=$(band2ifname $band)
+        iot_ifname="$ifname$iot_index"
+    elif [ -e /lib/wifi/qcacld32.sh ]; then
+        ifname=$(band2ifname $band)
+        [ "$band" = "2g" ] && iot_ifname="wlan6"
+        [ "$band" = "5g" ] && iot_ifname="wlan7"
+        [ "$band" = "6g" ] && iot_ifname="wlan8"
+        iot_ifname="$ifname$iot_index"
+    else
+        ifname=$(band2ifname $band)
+        iot_ifname=$ifname-6
+    fi
+
+    if [ "$type" = "qcawificfg80211" -o "$type" = "qcacld32" ]; then
+        [ "$band" = "6g" ] && encryption=ccmp || encryption=psk2+ccmp
+    elif [ "$type" = "mtkwifi" ]; then
+        [ "$band" = "6g" ] && encryption=sae || encryption=psk2+ccmp
+        [ "$band" = "2g" ] && encryption=psk2+ccmp
+    else
+        [ "$band" = "6g" ] && encryption=sae || encryption=psk2
+    fi
+
+    if [ "$type" = "qcacld32" ]; then
+        [ "$band" = "6g" ] && sae_pwe=2
+    else
+        [ "$band" = "6g" ] && sae_pwe=1
+    fi
+
+    key=$(lua -e 'lfactory = require "lfactory";print(lfactory.get_unique_password())' | grep '^[a-zA-Z0-9]\+$')
+    [ ${#key} = 10 ] || key=goodlife
+
+    case "$model" in
+        B3000|X2000|BE3600)
+            if [ ! -f /proc/gl-hw-info/device_mac ]; then
+                macaddr="$(get_random_bssid)"
+            else
+                [ "$band" = "2g" ] && macaddr=$(macaddr_add $(cat /proc/gl-hw-info/device_mac) ${model##*[BEX]})
+                [ "$band" = "5g" ] && macaddr=$(macaddr_add $(cat /proc/gl-hw-info/device_mac) $(( ${model##*[BEX]} + 1 )))
+            fi
+            iot_mac=$(guest_wifi_macaddr_add $macaddr 4)
+            ;;
+        BE9300)
+            if [ ! -f /proc/gl-hw-info/device_mac ]; then
+                macaddr="$(get_random_bssid)"
+                [ "$band" = "6g" ] && iot_mac=$(guest_wifi_macaddr_add $macaddr 4)
+            else
+                [ "$band" = "2g" ] && macaddr=$(macaddr_add $(cat /proc/gl-hw-info/device_mac) 3)
+                [ "$band" = "5g" ] && macaddr=$(macaddr_add $(cat /proc/gl-hw-info/device_mac) 4)
+                if [ "$band" = "6g" ]; then
+                    macaddr=$(macaddr_add $(cat /proc/gl-hw-info/device_mac) 5)
+                    iot_mac=$(guest_wifi_macaddr_add $macaddr 4)
+                else
+                    iot_mac=$(guest_wifi_macaddr_add $macaddr 4)
+                fi
+            fi
+            ;;
+        BE6500)
+            if [ ! -f /proc/gl-hw-info/device_mac ]; then
+                macaddr="$(get_random_bssid)"
+            else
+                [ "$band" = "2g" ] && macaddr=$(macaddr_add $(cat /proc/gl-hw-info/device_mac) 3)
+                [ "$band" = "5g" ] && macaddr=$(macaddr_add $(cat /proc/gl-hw-info/device_mac) 4)
+            fi
+            iot_mac=$(guest_wifi_macaddr_add $macaddr 4)
+            ;;
+        E5800)
+            [ "$band" = "2g" ] && macaddr=$(macaddr_add $(cat /proc/gl-hw-info/device_mac) 1)
+            [ "$band" = "5g" ] && {
+                macaddr=$(macaddr_add $(cat /proc/gl-hw-info/device_mac) 2)
+                acs_freq_list=5180-5240
+            }
+            [ "$band" = "6g" ] && macaddr=$(macaddr_add $(cat /proc/gl-hw-info/device_mac) 3)
+            [ ! -f /proc/gl-hw-info/device_mac ] && macaddr="$(get_random_bssid)"
+            iot_mac=$(guest_wifi_macaddr_add $macaddr 4)
+            ;;
+        *)
+            if [ ! -f /proc/gl-hw-info/device_mac ]; then
+                macaddr="$(get_random_bssid)"
+            else
+                [ "$band" = "2g" ] && macaddr=$(macaddr_add $(cat /proc/gl-hw-info/device_mac) 2)
+                [ "$band" = "5g" ] && macaddr=$(macaddr_add $(cat /proc/gl-hw-info/device_mac) 3)
+            fi
+            iot_mac=$(guest_wifi_macaddr_add $macaddr 4)
+            ;;
+    esac
+
+    random_bssid="$(get_random_bssid)"
+    if [ "$band" = "6g" ]; then
+        random_iot_mac=$(qca_6g_wifi_macaddr_add $random_bssid 2)
+    else
+        random_iot_mac="$(get_random_bssid)"
+    fi
+
+    if [ "$type" = "qcawificfg80211" -o "$type" = "qcacld32" ]; then
+        [ "$band" = "6g" ] && encryption=ccmp
+    elif [ "$type" = "mtkwifi" ]; then
+        [ "$band" = "6g" ] && encryption=sae
+    else
+        [ "$band" = "6g" ] && encryption=sae
+    fi
+    if [ "$type" = "qcacld32" ]; then
+        [ "$band" = "6g" ] && sae_pwe=2
+    else
+        [ "$band" = "6g" ] && sae_pwe=1
+    fi
+
+    uci -q get network.iot > /dev/null && {
+        uci -q batch <<-EOF
+            set wireless.$iot=wifi-iface
+            set wireless.$iot.device="$device"
+            set wireless.$iot.network=iot
+            set wireless.$iot.mode=ap
+            set wireless.$iot.ifname="$iot_ifname"
+            set wireless.$iot.encryption="$encryption"
+            set wireless.$iot.sae_pwe="$sae_pwe"
+            set wireless.$iot.key=goodlife
+            set wireless.$iot.ssid="$ssid-IoT"
+            set wireless.$iot.macaddr="$random_iot_mac"
+            set wireless.$iot.factory_macaddr="$iot_mac"
+            set wireless.$iot.iot=1
+            set wireless.$iot.disabled=1
+            set wireless.$iot.wds=1
+            set wireless.$iot.isolate=1
+            set wireless.$iot.hidden=0
+            set wireless.$iot.init=0
+            set wireless.$iot.random_bssid=1
+EOF
+    }
+
+    [ "$type" = "qcacld32" -a "$band" = "6g" ] && {
+        uci set wireless.$iot.sae=1
+    }
+
+    [ "$type" = "qcacld32" -a "$band" = "5g" ] && {
+        uci set wireless.$iot.acs_freq_list=$acs_freq_list
+    }
+
+    if [ "$type" = "mtkwifi" ]; then
+        uci set wireless.$iot.vifidx=$((mtk_iot_index + 1))
+    fi
+}
+
+# 全局变量：访客 MLO 对应的 wireless 里 wifi-mld 段名
+guest_mlo_section=mld1
+
+# mtkwifi：访客 MLO 与 IoT 撞名则只挪对应 leg；有冲突时才重写 wifi-mld 的 iface
+fix_wifi_mtk_guest_mlo() {
+    uci show wireless 2>/dev/null | grep -q "\.type='mtkwifi'" || return 0
+
+    uci show wireless.$guest_mlo_section 2>/dev/null | head -n1 | grep -q "=wifi-mld\$" || return 0
+    [ "$(uci -q get wireless.$guest_mlo_section.guest)" = "1" ] || return 0
+
+    guest_mlo_clash=0
+    guest_mlo_if_2g=
+    guest_mlo_if_5g=
+    guest_mlo_if_6g=
+
+    config_load wireless
+    config_foreach fix_guest_mlo_leg wifi-iface
+
+    if [ "$guest_mlo_clash" = "1" ]; then
+        local iface_line
+
+        iface_line="$guest_mlo_if_2g $guest_mlo_if_5g $guest_mlo_if_6g"
+        iface_line=$(echo "$iface_line" | sed 's/  */ /g;s/^ *//;s/ *$//')
+        [ -n "$iface_line" ] && uci set wireless.$guest_mlo_section.iface="$iface_line"
+    fi
+}
+
+# config_foreach：逐条处理访客 MLO 的 leg，检测与 IoT 冲突、必要时后移 ifname/vifidx，并按 band 收集 ifname
+fix_guest_mlo_leg() {
+    local section=$1 mld_section guest_flag device leg_ifname vif_idx band
+    local iot_section iot_dev iot_ifname new_ifname suffix_num
+
+    config_get mld_section "$section" mld
+    [ "$mld_section" = "$guest_mlo_section" ] || return 0
+
+    config_get guest_flag "$section" guest
+    [ "$guest_flag" = "1" ] || return 0
+
+    config_get device "$section" device
+    config_get leg_ifname "$section" ifname
+    config_get vif_idx "$section" vifidx
+    [ -n "$device" ] && [ -n "$leg_ifname" ] || return 0
+
+    for iot_section in iot2g iot5g iot6g; do
+        iot_dev=$(uci -q get wireless.$iot_section.device)
+        iot_ifname=$(uci -q get wireless.$iot_section.ifname)
+        [ -n "$iot_dev" ] && [ -n "$iot_ifname" ] && [ "$iot_dev" = "$device" ] && [ "$iot_ifname" = "$leg_ifname" ] && {
+            suffix_num=$(expr "$leg_ifname" : '.*\([0-9][0-9]*\)$')
+            if [ -n "$suffix_num" ]; then
+                case "$leg_ifname" in
+                    ra[0-9]*|rai[0-9]*|rax[0-9]*) new_ifname="${leg_ifname%"$suffix_num"}$((suffix_num + 1))" ;;
+                    *) new_ifname=$leg_ifname ;;
+                esac
+            else
+                new_ifname=$leg_ifname
+            fi
+
+            uci set wireless.$section.ifname="$new_ifname"
+            [ -n "$vif_idx" ] && uci set wireless.$section.vifidx=$((vif_idx + 1))
+            leg_ifname=$new_ifname
+            guest_mlo_clash=1
+            break
+        }
+    done
+
+    band=$(uci -q get wireless.$device.band)
+    case "$band" in
+        2g) guest_mlo_if_2g=$leg_ifname ;;
+        5g) guest_mlo_if_5g=$leg_ifname ;;
+        6g) guest_mlo_if_6g=$leg_ifname ;;
+    esac
+}
+
+set_default() {
+    config_load wireless
+    config_foreach fix_wifi_iface wifi-iface
+    fix_wifi_mtk_guest_mlo
+    uci commit wireless
+}
+
+main() {
+    set_default
+}
+
+main

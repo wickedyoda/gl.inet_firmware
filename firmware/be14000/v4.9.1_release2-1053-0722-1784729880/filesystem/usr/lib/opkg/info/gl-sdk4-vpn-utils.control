@@ -1,0 +1,10 @@
+Package: gl-sdk4-vpn-utils
+Version: git-2026.083.10297-8bf64f8-1
+Depends: libc, lua-cjson-lua5.4, lua-eco-http, lua5.4, libopenssl1.1, lua-eco-socket
+Source: feeds/glinet/gl-sdk4-vpn-utils
+SourceName: gl-sdk4-vpn-utils
+Section: base
+SourceDateEpoch: 1774320697
+Architecture: aarch64_cortex-a53
+Installed-Size: 14108
+Description:  GL-SDK4 server connectivity check module

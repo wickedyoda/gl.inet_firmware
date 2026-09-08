@@ -1,0 +1,4 @@
+/usr/bin/get_mpflow.sh
+/lib/modules/5.4.281/gl-mpflow.ko
+/etc/hotplug.d/iface/99-mpflow
+/etc/init.d/mpflow

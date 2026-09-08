@@ -1,0 +1,149 @@
+#!/bin/sh
+
+# shellcheck disable=SC3037,SC3043
+
+. /lib/functions/gl_util.sh
+
+config_load gl_dpi_qos
+
+DEVS=""
+
+[ -d /sys/class/net/br-lan ] && DEVS="$DEVS br-lan"
+[ -d /sys/class/net/br-guest ] && DEVS="$DEVS br-guest"
+
+prio_qos() {
+    local dl up prio_enable prio_mode
+    config_get prio_enable "qos" "prio_enable"
+    config_get dl "qos" "download"
+    config_get up "qos" "upload"
+
+    if [ "$prio_enable" = "0" ]; then
+        for dev in $DEVS; do
+            tc qdisc del dev $dev parent 1:10 handle 10:
+            tc qdisc del dev ${dev}-ifb parent 1:10 handle 10:
+        done
+        return
+    fi
+
+    for dev in $DEVS; do
+        if [ $up -gt 0 ]; then
+            tc qdisc add dev ${dev}-ifb parent 1:10 handle 10: prio bands 3
+            tc filter add dev ${dev}-ifb protocol ip parent 10: u32 match ip src 0.0.0.0/0 flowid 10:2 
+            tc filter add dev ${dev}-ifb protocol ip parent 10: handle 0x60/0xf0 fw flowid 10:1
+            tc filter add dev ${dev}-ifb protocol ip parent 10: handle 0x70/0xf0 fw flowid 10:2
+            tc filter add dev ${dev}-ifb protocol ip parent 10: handle 0x80/0xf0 fw flowid 10:3
+        fi
+        if [ $dl -gt 0 ]; then
+            tc qdisc add dev $dev parent 1:10 handle 10: prio bands 3
+            tc filter add dev $dev protocol ip parent 10: u32 match ip src 0.0.0.0/0 flowid 10:2 
+            tc filter add dev $dev protocol ip parent 10: handle 0x60/0xf0 fw flowid 10:1
+            tc filter add dev $dev protocol ip parent 10: handle 0x70/0xf0 fw flowid 10:2
+            tc filter add dev $dev protocol ip parent 10: handle 0x80/0xf0 fw flowid 10:3
+        fi
+    done
+
+    if [ ! -f "/sbin/fw4" ]; then
+        if iptables -w -t mangle -C FORWARD -m connbytes --connbytes 0:32 --connbytes-dir both --connbytes-mode packets -j NFQUEUE --queue-num 0 --queue-bypass 2>/dev/null && pgrep -f "netifyd" > /dev/null; then
+            /etc/init.d/netifyd reload
+        else
+            iptables -w -t mangle -D FORWARD -m connbytes --connbytes 0:32 --connbytes-dir both --connbytes-mode packets -j NFQUEUE --queue-num 0 --queue-bypass
+            ip6tables -w -t mangle -D FORWARD -m connbytes --connbytes 0:32 --connbytes-dir both --connbytes-mode packets -j NFQUEUE --queue-num 0 --queue-bypass
+            iptables -w -t mangle -A FORWARD -m connbytes --connbytes 0:32 --connbytes-dir both --connbytes-mode packets -j NFQUEUE --queue-num 0 --queue-bypass
+            ip6tables -w -t mangle -A FORWARD -m connbytes --connbytes 0:32 --connbytes-dir both --connbytes-mode packets -j NFQUEUE --queue-num 0 --queue-bypass
+            /etc/init.d/netifyd restart
+        fi
+    else
+        if nft list chain "inet netify forward" 2>/dev/null | grep -F -- "netify-init" >/dev/null && pgrep -f "netifyd" > /dev/null; then
+            /etc/init.d/netifyd reload
+        else
+            nft flush table inet netify 2>/dev/null
+            nft add rule inet netify forward 'ct label set netify-init counter'
+            nft add rule inet netify forward 'ct packets > 32 counter return'
+            nft add rule inet netify forward 'counter queue num 0-1 fanout, bypass'
+            /etc/init.d/netifyd restart
+        fi
+    fi
+}
+
+stop_qos() {
+    for dev in $DEVS; do
+        tc qdisc del dev $dev root 2>/dev/null
+        tc qdisc del dev $dev clsact 2>/dev/null
+        tc qdisc del dev ${dev}-ifb root 2>/dev/null
+        ip link del dev ${dev}-ifb 2>/dev/null
+    done
+    if [ ! -f "/sbin/fw4" ]; then
+        iptables -w -t mangle -D POSTROUTING -m connmark --mark 0x60/0xf0 -j MARK --set-mark 0x60/0xf0 
+        iptables -w -t mangle -D POSTROUTING -m connmark --mark 0x70/0xf0 -j MARK --set-mark 0x70/0xf0
+        iptables -w -t mangle -D POSTROUTING -m connmark --mark 0x80/0xf0 -j MARK --set-mark 0x80/0xf0
+        ip6tables -w -t mangle -D POSTROUTING -m connmark --mark 0x60/0xf0 -j MARK --set-mark 0x60/0xf0
+        ip6tables -w -t mangle -D POSTROUTING -m connmark --mark 0x70/0xf0 -j MARK --set-mark 0x70/0xf0
+        ip6tables -w -t mangle -D POSTROUTING -m connmark --mark 0x80/0xf0 -j MARK --set-mark 0x80/0xf0
+    else
+        nft flush chain inet filter postrouting
+    fi
+}
+
+start_qos() {
+    local dl up prio_enable prio_mode
+    config_get dl "qos" "download"
+    dl=$(( dl * 1024 * 95/100))
+    local up
+    config_get up "qos" "upload"
+    up=$(( up * 1024 * 95/100))
+    local lan_ipaddr=`uci -q get network.lan.ipaddr`
+
+    for dev in $DEVS; do
+        if [ $up -gt 0 ] || [ $dl -gt 0 ]; then
+            tc qdisc add dev $dev root handle 1: htb
+            tc class add dev $dev parent 1: classid 1:1 htb rate 2500000kbit
+        fi
+        if [ $up -gt 0 ]; then
+            ip link add dev ${dev}-ifb name ${dev}-ifb type ifb
+            ip link set dev ${dev}-ifb up
+            tc qdisc add dev ${dev}-ifb root handle 1: htb
+            tc class add dev ${dev}-ifb parent 1: classid 1:1 htb rate 2500000kbit
+            tc class add dev ${dev}-ifb parent 1:1 classid 1:10 htb rate ${up}kbit ceil ${up}kbit
+            tc filter add dev ${dev}-ifb protocol ip parent 1: prio 2 u32 match ip src 0.0.0.0/0 flowid 1:10
+            tc filter add dev ${dev}-ifb parent 1: protocol ip prio 1 u32 match ip dst $lan_ipaddr flowid 1:1
+            tc filter add dev ${dev}-ifb parent 1: protocol ip prio 1 u32 match ip src $lan_ipaddr flowid 1:1
+
+            tc qdisc show dev ${dev} | grep -q clsact || tc qdisc add dev $dev clsact
+            tc filter add dev $dev ingress protocol ip prio 2 u32 match u32 0 0 flowid 1:1 action mirred egress redirect dev ${dev}-ifb
+            tc filter add dev $dev ingress protocol ipv6 prio 2 u32 match u32 0 0 flowid 1:1 action mirred egress redirect dev ${dev}-ifb
+        fi
+        if [ $dl -gt 0 ]; then
+            tc class add dev $dev parent 1:1 classid 1:10 htb rate ${dl}kbit ceil ${dl}kbit
+            tc filter add dev $dev protocol ip parent 1: prio 3 u32 match ip src 0.0.0.0/0 flowid 1:10
+            tc filter add dev $dev parent 1: protocol ip prio 1 u32 match ip dst $lan_ipaddr flowid 1:1
+            tc filter add dev $dev parent 1: protocol ip prio 1 u32 match ip src $lan_ipaddr flowid 1:1
+        fi
+    done
+
+    prio_qos
+    if [ ! -f "/sbin/fw4" ]; then
+        iptables -w -t mangle -I POSTROUTING -m connmark --mark 0x60/0xf0 -j MARK --set-mark 0x60/0xf0
+        iptables -w -t mangle -I POSTROUTING -m connmark --mark 0x70/0xf0 -j MARK --set-mark 0x70/0xf0
+        iptables -w -t mangle -I POSTROUTING -m connmark --mark 0x80/0xf0 -j MARK --set-mark 0x80/0xf0
+        ip6tables -w -t mangle -I POSTROUTING -m connmark --mark 0x60/0xf0 -j MARK --set-mark 0x60/0xf0
+        ip6tables -w -t mangle -I POSTROUTING -m connmark --mark 0x70/0xf0 -j MARK --set-mark 0x70/0xf0
+        ip6tables -w -t mangle -I POSTROUTING -m connmark --mark 0x80/0xf0 -j MARK --set-mark 0x80/0xf0
+    else
+        nft add rule inet filter postrouting ct label "netify-priority-high" counter name "qos" mark set meta mark or 0x60
+        nft add rule inet filter postrouting ct label "netify-priority-middle" counter name "qos" mark set meta mark or 0x70
+        nft add rule inet filter postrouting ct label "netify-priority-low" counter name "qos" mark set meta mark or 0x80
+    fi
+}
+
+case "$1" in
+    "stop")
+        stop_qos
+    ;;
+    "start")
+        stop_qos
+        start_qos
+    ;;
+    "prio")
+        prio_qos
+    ;;
+esac

@@ -1,0 +1,4 @@
+#!/bin/sh
+
+cp /rom/etc/openvpn/scripts/* /etc/openvpn/scripts/
+exit 0

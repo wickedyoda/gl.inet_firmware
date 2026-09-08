@@ -1,0 +1,30 @@
+. /lib/functions.sh
+
+config_cb() {
+    local name="$2"
+
+    if [ "$name" = "cloud" ]
+    then
+        option_cb() {
+            local option="$1"
+            local value="$2"
+
+            [ "$option" = "serverzone" ] && option="server"
+
+            uci set gl-cloud.@cloud[0].$option="$value"
+        }
+    else {
+        option_cb() { return; }
+    }
+    fi
+}
+
+config_load glconfig
+uci -q delete glconfig.cloud
+uci commit
+server=$(uci -q get gl-cloud.@cloud[0].server)
+if [ -n "$server" ] && ! echo "$server" | grep -q -E 'cn|vixmini'; then
+    uci set gl-cloud.@cloud[0].server="gslb-eu.goodcloud.xyz"
+    uci commit gl-cloud
+    sync
+fi

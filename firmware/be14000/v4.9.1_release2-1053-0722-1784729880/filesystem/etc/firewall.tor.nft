@@ -1,0 +1,3 @@
+chain dstnat_lan {
+        meta nfproto { ipv4, ipv6 } tcp flags syn / fin,syn,rst,ack redirect to :9040 comment "!fw3: Intercept-TCP"
+}

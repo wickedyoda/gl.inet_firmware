@@ -1,0 +1,10 @@
+Package: gl-sdk4-wg-server
+Version: git-2026.167.27793-ea49fe7-1
+Depends: libc, jansson4, gl-sdk4-utils, gl-sdk4-uci, gl-sdk4-log, resolveip, curl, ca-bundle, ca-certificates, ip-full, wireguard-tools
+Source: feeds/glinet/gl-sdk4-wg-server
+SourceName: gl-sdk4-wg-server
+Section: base
+SourceDateEpoch: 1781595793
+Architecture: aarch64_cortex-a53
+Installed-Size: 31617
+Description:  Wireguard server api for gl-inet.

@@ -1,0 +1,10 @@
+. /lib/functions/uci-defaults.sh
+. /lib/functions/gl_util.sh
+
+model=$(get_model  | awk '{ print toupper($1) }')
+
+board_config_update
+ucidef_set_hostname "GL-$model"
+board_config_flush
+
+exit 0

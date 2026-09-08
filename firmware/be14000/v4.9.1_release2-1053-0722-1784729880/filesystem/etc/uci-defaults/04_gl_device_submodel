@@ -1,0 +1,24 @@
+#!/bin/sh
+
+set_model_svg()
+{
+    local device_submodel=$(cat /proc/gl-hw-info/device_submodel)
+
+    case $device_submodel in
+        "BLE")
+            cp /www/svg/x300b-ble.svg /www/model.svg
+        ;;
+        "GPS")
+            cp /www/svg/x300b-gps.svg /www/model.svg 
+        ;;
+        "RS485")
+            cp /www/svg/x300b-rs485.svg /www/model.svg 
+        ;;
+    esac
+}
+
+model=$(cat /proc/gl-hw-info/model)
+
+[ "$model" = "x300b" ] && set_model_svg
+
+exit 0

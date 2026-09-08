@@ -1,0 +1,59 @@
+#!/bin/sh
+
+. /lib/functions.sh
+. /lib/functions/vpn_func.sh
+
+/etc/init.d/vpn-client enabled || exit 0
+
+notify_if_status_change(){
+        local interface="$1";shift
+        local action="$1";shift
+        local action_type=''
+        local if_type=''
+        local arg_cmd=''
+
+        local is_vpn_instance="$(uci -q get network."${interface}".gl_vpn_instance)"
+        [ "${is_vpn_instance}" = '1' ] && return
+
+        if [ "${action}" = "ifup" ] ;then
+                action_type='up'
+        else
+                action_type='down'
+        fi
+
+        case $interface in
+                "wan"* | "wwan"* | "secondwan"* | "tethering"* | "modem"*)
+                        if_type='wan'
+                    ;;
+                *)
+                        if_type='inner'
+                    ;;
+        esac
+
+        arg_cmd="if_type=\"${if_type}\""
+
+        [ -n "$if_type" ] && [ -n "${action_type}" ] && /usr/bin/rtp2.sh 'interface_status_change' "${interface}" "${action_type}" "${arg_cmd}"
+}
+
+(
+    status=$(ubus -t 5 call gl-session call '{"module":"vpn-client", "func":"get_status"}' | jsonfilter -e '@.result')
+    ubus -t 5 call gl-session notify "{\"name\": \"vpnclient.status\", \"data\":$status}"
+) &
+
+notify_if_status_change "${INTERFACE}" "${ACTION}"
+
+for i in $(seq 0 4)
+do
+	tunnel_id=$(uci -q get route_policy.@rule[$i].tunnel_id)
+	tunnel_enabled=$(uci -q get route_policy.@rule[$i].enabled)
+
+	echo "$i tunnel_id=$tunnel_id"
+	echo "$i tunnel_enabled=$tunnel_enabled"
+	[ "$tunnel_enabled" = "1" ] && [ -n "$tunnel_id" ] && {
+		echo "$i tunnel_id=$tunnel_id"
+		exist=$(ps | grep "setup_autovpn_instance.lua" | grep $tunnel_id | grep -v grep)
+		[ ! "$exist" ] && {
+			eco /usr/bin/setup_autovpn_instance.lua $tunnel_id &
+		}
+	}
+done

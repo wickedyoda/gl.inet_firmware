@@ -1,0 +1,57 @@
+#!/bin/sh /etc/rc.common
+
+START=99
+
+set_rules() {
+    if [ -f /sbin/fw4 ]; then
+        iptables -t nat -I POSTROUTING -o $1 -j MASQUERADE --mode "fullcone" 2>/dev/null
+    else
+        iptables -t nat -I POSTROUTING -o $1 -j FULLCONENAT 2>/dev/null
+        iptables -t nat -I PREROUTING  -i $1 -j FULLCONENAT 2>/dev/null
+    fi
+}
+
+clear_rules() {
+    if [ -f /sbin/fw4 ]; then
+        local ifaces=$(iptables -t nat -nvL POSTROUTING|grep fullcone|awk -F' ' '{print $7}')
+        for item in $ifaces; do
+            iptables -t nat -D POSTROUTING -o $item -j MASQUERADE --mode "fullcone" 2>/dev/null
+        done
+    else
+        local ifaces=$(iptables -t nat -nvL POSTROUTING|grep FULLCONENAT|awk -F' ' '{print $7}')
+        for item in $ifaces; do
+            iptables -t nat -D POSTROUTING -o $item -j FULLCONENAT 2>/dev/null
+            iptables -t nat -D PREROUTING  -i $item -j FULLCONENAT 2>/dev/null
+        done
+    fi
+}
+
+find_wan_gw()
+{
+    local wan_list=$(ubus list|grep interface.|grep -v -E 'lan|loopback|4|6')
+    for item in $wan_list; do
+        local ubus_data=$(ubus call $item status)
+        local up="$(echo $ubus_data|jsonfilter -e '@.up')"
+        [ "$up" = "true" ] || continue
+
+        local gw="$(echo $ubus_data|jsonfilter -e '@.l3_device')"
+        [ -n "$gw" ] && set_rules $gw
+    done
+}
+
+stop() {
+    clear_rules
+    if [ ! -f /sbin/fw4 ]; then
+        [ -n "$(lsmod|grep xt_FULLCONENAT)" ] && rmmod xt_FULLCONENAT
+    fi
+}
+
+start() {
+    if [ "$(uci get fullconenat.global.enable)" = "1" ]; then
+        if [ ! -f /sbin/fw4 ]; then
+            [ -z "$(lsmod|grep xt_FULLCONENAT)" ] && insmod xt_FULLCONENAT
+        fi
+        local ifaces=$(iptables -t nat -nvL POSTROUTING|grep FULLCONENAT|awk -F' ' '{print $7}')
+        [ -z "$ifaces" ] && find_wan_gw
+    fi
+}

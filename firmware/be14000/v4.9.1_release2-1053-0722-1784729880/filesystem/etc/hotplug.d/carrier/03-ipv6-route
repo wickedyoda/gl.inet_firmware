@@ -1,0 +1,29 @@
+#!/bin/sh
+
+model=$(cat /proc/gl-hw-info/model)
+if [ "$model" = "sft1200" ];then
+    [ "$PORT" = "0" ] && INTERFACE="eth0.2"
+fi
+
+#check interface is not secondwan
+if [ "$INTERFACE" = "$(cat /proc/gl-hw-info/wan)" -a -n "$INTERFACE" ];then
+    wan6_status=$(ubus call network.interface.wan6 status)
+    is_up=$(echo "$wan6_status" | jsonfilter -e '@.up')
+fi
+
+if [ "$ACTION" = "down" ];then
+    if [ "$is_up" = "true" ]; then
+        exit
+    else
+        if [ -n "$(uci -q get network.secondwan)" ];then
+            secondwan=`uci -q get network.secondwan.ifname`
+            [ -z "$secondwan" ] && secondwan=`uci -q get network.secondwan.device`
+        fi
+
+        if [ "$INTERFACE" = "$(cat /proc/gl-hw-info/wan)" -a -n "$INTERFACE" ] || [ "$INTERFACE" = "$secondwan" -a -n "$INTERFACE" ];then
+            ip -6 route show table main | grep "dev $INTERFACE" | sed 's/linkdown.*$//g' | sed 's/expires.*$//g'| while read line;do
+                ip -6 route del table main $line
+            done
+        fi
+    fi
+fi

@@ -1,0 +1,141 @@
+#!/bin/sh
+. /lib/functions/gl_util.sh
+
+ipq53xx_ovpn_irq()
+{
+	[ $ACTION = "ifup" ] || return
+	[ `echo "${INTERFACE}" | grep ovpn|wc -l` -ge 1 ] || [ "$INTERFACE" = "wan" -o "$INTERFACE" = "lan" ] || return
+	if ls /sys/class/net/ovpnclient* >/dev/null 2>&1; then
+		[ -e /sys/class/net/eth1 ] && echo 6 > /sys/class/net/eth1/queues/rx-0/rps_cpus
+		[ -e /sys/class/net/eth1.1 ] && echo 6 > /sys/class/net/eth1.1/queues/rx-0/rps_cpus
+		[ -e /sys/class/net/eth0 ] && echo 3 > /sys/class/net/eth0/queues/rx-0/rps_cpus
+
+		for iface in /sys/class/net/ovpnclient*; do
+			if [ -e "$iface" ]; then
+				echo 8 > "$iface/queues/rx-0/rps_cpus"
+			fi
+		done
+	fi
+}
+
+ovpn_irq_smp_affinity()
+{
+	filter_info=$1
+	affinity_masks=$2
+	index=1
+
+	[ -z ${filter_info} ] && return
+	while IFS= read -r line; do
+		if echo "$line" | grep -q "${filter_info}"; then
+			irq_number=$(echo "$line" | awk '{print $1}' | cut -d: -f1)
+
+			if [[ "$irq_number" =~ ^[0-9]+$ ]]; then
+				affinity_mask=$(echo "$affinity_masks" | cut -d' ' -f$index)
+
+				if [ -z "$affinity_mask" ]; then
+					affinity_mask=$(cat /proc/irq/default_smp_affinity)
+				fi
+
+				echo "$affinity_mask" > "/proc/irq/$irq_number/smp_affinity"
+				index=$((index + 1))
+			fi
+		fi
+	done < /proc/interrupts
+}
+
+mt3600be_ovpn_irq()
+{
+	[ `echo "${INTERFACE}" | grep ovpn |wc -l` -ge 1 ] || return
+	if ls /sys/class/net/${INTERFACE} >/dev/null 2>&1; then
+		if [ $ACTION = "ifup" ]; then
+
+			if [ `echo "${INTERFACE}" | grep server |wc -l` -ge 1 ]; then
+				[ -e /sys/class/net/eth1 ] && echo e > /sys/class/net/eth1/queues/rx-0/rps_cpus
+				[ -e /sys/class/net/eth0 ] && echo c > /sys/class/net/eth0/queues/rx-0/rps_cpus
+				[ -e /sys/class/net/${INTERFACE} ] && echo b > /sys/class/net/${INTERFACE}/queues/rx-0/rps_cpus
+			else
+				if [ "$model" = "be14000" ]; then
+					[ -e /sys/class/net/eth1 ] && echo 4 > /sys/class/net/eth1/queues/rx-0/rps_cpus
+					[ -e /sys/class/net/eth2 ] && echo 8 > /sys/class/net/eth2/queues/rx-0/rps_cpus
+					[ -e /sys/class/net/${INTERFACE} ] && echo 1 > /sys/class/net/${INTERFACE}/queues/rx-0/rps_cpus
+				else
+					[ -e /sys/class/net/eth1 ] && echo 8 > /sys/class/net/eth1/queues/rx-0/rps_cpus
+					[ -e /sys/class/net/eth0 ] && echo 4 > /sys/class/net/eth0/queues/rx-0/rps_cpus
+					[ -e /sys/class/net/${INTERFACE} ] && echo 3 > /sys/class/net/${INTERFACE}/queues/rx-0/rps_cpus
+				fi
+			fi
+			ovpn_irq_smp_affinity "15100000.ethernet, 15100000.ethernet" "f 2 4 8"
+		fi
+	fi
+
+	if [ $ACTION = "ifdown" ]; then
+		[ -e /sys/class/net/eth1 ] && echo f > /sys/class/net/eth1/queues/rx-0/rps_cpus
+		[ -e /sys/class/net/eth0 ] && echo f > /sys/class/net/eth0/queues/rx-0/rps_cpus
+		[ -e /sys/class/net/eth2 ] && echo f > /sys/class/net/eth2/queues/rx-0/rps_cpus
+		ovpn_irq_smp_affinity "15100000.ethernet, 15100000.ethernet"
+	fi
+}
+
+mt5000_ovpn_irq()
+{
+	[ `echo "${INTERFACE}" | grep ovpn |wc -l` -ge 1 ] || return
+	if ls /sys/class/net/${INTERFACE} >/dev/null 2>&1; then
+		if [ $ACTION = "ifup" ]; then
+
+			if [ `echo "${INTERFACE}" | grep server |wc -l` -ge 1 ]; then
+				[ -e /sys/class/net/eth1 ] && echo e > /sys/class/net/eth1/queues/rx-0/rps_cpus
+				[ -e /sys/class/net/eth0.1 ] && echo c > /sys/class/net/eth0.1/queues/rx-0/rps_cpus
+				[ -e /sys/class/net/${INTERFACE} ] && echo b > /sys/class/net/${INTERFACE}/queues/rx-0/rps_cpus
+			else
+				[ -e /sys/class/net/eth1 ] && echo 8 > /sys/class/net/eth1/queues/rx-0/rps_cpus
+				[ -e /sys/class/net/eth0.1 ] && echo 4 > /sys/class/net/eth0.1/queues/rx-0/rps_cpus
+				[ -e /sys/class/net/${INTERFACE} ] && echo 3 > /sys/class/net/${INTERFACE}/queues/rx-0/rps_cpus
+			fi
+			ovpn_irq_smp_affinity "15100000.ethernet, 15100000.ethernet" "f 2 4 8"
+		fi
+	fi
+
+	if [ $ACTION = "ifdown" ]; then
+		[ -e /sys/class/net/eth1 ] && echo f > /sys/class/net/eth1/queues/rx-0/rps_cpus
+		[ -e /sys/class/net/eth0.1 ] && echo f > /sys/class/net/eth0.1/queues/rx-0/rps_cpus
+		ovpn_irq_smp_affinity "15100000.ethernet, 15100000.ethernet"
+	fi
+}
+
+mt7981_ovpn_irq() {
+        [ $ACTION = "ifup" ] || return
+        [ `echo "${INTERFACE}" | grep ovpn|wc -l` -ge 1 ] || [ "$INTERFACE" = "wan" -o "$INTERFACE" = "lan" ] || return
+        if ls /sys/class/net/ovpnclient* >/dev/null 2>&1; then
+                [ -e /sys/class/net/eth0 ] && echo 3 > /sys/class/net/eth0/queues/rx-0/rps_cpus
+                [ -e /sys/class/net/eth1 ] && echo 0 > /sys/class/net/eth1/queues/rx-0/rps_cpus
+                [ -e /sys/class/net/br-lan ] && echo 0 > /sys/class/net/br-lan/queues/rx-0/rps_cpus
+
+                for iface in /sys/class/net/ovpnclient*; do
+                        if [ -e "$iface" ]; then
+                                echo 3 > "$iface/queues/rx-0/rps_cpus"
+                        fi
+                done
+                #ovpn_irq_smp_affinity "15100000.ethernet" "2 2 2"
+        fi
+}
+
+model=$(get_model)
+case "$model" in
+	"be9300"|\
+	"be6500"|\
+	"be3600")
+		ipq53xx_ovpn_irq
+	;;
+	"be10000"|\
+	"mt3600be"|\
+	"be14000")
+		mt3600be_ovpn_irq
+	;;
+	"mt5000")
+		mt5000_ovpn_irq
+	;;
+	"x3000"|\
+	"xe3000")
+		mt7981_ovpn_irq
+	;;
+esac

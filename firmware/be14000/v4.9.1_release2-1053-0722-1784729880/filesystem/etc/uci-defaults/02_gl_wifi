@@ -1,0 +1,926 @@
+. /lib/functions/gl_util.sh
+. /lib/functions/system.sh
+. /usr/share/libubox/jshn.sh
+
+uci_apply_wifi_defaults() {
+    [ -d /etc/uci-defaults/wifi.d ] || return 0
+
+    cd /etc/uci-defaults/wifi.d
+
+    files="$(ls)"
+
+    [ -z "$files" ] && {
+        cd -
+        return 0
+    }
+
+    for file in $files; do
+        ( . "./$(basename $file)" )
+    done
+
+    cd -
+    uci commit
+    rm -r /etc/uci-defaults/wifi.d
+}
+
+band2ifname() {
+    case $1 in
+    2g)
+        echo "wlan0"
+        ;;
+    5g)
+        echo "wlan1"
+        ;;
+    6g)
+        echo "wlan2"
+        ;;
+    esac
+}
+
+fix_wifi_ifname_mtk() {
+    local band=$1
+    local mode=$2
+    local ifname=$3
+    local guest=$4
+    local idx=0
+
+    echo "$ifname" | grep -q ra && return
+    echo "$ifname" | grep -q apcli && return
+
+    ifname=ra
+
+    [ "$mode" = "sta" ] && ifname=apcli
+
+    if [ "$type" = "mtkwifi"]; then
+        echo "$band" | grep -q 5 && ifname="$ifname"i
+    else
+        echo "$band" | grep -q 5 && ifname="$ifname"x
+    fi
+
+    [ "$guest" = "1" ] && let idx=idx+1
+
+    echo $ifname$idx
+}
+
+fix_wifi_ifname() {
+    local guest="guest2g"
+    local gifname=""
+    local ifname
+    local guest
+    local iot
+    local type
+    local index=1
+    local multi_ap
+
+    config_get device "$1" device
+    config_get guest "$1" guest
+    config_get iot "$1" iot
+
+    config_get band "$device" band
+    config_get type "$device" type
+    config_get multi_ap "$1" multi_ap
+
+    [ "$type" = "mtk" -o "$type" = "mtkwifi" ] && {
+        config_get ifname "$1" ifname
+        config_get mode "$1" mode
+        ifname=$(fix_wifi_ifname_mtk $band $mode $ifname $guest)
+        [ -n "$ifname" ] && uci set wireless.$1.ifname="$ifname"
+        return
+    }
+
+    [ -e /bin/sfwifi ] && return
+    [ "$guest" = "1" ] && return
+    [ "$iot" = "1" ] && return
+    [ "$multi_ap" = "1" ] && return
+
+    echo "$band" | grep -q 5 && guest="guest5g"
+
+    if [ -e /lib/wifi/qcawificfg80211.sh ]; then
+        config_get mode "$1" mode
+        [ "$mode" != "ap" ] && return
+        ifname=$(band2ifname $band)
+        gifname="$ifname$index"
+    elif [ -e /lib/wifi/qcacld32.sh ]; then
+        config_get mode "$1" mode
+        [ "$mode" != "ap" ] && return
+        ifname=$(band2ifname $band)
+        [ "$band" = "2g" ] && gifname="wlan3"
+        [ "$band" = "5g" ] && gifname="wlan4"
+        [ "$band" = "6g" ] && gifname="wlan5"
+    elif [  -e /lib/wifi/rtk_wifi.sh ]; then
+        ifname=$(band2ifname $band)
+        gifname=$ifname-vap0
+    else
+        ifname=$(band2ifname $band)
+        gifname=$ifname-1
+    fi
+
+    uci set wireless.$1.ifname="$ifname"
+    uci set wireless.$guest.ifname="$gifname"
+
+    mlo_support=$(cat /usr/share/wifi-features-$device | jsonfilter -e '@.mlo')
+    if [ "$mlo_support" = true ]; then
+        local mloiface="wlanmld$band"
+
+        index=$((index + 1))
+        mloifname="$ifname$index"
+        index=$((index + 1))
+        uci set wireless.$mloiface.ifname="$mloifname"
+    fi
+}
+
+[ "$(uci -q get glconfig.general.inited)" = "1" ] && {
+    config_load wireless
+    config_foreach fix_wifi_ifname wifi-iface
+    uci commit wireless
+    uci_apply_wifi_defaults
+    exit 0
+}
+
+touch /tmp/.gl-wifi-default-load
+. /etc/uci-defaults/03_gl_random-bssid
+rm /tmp/.gl-wifi-default-load
+
+touch /tmp/.gl-wifi-default
+
+wait_radio_configured() {
+    local radio="$1"
+    local n=30
+
+    [ -e /lib/wifi/qcawificfg80211.sh ] && n=100
+    [ -e /lib/wifi/qcacld32.sh ] && n=100
+    [ -e /lib/wifi/rtk_wifi.sh ] && n=100
+
+    echo "WiFi: wait $radio configured..." > /dev/console
+
+    while  [ $n -gt 0 ]
+    do
+        uci -q get wireless."$radio" > /dev/null && {
+            echo "WiFi: wait $radio configured OK" > /dev/console
+            return 0
+        }
+
+        sleep 1
+        let n=n-1
+    done
+
+    echo "WiFi: wait $radio configured timeout" > /dev/console
+    return 1
+}
+
+wait_configured() {
+    local name radio
+    local n=10
+
+    while  [ $n -gt 0 ]
+    do
+        [ -d /proc/gl-hw-info ] && break
+        sleep 1
+        let n=n-1
+    done
+
+    for name in $(ls /usr/share/wifi-features-*); do
+        radio=${name#/usr/share/wifi-features-}
+        wait_radio_configured $radio || return 1
+    done
+
+    return 0
+}
+
+model=$(get_model  | awk '{ print toupper($1) }')
+[ -f /proc/gl-hw-info/device_mac ] && mac=$(cat /proc/gl-hw-info/device_mac | sed 's/://g' | cut -c10-12)
+
+[ -n "$mac" ] || mac=$(cat /proc/sys/kernel/random/uuid | cut -c1-3)
+
+fix_wifi_device() {
+    local channel htmode hwmode band channels country macaddr max_txpwr txpower_drop
+
+    json_load "$(cat /usr/share/wifi-features-$1)"
+    json_get_vars band
+
+    config_get channel "$1" channel 0
+    config_get htmode "$1" htmode
+    config_get hwmode "$1" hwmode
+    config_get type "$1" type
+
+    [ "$(echo $htmode | grep -o [0-9][0-9])" = "20" ] && htmode=$(echo $htmode | sed 's/20/40/')
+    [ -z "$htmode" ] && {
+        if [ "$type" == "qcawificfg80211" ]; then
+            if [ "$band" = "2g" ]; then
+                htmode=HT40
+            elif [ "$band" = "6g" ]; then
+                htmode=HT320
+            else
+                htmode=HT80
+            fi
+        elif [ "$type" == "qcacld32" ]; then
+            if [ "$band" = "2g" ]; then
+                htmode=EHT40
+            elif [ "$band" = "6g" ]; then
+                htmode=EHT160
+            else
+                htmode=EHT80
+            fi
+        fi
+    }
+
+    country=$(get_country_code)
+
+    if [ "$type" == "mac80211" -o "$type" == "qcawificfg80211" -o "$type" == "qcacld32" ]; then
+        [ $band = "5g" ] && {
+            channels="36,40,44,48"
+            [ "$country" = "US" -o "$country" = "CN" ] && channels="36,40,44,48,149,153,157,161"
+        }
+
+        [ $band = "6g" ] && {
+            channels="5,21,37,53"
+            [ "$country" = "US" ] && channels="5,21,37,53,69,85"
+        }
+    fi
+
+    if [ "$type" == "qcawificfg80211" ]; then
+        case "$model" in
+        B3000)
+            macaddr="$(get_random_bssid)"
+            ;;
+        X2000)
+            macaddr="$(get_random_bssid)"
+            ;;
+        BE3600)
+            [ "$band" = "2g" ] && macaddr=$(macaddr_add $(cat /proc/gl-hw-info/device_mac) 2)
+            [ "$band" = "5g" ] && macaddr=$(macaddr_add $(cat /proc/gl-hw-info/device_mac) 3)
+            [ ! -f /proc/gl-hw-info/device_mac ] && macaddr="$(get_random_bssid)"
+            [ $band = "5g" ] && channels="36,40,44,48"
+            ;;
+        BE9300)
+            if [ ! -f /proc/gl-hw-info/device_mac ]
+            then
+                macaddr="$(get_random_bssid)"
+            else
+                [ "$band" = "2g" ] && macaddr=$(macaddr_add $(cat /proc/gl-hw-info/device_mac) 3)
+                [ "$band" = "5g" ] && macaddr=$(macaddr_add $(cat /proc/gl-hw-info/device_mac) 4)
+                [ "$band" = "6g" ] && macaddr=$(macaddr_add $(cat /proc/gl-hw-info/device_mac) 5)
+            fi
+            [ $band = "5g" ] && channels="36,40,44,48"
+            [ "$band" = "2g" ] && {
+                uci set wireless.$1.noscan=1
+            }
+            ;;
+        BE6500)
+            if [ ! -f /proc/gl-hw-info/device_mac ]
+            then
+                macaddr="$(get_random_bssid)"
+            else
+                [ "$band" = "2g" ] && macaddr=$(macaddr_add $(cat /proc/gl-hw-info/device_mac) 3)
+                [ "$band" = "5g" ] && macaddr=$(macaddr_add $(cat /proc/gl-hw-info/device_mac) 4)
+            fi
+            [ $band = "5g" ] && channels="36,40,44,48"
+            [ "$band" = "2g" ] && {
+                uci set wireless.$1.noscan=1
+            }
+            ;;
+        esac
+
+        [ -n "$macaddr" ] && {
+            uci set repeater.@main[0].macaddr="92${macaddr:2}"
+            uci commit repeater
+        }
+    fi
+    if [ "$type" == "qcacld32" ]; then
+        case "$model" in
+        E5800)
+            if [ ! -f /proc/gl-hw-info/device_mac ]; then
+                macaddr="$(get_random_bssid)"
+            else
+                [ "$band" = "2g" ] && macaddr=$(macaddr_add $(cat /proc/gl-hw-info/device_mac) 2)
+                [ "$band" = "5g" ] && macaddr=$(macaddr_add $(cat /proc/gl-hw-info/device_mac) 3)
+                [ "$band" = "6g" ] && macaddr=$(macaddr_add $(cat /proc/gl-hw-info/device_mac) 4)
+            fi
+            ;;
+        esac
+
+        [ -n "$macaddr" ] && {
+            uci set repeater.@main[0].macaddr="92${macaddr:2}"
+            uci commit repeater
+        }
+    fi
+
+    if [ "$type" == "mtkwifi" ]; then
+        case "$model" in
+        *)
+            if [ "$model" = "BE14000" ] && [ "$band" = "2g" ]; then
+                htmode=EHT40
+                uci set wireless.$1.noscan=1
+                uci set wireless.$1.ht_coex=1
+            elif [ "$band" = "5g" ]; then
+                htmode=EHT80
+            elif [ "$band" = "6g" ]; then
+                htmode=EHT320
+            fi
+
+            if [ ! -f /proc/gl-hw-info/device_mac ]; then
+                macaddr="$(get_random_bssid)"
+            else
+                [ "$band" = "2g" ] && macaddr=$(macaddr_add $(cat /proc/gl-hw-info/device_mac) 2)
+                [ "$band" = "5g" ] && macaddr=$(macaddr_add $(cat /proc/gl-hw-info/device_mac) 3)
+                [ "$band" = "6g" ] && macaddr=$(macaddr_add $(cat /proc/gl-hw-info/device_mac) 4)
+            fi
+        esac
+
+        [ -n "$macaddr" ] && {
+            uci set repeater.@main[0].macaddr="92${macaddr:2}"
+            uci commit repeater
+        }
+    fi
+
+    if [  -e /lib/wifi/rtk_wifi.sh ]; then
+        if [ ! -f /proc/gl-hw-info/device_mac ]; then
+                macaddr="$(get_random_bssid)"
+        else
+            [ "$band" = "2g" ] && macaddr=$(macaddr_add $(cat /proc/gl-hw-info/device_mac) 1)
+            [ "$band" = "5g" ] && macaddr=$(macaddr_add $(cat /proc/gl-hw-info/device_mac) 2)
+        fi
+
+        [ -n "$macaddr" ] && {
+            uci set repeater.@main[0].macaddr="92${macaddr:2}"
+            uci commit repeater
+        }
+    fi
+
+    country="${country:-US}"
+
+    max_txpwr=$(cat /usr/share/wifi-features-$1 | jsonfilter -e "@.txpwrs.$country[3]")
+
+    [ -n "$max_txpwr" ] || {
+        max_txpwr=$(cat /usr/share/wifi-features-$1 | jsonfilter -e '@.max_txpwr')
+        txpower_drop=$(cat /usr/share/wifi-features-$1 | jsonfilter -e "@.txpower_drop.$country")
+
+        [ -n "$txpower_drop" ] && let max_txpwr=max_txpwr+txpower_drop
+    }
+
+    uci -q batch <<-EOF
+        set wireless.$1.country="$country"
+        set wireless.$1.txpower="$max_txpwr"
+        set wireless.$1.random_bssid=1
+        set wireless.$1.disabled=0
+        set wireless.$1.channel=auto
+        set wireless.$1.band="$band"
+        set wireless.$1.htmode="$htmode"
+        set wireless.$1.channels="$channels"
+        set wireless.$1.macaddr="$macaddr"
+EOF
+
+    [ "$band" = "2g" ] && {
+        uci set wireless.$1.legacy_rates=0
+    }
+
+    [ "$band" = "6g" ] && {
+        uci set wireless.$1.chan_6g_only_psc="1"
+        uci set wireless.$1.require_mode="ax"
+    }
+
+    [ "$model" == "SFT1200" -a "$country" == "JP" ]  && uci set wireless.$1.txpower_lvl="0"
+
+    [ "$band" = "2g" -a -e /sys/kernel/debug/ieee80211/phy0/mt76/dbdc ] && uci set wireless.$1.vendor_vht="1"
+    mlo_support=$(cat /usr/share/wifi-features-$1 | jsonfilter -e '@.mlo')
+    if [ "$mlo_support" = true ]; then
+        if [ ! -f /etc/config/mlo ]; then
+            touch /etc/config/mlo
+            uci set mlo.global=mlo
+            uci set mlo.global.random_bssid=1
+        fi
+        uci add_list mlo.global.support_bands=$band
+    fi
+
+    if [ "$type" == "qcacld32" ]; then
+        if [ ! -f /etc/config/environment ]; then
+            touch /etc/config/environment
+            uci set environment.global=environment
+            uci set environment.global.use_environment="indoor"
+        fi
+    fi
+}
+
+fix_mld_wifi_iface() {
+    local device=$1
+    local macaddr=$2
+    local index=$3
+    local random_mac_base
+    local random_mac
+
+    # All wireless vap Macs in 6g of be9300 must maintain the same first four digits
+    [ "$band" = "6g" ] && [ "$type" == "qcawificfg80211" ] && random_mac_base=$4
+
+
+    if [ "$type" == "qcawificfg80211" ]; then
+        case "$model" in
+        BE3600)
+            macaddr=$(macaddr_add $macaddr 2)
+            ;;
+        BE9300)
+            if [ "$band" = "6g" ]; then
+                macaddr=$(qca_6g_wifi_macaddr_add $macaddr 4)
+            else
+                macaddr=$(macaddr_add $macaddr 4)
+            fi
+            [ "$band" = "2g" ] && {
+                local mlo_ifname="wlanmld$band"
+                uci set wireless.$mlo_ifname.disablecoext=1
+            }
+            ;;
+        BE6500)
+            macaddr=$(macaddr_add $macaddr 2)
+            [ "$band" = "2g" ] && {
+                local mlo_ifname="wlanmld$band"
+                uci set wireless.$mlo_ifname.disablecoext=1
+            }
+            ;;
+        esac
+    fi
+
+    if [ "$type" == "qcacld32" ]; then
+        case "$model" in
+        E5800)
+            macaddr=$(macaddr_add $macaddr 2)
+            ;;
+        esac
+    fi
+
+    # All wireless vap Macs in 6g of be9300 must maintain the same first four digits
+    if [ "$band" = "6g" ] && [ "$type" = "qcawificfg80211" ]; then
+        random_mac=$(qca_6g_wifi_macaddr_add $random_mac_base 2)
+    else
+        random_mac="$(get_random_bssid)"
+    fi
+
+    local encryption="psk2+ccmp"
+    echo "$(uci -q get mlo.global.support_bands)" | grep -q 6g && encryption="ccmp"
+
+    local mld_ifname="wlanmld$band"
+    local mlo_ssid="GL-$model-$mac-MLO"
+    index=$((index + 1))
+    uci -q batch <<-EOF
+        set wireless.$mld_ifname=wifi-iface
+        set wireless.$mld_ifname.device="$device"
+        set wireless.$mld_ifname.network=lan
+        set wireless.$mld_ifname.mode=ap
+        set wireless.$mld_ifname.macaddr="$random_mac"
+        set wireless.$mld_ifname.factory_macaddr="$macaddr"
+        set wireless.$mld_ifname.ssid="$mlo_ssid"
+        set wireless.$mld_ifname.encryption="$encryption"
+        set wireless.$mld_ifname.sae=1
+        set wireless.$mld_ifname.key="$key"
+        set wireless.$mld_ifname.wds=1
+        set wireless.$mld_ifname.isolate=0
+        set wireless.$mld_ifname.hidden=0
+        set wireless.$mld_ifname.ifname="$ifname$index"
+        set wireless.$mld_ifname.ieee80211k=1
+        set wireless.$mld_ifname.bss_transition=1
+        set wireless.$mld_ifname.disabled=1
+        set wireless.$mld_ifname.mld="mld0"
+EOF
+        uci set mlo.mld0=wifi-mld
+        uci set mlo.mld0.disabled=1
+        uci set mlo.mld0.mld_macaddr="$(get_random_bssid)"
+
+    if [ "$band" = "6g" ]; then
+        random_mac=$(qca_6g_wifi_macaddr_add $random_mac 1)
+    else
+        random_mac="$(get_random_bssid)"
+    fi
+
+
+    index=$((index + 1))
+
+    if [ "$type" == "qcawificfg80211" ]; then
+        [ "$band" = "2g" ] || [ "$band" = "5g" ] || [ "$band" = "6g" ] && {
+            uci set wireless.$mld_ifname.no_beacon_rsnxe=0
+        }
+    fi
+
+    uci set mlo.mld1=wifi-mld
+    uci set mlo.mld1.disabled=1
+    uci set mlo.mld1.mld_macaddr="$(get_random_bssid)"
+    uci commit mlo
+}
+
+fix_mtwifi_mld_group() {
+
+    local encryption="sae-mixed"
+    local key
+    local mld_group="mld0"
+    local mlo_ssid="GL-$model-$mac-MLO"
+    local eht_t2lmnegosupport=1
+    local mldgroup_mode="ap"
+
+    config_load wireless
+
+    key=$(lua -e 'lfactory = require "lfactory";print(lfactory.get_unique_password())' | grep '^[a-zA-Z0-9]\+$')
+    [ ${#key} = 10 ] || key=goodlife
+
+    local mld_iface="ra2 rai2"
+
+    case "$model" in
+        BE14000|BE10000)
+            mld_iface="$mld_iface rax2"
+            encryption="sae"
+            ;;
+    esac
+
+    uci -q batch <<-EOF
+        set wireless.$mld_group=wifi-mld
+        set wireless.$mld_group.disabled=1
+        set wireless.$mld_group.ssid="$mlo_ssid"
+        set wireless.$mld_group.eht_t2lmnegosupport="$eht_t2lmnegosupport"
+        set wireless.$mld_group.mode="$mldgroup_mode"
+        set wireless.$mld_group.encryption="$encryption"
+        set wireless.$mld_group.key="$key"
+        set wireless.$mld_group.iface="$mld_iface"
+        set wireless.$mld_group.hidden="0"
+        set wireless.$mld_group.mldgroup="1"
+EOF
+
+        uci commit wireless
+}
+
+fix_mtwifi_mld_wifi_iface() {
+    local device=$1
+    local macaddr=$2
+    local random_mac_base
+    local random_mac
+    local mtk_ifname="${ifname%%[0-9]*}"
+    local vifidx=$((index + 1))
+    local mld_group="mld0"
+    local support_6g="0"
+    local encryption
+
+    echo "$(uci -q get mlo.global.support_bands)" | grep -q 6g && support_6g="1"
+    if [ "$support_6g" = "1" ]; then
+        macaddr=$(macaddr_add $macaddr 3)
+        encryption="sae"
+    else
+        macaddr=$(macaddr_add $macaddr 2)
+        encryption="sae-mixed"
+    fi
+
+    random_mac="$(get_random_bssid)"
+
+    local mld_ifname="wlanmld$band"
+    local mlo_ssid="GL-$model-$mac-MLO"
+    index=$((index + 1))
+    vifidx=$((vifidx + 1))
+    uci -q batch <<-EOF
+        set wireless.$mld_ifname=wifi-iface
+        set wireless.$mld_ifname.device="$device"
+        set wireless.$mld_ifname.network=lan
+        set wireless.$mld_ifname.mode=ap
+        set wireless.$mld_ifname.macaddr="$random_mac"
+        set wireless.$mld_ifname.factory_macaddr="$macaddr"
+        set wireless.$mld_ifname.ssid="$mlo_ssid"
+        set wireless.$mld_ifname.encryption="$encryption"
+        set wireless.$mld_ifname.key="$key"
+        set wireless.$mld_ifname.wds=1
+        set wireless.$mld_ifname.isolate=0
+        set wireless.$mld_ifname.hidden=0
+        set wireless.$mld_ifname.ifname="$mtk_ifname$index"
+        set wireless.$mld_ifname.ieee80211k=1
+        set wireless.$mld_ifname.bss_transition=1
+        set wireless.$mld_ifname.disabled=1
+        set wireless.$mld_ifname.vifidx=$vifidx
+        set wireless.$mld_ifname.mld="$mld_group"
+EOF
+        uci set mlo.$mld_group=wifi-mld
+        uci set mlo.$mld_group.disabled=1
+        uci set mlo.$mld_group.mld_macaddr="$(get_random_bssid)"
+
+
+    index=$((index + 1))
+    vifidx=$((vifidx + 1))
+    uci commit mlo
+}
+
+fix_wifi_iface() {
+    local guest
+    local gifname=""
+    local ifname
+    local encryption
+    local sae_pwe
+    local key
+    local index=1
+    local macaddr
+    local guest_mac
+    local random_guest_mac
+    local random_bssid
+    local acs_freq_list
+    config_get device "$1" device
+    config_get band "$device" band
+    config_get type "$device" type
+
+    local ssid=$(generate_default_ssid $band $mac)
+
+    guest="guest$band"
+
+    # for mtk private
+    config_get ifname "$1" ifname
+    if [ "${ifname:0:2}" = "ra" ]; then
+        gifname="${ifname%[0-9]}1"
+    elif [ -e /bin/sfwifi ]; then
+        gifname="${ifname%[0-9]}$((${ifname##wlan}+2))"
+    elif [ -e /lib/wifi/qcawificfg80211.sh ]; then
+        ifname=$(band2ifname $band)
+        gifname="$ifname$index"
+    elif [ -e /lib/wifi/qcacld32.sh ];then
+        ifname=$(band2ifname $band)
+        [ "$band" = "2g" ] && gifname="wlan3"
+        [ "$band" = "5g" ] && gifname="wlan4"
+        [ "$band" = "6g" ] && gifname="wlan5"
+    elif [  -e /lib/wifi/rtk_wifi.sh ];then
+        ifname=$(band2ifname $band)
+        gifname=$ifname-vap0
+    else
+        ifname=$(band2ifname $band)
+        gifname=$ifname-1
+    fi
+
+    if [ "$type" = "qcawificfg80211" -o "$type" = "qcacld32" ]; then
+        [ "$band" = "6g" ] && encryption=ccmp || encryption=psk2+ccmp
+    elif [ "$type" = "mtkwifi" ]; then
+        [ "$band" = "6g" ] && encryption=sae || encryption=sae-mixed
+        [ "$band" = "2g" ] && encryption=psk2+ccmp
+    else
+        [ "$band" = "6g" ] && encryption=sae || encryption=psk2
+    fi
+    if [ "$type" = "qcacld32" -o "$type" = "qcawificfg80211"]; then
+        [ "$band" = "6g" ] && sae_pwe=2
+    else
+        [ "$band" = "6g" ] && sae_pwe=1
+    fi
+
+    key=$(lua -e 'lfactory = require "lfactory";print(lfactory.get_unique_password())' | grep '^[a-zA-Z0-9]\+$')
+    [ ${#key} = 10 ] || key=goodlife
+
+    if [ "$type" == "qcawificfg80211" ]; then
+        case "$model" in
+        B3000)
+            if [ ! -f /proc/gl-hw-info/device_mac ]; then
+                macaddr="$(get_random_bssid)"
+            else
+                [ "$band" = "2g" ] && macaddr=$(macaddr_add $(cat /proc/gl-hw-info/device_mac) 3)
+                [ "$band" = "5g" ] && macaddr=$(macaddr_add $(cat /proc/gl-hw-info/device_mac) 4)
+            fi
+            guest_mac=$(guest_wifi_macaddr_add $macaddr 2)
+            ;;
+        X2000)
+            if [ ! -f /proc/gl-hw-info/device_mac ]; then
+                macaddr="$(get_random_bssid)"
+            else
+                [ "$band" = "2g" ] && macaddr=$(macaddr_add $(cat /proc/gl-hw-info/device_mac) 2)
+                [ "$band" = "5g" ] && macaddr=$(macaddr_add $(cat /proc/gl-hw-info/device_mac) 3)
+            fi
+            guest_mac=$(guest_wifi_macaddr_add $macaddr 2)
+           ;;
+        BE3600)
+            [ "$band" = "2g" ] && macaddr=$(macaddr_add $(cat /proc/gl-hw-info/device_mac) 2)
+            [ "$band" = "5g" ] && macaddr=$(macaddr_add $(cat /proc/gl-hw-info/device_mac) 3)
+            [ ! -f /proc/gl-hw-info/device_mac ] && macaddr="$(get_random_bssid)"
+            guest_mac=$(guest_wifi_macaddr_add $macaddr 2)
+            ;;
+        BE9300)
+            if [ ! -f /proc/gl-hw-info/device_mac ]; then
+                macaddr="$(get_random_bssid)"
+                if [ "$band" = "6g" ]; then
+                    guest_mac=$(qca_6g_wifi_macaddr_add $macaddr 1)
+                fi
+            else
+                [ "$band" = "2g" ] && macaddr=$(macaddr_add $(cat /proc/gl-hw-info/device_mac) 3)
+                [ "$band" = "5g" ] && macaddr=$(macaddr_add $(cat /proc/gl-hw-info/device_mac) 4)
+                if [ "$band" = "6g" ]; then
+                    macaddr=$(macaddr_add $(cat /proc/gl-hw-info/device_mac) 5)
+                    guest_mac=$(qca_6g_wifi_macaddr_add $macaddr 1)
+                else
+                    guest_mac=$(guest_wifi_macaddr_add $macaddr 2)
+                fi
+            fi
+            ;;
+        BE6500)
+            if [ ! -f /proc/gl-hw-info/device_mac ]; then
+                macaddr="$(get_random_bssid)"
+            else
+                [ "$band" = "2g" ] && macaddr=$(macaddr_add $(cat /proc/gl-hw-info/device_mac) 3)
+                [ "$band" = "5g" ] && macaddr=$(macaddr_add $(cat /proc/gl-hw-info/device_mac) 4)
+                guest_mac=$(guest_wifi_macaddr_add $macaddr 2)
+            fi
+            ;;
+        esac
+    fi
+    if [ "$type" == "qcacld32" ]; then
+        case "$model" in
+        E5800)
+            [ "$band" = "2g" ] && macaddr=$(macaddr_add $(cat /proc/gl-hw-info/device_mac) 2)
+            if [ "$band" = "5g" ]; then
+                macaddr=$(macaddr_add $(cat /proc/gl-hw-info/device_mac) 3)
+                acs_freq_list='5180,5200,5220,5240,5745,5765,5785,5805,5825'
+            fi
+            [ "$band" = "6g" ] && macaddr=$(macaddr_add $(cat /proc/gl-hw-info/device_mac) 4)
+            [ ! -f /proc/gl-hw-info/device_mac ] && macaddr="$(get_random_bssid)"
+            guest_mac=$(guest_wifi_macaddr_add $macaddr 2)
+            ;;
+        esac
+    fi
+
+    if [ "$type" == "mtkwifi" ]; then
+        if [ ! -f /proc/gl-hw-info/device_mac ]; then
+            macaddr="$(get_random_bssid)"
+        else
+            case "$model" in
+            BE14000)
+                [ "$band" = "2g" ] && macaddr=$(macaddr_add $(cat /proc/gl-hw-info/device_mac) 4)
+                [ "$band" = "5g" ] && macaddr=$(macaddr_add $(cat /proc/gl-hw-info/device_mac) 5)
+                [ "$band" = "6g" ] && macaddr=$(macaddr_add $(cat /proc/gl-hw-info/device_mac) 6)
+                ;;
+            *)
+                [ "$band" = "2g" ] && macaddr=$(macaddr_add $(cat /proc/gl-hw-info/device_mac) 2)
+                [ "$band" = "5g" ] && macaddr=$(macaddr_add $(cat /proc/gl-hw-info/device_mac) 3)
+                [ "$band" = "6g" ] && macaddr=$(macaddr_add $(cat /proc/gl-hw-info/device_mac) 4)
+                ;;
+            esac
+        fi
+        
+        guest_mac=$(guest_wifi_macaddr_add $macaddr 2)
+    fi
+
+    if [  -e /lib/wifi/rtk_wifi.sh ]; then
+        if [ ! -f /proc/gl-hw-info/device_mac ]; then
+            macaddr="$(get_random_bssid)"
+        else
+            [ "$band" = "2g" ] && macaddr=$(macaddr_add $(cat /proc/gl-hw-info/device_mac) 1)
+            [ "$band" = "5g" ] && macaddr=$(macaddr_add $(cat /proc/gl-hw-info/device_mac) 2)
+        fi
+
+        guest_mac=$(guest_wifi_macaddr_add $macaddr 1)
+    fi
+
+    if [ "$type" == "mtk" ]; then
+        case "$model" in
+        *)
+            if [ ! -f /proc/gl-hw-info/device_mac ]; then
+                macaddr="$(get_random_bssid)"
+            else
+                [ "$band" = "2g" ] && macaddr=$(macaddr_add $(cat /proc/gl-hw-info/device_mac) 2)
+                [ "$band" = "5g" ] && macaddr=$(macaddr_add $(cat /proc/gl-hw-info/device_mac) 3)
+            fi
+
+            guest_mac=$(guest_wifi_macaddr_add $macaddr 2)
+            ;;
+        esac
+    fi
+
+    if [ "$type" == "mac80211" ]; then
+        case "$model" in
+        *)
+            if [ ! -f /proc/gl-hw-info/device_mac ]; then
+                macaddr="$(get_random_bssid)"
+            else
+                [ "$band" = "2g" ] && macaddr=$(macaddr_add $(cat /proc/gl-hw-info/device_mac) 2)
+                [ "$band" = "5g" ] && macaddr=$(macaddr_add $(cat /proc/gl-hw-info/device_mac) 3)
+            fi
+
+            guest_mac=$(guest_wifi_macaddr_add $macaddr 2)
+            ;;
+        esac
+    fi
+
+    random_bssid="$(get_random_bssid)"
+    uci -q batch <<-EOF
+        set wireless.$1.macaddr="$random_bssid"
+        set wireless.$1.factory_macaddr="$macaddr"
+        set wireless.$1.ssid="$ssid"
+        set wireless.$1.encryption="$encryption"
+        set wireless.$1.sae_pwe="$sae_pwe"
+        set wireless.$1.key="$key"
+        set wireless.$1.wds=1
+        set wireless.$1.isolate=0
+        set wireless.$1.hidden=0
+        set wireless.$1.ifname="$ifname"
+        set wireless.$1.ieee80211k=1
+        set wireless.$1.bss_transition=1
+        set wireless.$1.init=1
+        set wireless.$1.random_bssid=1
+EOF
+
+    if [ "$band" = "6g" ]; then
+        random_guest_mac=$(qca_6g_wifi_macaddr_add $random_bssid 1)
+    else
+        random_guest_mac="$(get_random_bssid)"
+    fi
+    uci -q get network.guest > /dev/null && {
+        uci -q batch <<-EOF
+            set wireless.$guest=wifi-iface
+            set wireless.$guest.device="$device"
+            set wireless.$guest.network=guest
+            set wireless.$guest.mode=ap
+            set wireless.$guest.ifname="$gifname"
+            set wireless.$guest.encryption="$encryption"
+            set wireless.$guest.sae_pwe="$sae_pwe"
+            set wireless.$guest.key=goodlife
+            set wireless.$guest.ssid="$ssid-Guest"
+            set wireless.$guest.macaddr="$random_guest_mac"
+            set wireless.$guest.factory_macaddr="$guest_mac"
+            set wireless.$guest.guest=1
+            set wireless.$guest.disabled=1
+            set wireless.$guest.wds=1
+            set wireless.$guest.isolate=1
+            set wireless.$guest.hidden=0
+            set wireless.$guest.init=0
+            set wireless.$guest.random_bssid=1
+EOF
+    }
+
+    [ "$type" = "qcawificfg80211" ] && {
+        if [ "$band" = "6g" ]; then
+            uci set wireless.$1.sae=1
+            uci set wireless.$guest.sae=1
+            uci set wireless.$1.acs_6g_only_psc="1"
+        elif [ "$band" = "5g" ]; then
+            uci set wireless.$1.sae=1
+            uci set wireless.$guest.sae=1
+        fi
+
+        case "$model" in
+        BE6500|BE9300)
+            [ "$band" = "2g" ] && {
+                uci set wireless.$1.disablecoext=1
+                uci set wireless.$guest.disablecoext=1
+            }
+
+            uci set wireless.$1.wpa_group_rekey=4320000
+            uci set wireless.$guest.wpa_group_rekey=4320000
+            ;;
+        esac
+    }
+
+    if [ "$type" = "qcawificfg80211" ]; then
+        [ "$band" = "5g" ] || [ "$band" = "6g" ] && {
+            uci set wireless.$1.no_beacon_rsnxe=0
+            uci set wireless.$guest.no_beacon_rsnxe=0
+        }
+        [ "$band" = "2g" ] && {
+            uci set wireless.$1.no_beacon_rsnxe=1
+            uci set wireless.$guest.no_beacon_rsnxe=1
+        }
+    fi
+
+    [ "$type" = "qcacld32" ] && {
+        if [ "$band" = "6g" ]; then
+            uci set wireless.$1.sae=1
+            uci set wireless.$guest.sae=1
+        elif [ "$band" = "5g" ]; then
+            uci set wireless.$1.sae=1
+            uci set wireless.$guest.sae=1
+            uci set wireless.$1.acs_freq_list=$acs_freq_list
+            uci set wireless.$guest.acs_freq_list=$acs_freq_list
+        fi
+    }
+
+    mlo_support=$(cat /usr/share/wifi-features-$device | jsonfilter -e '@.mlo')
+    if [ "$mlo_support" != true ]; then
+        return
+    fi
+
+    if [ "$type" = "mtkwifi" ]; then
+        uci set wireless.$guest.vifidx=$((index+1))
+        fix_mtwifi_mld_wifi_iface $device $macaddr $index
+    else
+        fix_mld_wifi_iface $device $macaddr $index $random_bssid
+    fi
+}
+
+set_default() {
+    config_load wireless
+    config_foreach fix_wifi_device wifi-device
+    uci commit wireless
+
+    config_load wireless
+    config_foreach fix_wifi_iface wifi-iface
+    uci commit wireless
+
+    case "$model" in
+        BE5100|MT3600BE|BE14000|BE10000)
+            fix_mtwifi_mld_group
+            ;;
+        esac
+}
+
+main() {
+    touch /tmp/wait_for_wifi_config
+    wait_configured && {
+        set_default
+        uci_apply_wifi_defaults
+    }
+    rm /tmp/wait_for_wifi_config
+
+    rm /tmp/.gl-wifi-default
+    /sbin/wifi reload
+}
+
+main &

@@ -1,0 +1,8 @@
+uci set firewall.security=include
+uci set firewall.security.type=script
+uci set firewall.security.path=/etc/firewall.security
+uci set firewall.security.reload=0
+
+[ -e "/sbin/fw3" ] && uci set firewall.security.reload=1
+
+uci commit firewall

@@ -1,0 +1,11 @@
+#!/bin/sh
+
+rm /usr/share/nftables.d/chain-pre/forward/01-s2s-forward.nft
+rm /usr/share/nftables.d/chain-pre/input/01-s2s-input.nft
+rm /usr/share/nftables.d/chain-pre/output/01-s2s-output.nft
+rm /usr/share/nftables.d/chain-pre/forward_lan/01-s2s-forward-lan.nft
+
+uci delete firewall.gls2s
+uci commit firewall
+
+exit 0

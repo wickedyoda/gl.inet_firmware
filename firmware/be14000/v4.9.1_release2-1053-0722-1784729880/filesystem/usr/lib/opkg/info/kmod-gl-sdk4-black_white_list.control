@@ -1,0 +1,10 @@
+Package: kmod-gl-sdk4-black_white_list
+Version: 5.4.281+git-2026.162.24246-b9ed294-1
+Depends: kernel (=5.4.281-1-df4fa332840f56a774a5d60bd140aaf6)
+Source: feeds/glinet/gl-sdk4-black_white_list
+SourceName: kmod-gl-sdk4-black_white_list
+Section: kernel
+SourceDateEpoch: 1781160246
+Architecture: aarch64_cortex-a53
+Installed-Size: 14396
+Description:  Kernel module for gl-sdk4-black_white_list

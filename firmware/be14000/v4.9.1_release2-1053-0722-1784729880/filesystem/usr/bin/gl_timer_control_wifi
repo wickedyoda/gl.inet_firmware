@@ -1,0 +1,122 @@
+#!/bin/sh
+# shellcheck disable=SC2034
+. /lib/functions/uci-defaults.sh
+. /lib/functions/gl_util.sh
+# $1: function
+# $2: action
+# $3: band
+# $4: guest
+
+function="$1"
+action="$2"
+band="$3"
+guest="$4"
+iface=""
+device=""
+
+usage() {
+    echo "Usage: gl_timer_control_wifi \$function \$action \$band <\$guest>"
+    echo "function: turn_onoff or power_switch"
+    echo "action: turnon or turnoff for turn_onoff function"
+    echo "    Max High Medium Low for power_switch function"
+    echo "band: 2G or 5G"
+    echo "guest: 0 or 1 (only turn_onoff need this param)"
+}
+
+if [ $# -lt 3 ] || [ "$1" = "turn_onoff" -a $# -lt 4 ];then
+    usage
+elif [ "$1" != "turn_onoff" -a "$1" != "power_switch" ];then
+    usage
+elif [ "$1" = "turn_onoff" ] && [ "$2" != "turnon" -a "$2" != "turnoff" ] && [ "$4" != "1" -a "$4" != "0" ];then
+    usage
+elif [ "$1" = "power_switch" ] && [ "$2" != "Max" -a "$2" != "High" -a "$2" != "Medium" -a "$2" != "Low" ];then
+    usage
+elif [ "$3" != "2G" -a "$3" != "5G" -a "$3" != "6G" -a "$3" != "MLD" ];then
+    usage
+fi
+
+get_iface() {
+    if [ "$1" = "iot5g" ] || [ "$1" = "iot2g" ]; then
+        return
+    fi
+
+    config_get mode $1 mode
+    if [ "$mode" != "ap" ];then
+        return
+    fi
+
+    config_get device_tmp $1 device
+    config_get guest_tmp $1 guest 0
+    config_get mld $1 mld
+    if [ "$device_tmp" = "$device" -a "$guest_tmp" = "$guest" -a -z "$mld" ];then
+        iface=$1
+    elif [ "$device" = "MLD" -a "$guest_tmp" = "$guest" ]; then
+        if [ -n "$mld" ]; then
+            iface=$mld
+        fi
+    fi
+}
+
+get_device() {
+    config_get band_tmp $1 band
+    band_tmp=`echo $band_tmp | awk '{print toupper($0)}'`
+    if [ "$band_tmp" = "$band" ];then
+        device=$1
+    elif [ "$band" = "MLD" ]; then
+        device="MLD"
+    fi
+}
+
+mode=`uci -q get glconfig.general.mode`
+if [ "$mode" != "router" -a "$guest" = "1" ];then
+    exit
+fi
+
+config_load wireless
+config_foreach get_device wifi-device
+if [ -z "$device" ];then
+    echo "gl_timer_control_wifi can't get wifi-device"
+    exit
+fi
+
+for count in `seq 1 40`
+do
+    lock -n /tmp/wifi_timer.lock
+    [ "$?" = "0"  ] && break
+    sleep 2
+done
+
+PORT=$(cat /etc/nginx/conf.d/gl.conf |grep -E "    listen [0-9]+;" |grep -oE '[0-9]+'| head -1)
+
+if [ "$PORT" != "" -a "$PORT" != "80" ];then
+    URL="http://127.0.0.1:$PORT/rpc"
+else
+    URL="http://127.0.0.1/rpc"
+fi
+
+if [ "$function" = "turn_onoff" ];then
+    config_foreach get_iface wifi-iface
+    if [ -z "$iface" ];then
+        echo "gl_timer_control_wifi can't get wifi-iface"
+        lock -u /tmp/wifi_timer.lock
+        exit
+    fi
+
+    if [ "$action" = "turnon" ];then
+        enable=true
+    else
+        enable=false
+    fi
+    if [ "$device" = "MLD" ]; then
+        curl -H 'glinet: 1' -k $URL -d "{\"jsonrpc\":\"2.0\",\"method\":\"call\",\"params\":[\"\",\"wifi\",\"set_mlo_config\",{\"init\":true,\"name\":\"$iface\",\"mlo_enable\":$enable}],\"id\":1}"
+    else
+        curl -H 'glinet: 1' -k $URL -d "{\"jsonrpc\":\"2.0\",\"method\":\"call\",\"params\":[\"\",\"wifi\",\"set_config\",{\"init\":true,\"iface_name\":\"$iface\",\"enabled\":$enable}],\"id\":1}"
+    fi
+else
+    power=$action
+    curl -H 'glinet: 1' -k $URL -d "{\"jsonrpc\":\"2.0\",\"method\":\"call\",\"params\":[\"\",\"wifi\",\"set_txpower\",{\"device\":\"$device\",\"txpower\":\"$power\"}],\"id\":1}"
+fi
+
+sleep 5
+lock -u /tmp/wifi_timer.lock
+

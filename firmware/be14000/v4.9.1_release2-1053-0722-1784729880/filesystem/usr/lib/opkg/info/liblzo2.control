@@ -1,0 +1,15 @@
+Package: liblzo2
+Version: 2.10-4
+Depends: libc
+Provides: liblzo
+Source: feeds/packages/libs/lzo
+SourceName: liblzo
+License: GPL-2.0-or-later
+LicenseFiles: COPYING
+Section: libs
+SourceDateEpoch: 1607138319
+ABIVersion: 2
+Architecture: aarch64_cortex-a53
+Installed-Size: 39094
+Description:  LZO is a data compression library which is suitable for data de-/compression
+ in real-time. This means it favours speed over compression ratio.

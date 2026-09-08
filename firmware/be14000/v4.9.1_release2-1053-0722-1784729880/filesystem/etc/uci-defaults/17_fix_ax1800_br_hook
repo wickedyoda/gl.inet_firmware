@@ -1,0 +1,27 @@
+#!/bin/sh
+
+# enable bridge-nf-call-custom for ax1800 axt1800 kernel which patched br_forward.c
+set_nf_call_custom()
+{
+    if [ -e /proc/sys/net/bridge/bridge-nf-call-custom ] && [ ! -f /etc/sysctl.d/90-bridge-nf-custom.conf ]; then
+        echo "net.bridge.bridge-nf-call-custom=1" >> /etc/sysctl.d/90-bridge-nf-custom.conf 2>/dev/null
+        echo 1 > /proc/sys/net/bridge/bridge-nf-call-custom
+    fi
+}
+
+fix_ap_isolate_br_hook()
+{
+    local model=`cat /proc/gl-hw-info/model`
+
+    case $model in
+        "ax1800" |\
+        "axt1800")
+            set_nf_call_custom
+        ;;
+    esac
+}
+
+fix_ap_isolate_br_hook
+
+exit 0
+

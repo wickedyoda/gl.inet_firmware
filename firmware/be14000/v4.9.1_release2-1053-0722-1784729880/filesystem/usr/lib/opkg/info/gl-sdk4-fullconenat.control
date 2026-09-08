@@ -1,0 +1,10 @@
+Package: gl-sdk4-fullconenat
+Version: git-2025.317.28192-e972afc-1
+Depends: libc, iptables-mod-fullconenat, kmod-ipt-fullconenat
+Source: feeds/glinet/gl-sdk4-fullconenat
+SourceName: gl-sdk4-fullconenat
+Section: base
+SourceDateEpoch: 1763020192
+Architecture: aarch64_cortex-a53
+Installed-Size: 812
+Description:  FULL CONE NAT OPTION

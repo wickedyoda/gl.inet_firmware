@@ -1,0 +1,83 @@
+#!/usr/bin/lua
+
+local zoneinfo = require "zoneinfo"
+local cjson    = require "cjson"
+local uci = require "uci"
+
+
+local function parse_AT_result(result)
+    if not string.find(result, "QLTS") then
+        return nil
+    end
+
+    local content = string.match(result, '([%+%-]%d+)')
+    if not content or content == "" then
+        return nil
+    end
+
+    local tz = tonumber(content)
+    tz = tz / 4
+
+    return tz
+end
+
+local function set_timezone_info(tzoffset)
+    local tz_str
+    local tz_info = {}
+    local tz_table = zoneinfo.zoneinfo_tab
+    if tzoffset == 0 then
+        tz_info.zonename = 'UTC'
+        tz_info.timezone = 'UTC'
+
+        return tz_info
+    end
+
+    if tzoffset > 0 then
+        tz_str = "<+" .. string.format("%02d>", tzoffset)
+    else
+        tz_str = "<" .. string.format("%03d>", tzoffset)
+    end
+
+    print(tz_str)
+    for _, value in ipairs(tz_table) do
+        if string.find(value.timezone, tz_str, 1, true) and string.find(value.zonename, "GMT", 1, true) then
+            local c = uci.cursor()
+            c:set("system", "@system[0]", "timezone", value.timezone)
+            c:set("system", "@system[0]", "zonename", value.zonename)
+            c:set("system", "@system[0]", "auto_timezone", "0")
+            c:commit("system")
+            os.execute("/etc/init.d/system reload")
+            os.remove("/etc/gl_crontabs/crontabs.d/auto_timezone")
+            os.remove("/tmp/gl_crontabs/crontabs.d/auto_timezone")
+            os.execute("/etc/init.d/gl_timer restart")
+            break
+        end
+    end
+end
+
+local c = uci.cursor()
+local auto_timezone = c.get("system", "@system[0]", "auto_timezone")
+
+if not auto_timezone then
+    return
+end
+if auto_timezone == "0" then
+    os.remove("/etc/gl_crontabs/crontabs.d/auto_timezone")
+    return
+end
+
+local handle = io.popen("ubus call gl-session call '{\"module\":\"modem\", \"func\":\"get_nitz_info\", \"params\":{}}'")
+local result
+if handle then
+    result = handle:read("*a")
+    handle:close()
+    print(result)
+end
+
+local status, conf = pcall(cjson.decode, result)
+
+if status and conf.result and conf.result.response then
+    local tz = parse_AT_result(conf.result.response)
+    set_timezone_info(tz)
+end
+

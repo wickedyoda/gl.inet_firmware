@@ -1,0 +1,75 @@
+#!/bin/sh
+
+. /lib/functions.sh
+
+APPEND_CONF_DIR="/etc/wireguard/profile"
+mkdir -p ${APPEND_CONF_DIR}
+
+set_peer_s_append()
+{
+	local peer_name="$1";shift
+	local proto_type="$1";shift
+	local origin_append_file="$1";shift
+
+	local group_id
+
+	config_load wireguard
+	config_get group_id "${peer_name}" "group_id"
+
+	if [ -n "${group_id}" ] ;then
+		mkdir -p ${APPEND_CONF_DIR}/${group_id}
+	else
+		return 1
+	fi
+
+	case "${proto_type}" in
+		"1")
+			rm -f ${APPEND_CONF_DIR}/${group_id}/${peer_name}
+			echo "$(grep -iE '^(jc|jmax|jmin|s1|s2|s3|s4|h1|h2|h3|h4|i1|i2|i3|i4|i5)\b' ${origin_append_file} 2>/dev/null)" >> "${APPEND_CONF_DIR}/${group_id}/${peer_name}"
+		;;
+		*)
+		;;
+	esac
+
+	#config_set "${peer_name}" "type" "${proto_type}"
+	uci set wireguard.${peer_name}.type="${proto_type}"
+
+	uci commit wireguard
+	return 0
+}
+
+
+ret_err()
+{
+	echo "error!
+
+usage:
+	wgclient_set_append peername protocol config_path
+eg.
+	wgclient_set_append \"peer_8491\" \"amneziaWG\" \"/tmp/awgclient.conf\"
+"
+
+	exit 1
+
+}
+
+peer="$1";shift
+protocol="$1";shift
+config_file="$1";shift
+proto_type='0'
+
+[ "$(uci -q get wireguard.${peer})" != 'peers' ] && ret_err
+
+case "${protocol}" in
+	"amneziaWG")
+		proto_type='1'
+	;;
+	*)
+		ret_err
+	;;
+esac
+
+[ -f ${config_file} ] || ret_err
+
+set_peer_s_append "$peer" "$proto_type" "$config_file"
+

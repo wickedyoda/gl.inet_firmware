@@ -1,0 +1,10 @@
+{
+  "index": 40,
+  "view": "bridge",
+  "level": 2,
+  "parent": "network",
+  "parent_icon": "network",
+  "parent_index": 48,
+  "disables": ["sdwan", "taps2s"],
+  "hidden_mode": ["agent"]
+}

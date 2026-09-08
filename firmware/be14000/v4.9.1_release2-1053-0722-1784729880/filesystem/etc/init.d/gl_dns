@@ -1,0 +1,17 @@
+#!/bin/sh /etc/rc.common
+START=95
+
+boot() {
+	config_syn=$(uci -q get gl-dns-v2.@dns[0].config_syn)
+	if [ "$config_syn" = '1' ];then
+		uci del gl-dns-v2.@dns[0].config_syn
+		config=$(ubus call gl-session call '{"module":"dns", "func":"get_config"}' | jsonfilter -e '@.result')
+		ubus call gl-session call "{\"module\":\"dns\",\"func\":\"set_config\",\"params\":$config}" > /dev/null
+	fi
+
+	#Temporary solution: let nginx read the latest /tmp/resolv.conf to re-establish the socket
+	nginx -s reload 2>/dev/null
+
+	return 0
+}
+

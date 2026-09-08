@@ -1,0 +1,10 @@
+Package: gl-sdk4-qos
+Version: git-2026.135.30663-7090dcf-1
+Depends: libc, gl-sdk4-utils, tc, kmod-sched-core, kmod-ifb
+Source: feeds/glinet/gl-sdk4-qos
+SourceName: gl-sdk4-qos
+Section: base
+SourceDateEpoch: 1778833863
+Architecture: aarch64_cortex-a53
+Installed-Size: 8361
+Description:  Oui Support for qos, and qos api

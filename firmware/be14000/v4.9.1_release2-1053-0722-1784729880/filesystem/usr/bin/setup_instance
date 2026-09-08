@@ -1,0 +1,544 @@
+#!/bin/sh
+
+# shellcheck disable=SC2050
+# shellcheck disable=SC3037
+
+# $1: operation (generate/clean)
+# $2: instance name
+# $3: group_id (optional)
+# $4: peer_id/client_id (optional)
+
+operation="$1"
+shift
+instance_name="$1"
+shift
+group_id="$1"
+shift
+client_id="$1"
+
+. /lib/functions.sh
+
+ip_rule_pref=6000
+
+wg_route_base=1000
+ovpn_route_base=1010
+
+wg_mark_base=0x1000
+ovpn_mark_base=0xa000
+vpn_mark_mask=0xf000
+
+wg_dns_port_base=2053
+ovpn_dns_port_base=4053
+
+# Show usage help
+show_help() {
+    cat << EOF
+Usage: setup_instance <operation> <instance_name> [group_id] [peer_id/client_id]
+
+Generate or clean VPN client instance with specified configuration.
+
+Operations:
+    generate     Generate a new VPN instance
+    clean        Clean up an existing VPN instance
+    start        Start a VPN instance
+    stop         Stop a VPN instance
+
+Arguments:
+    instance_name     Name of the instance (e.g., wgclient1, ovpnclient1)
+    group_id         (Optional) Group ID for the configuration
+    peer_id/client_id (Optional) Peer ID for WireGuard or Client ID for OpenVPN
+
+Examples:
+    # Create WireGuard instance with specific config:
+    setup_instance generate wgclient1 5465 2001
+
+    # Create OpenVPN instance with specific config:
+    setup_instance generate ovpnclient1 53593 4
+
+    # Create instance with first available config:
+    setup_instance generate wgclient1
+
+    # Clean specific instance:
+    setup_instance clean wgclient1
+
+    # Clean all instances:
+    setup_instance clean all
+
+    # Start an instance:
+    setup_instance start wgclient1
+
+    # Stop an instance:
+    setup_instance stop wgclient1
+
+Notes:
+    - Maximum 5 instances allowed per type
+    - Instance names must end with a number (1-5)
+    - If group_id and peer_id/client_id are omitted,
+      first available unused configuration will be used
+    - Clean operation without specific config will clean all instances
+EOF
+	echo -e "\n\n\n"
+}
+
+# Set instance type and related variables based on instance name
+set_instance_type() {
+    case "$1" in
+    ovpnclient*)
+        instance_type="ovpnclient"
+        instance_remote_config="ovpnclient"
+        instance_type_abbr=ovpn
+        route_base=$ovpn_route_base
+        mark_base=$ovpn_mark_base
+        dns_port_base=$ovpn_dns_port_base
+        return 0
+        ;;
+    wgclient*)
+        instance_type="wgclient"
+        instance_remote_config="wireguard"
+        instance_type_abbr=wg
+        route_base=$wg_route_base
+        mark_base=$wg_mark_base
+        dns_port_base=$wg_dns_port_base
+        return 0
+        ;;
+    *)
+        return 1
+        ;;
+    esac
+}
+
+# Check if instance name is valid and set index
+validate_instance() {
+    if [ -z "$1" ]; then
+        echo "Please specify instance name"
+        exit 1
+    fi
+
+    if ! set_instance_type "$1"; then
+        echo "unknown instance type"
+        exit 0
+    fi
+
+    # 最大支持5个实例，从1到5
+    case "$1" in
+        wgclient[1-5]|ovpnclient[1-5])
+            index=${1##*[a-z]}
+            ;;
+        *)
+            echo "illegal instance index"
+            exit 0
+            ;;
+    esac
+
+    # For generate operation, check max instances
+    if [ "$operation" = "generate" ] || [ "$operation" = "gen" ]; then
+        if check_instance_exists "$1"; then
+            echo "Instance $1 already exists"
+            exit 1
+        fi
+        instance_count=$(count_existing_instances)
+        if [ "$instance_count" -ge 5 ]; then
+            echo "Maximum number of instances (5) reached"
+            exit 1
+        fi
+    # For other operations except 'clean all', check if instance exists
+    elif [ "$operation" != "clean" ] || [ "$1" != "all" ]; then
+        if ! check_instance_exists "$1"; then
+            echo "Instance $1 does not exist"
+            exit 1
+        fi
+    fi
+
+    # Set mark value for the instance
+    mark_base_high=$(echo "$mark_base" | cut -c 1-3)
+    mark_high=$(printf "%x" $(($mark_base_high+${index}-1)))
+    mark_value=0x${mark_high}000
+}
+
+# Check if instance already exists
+check_instance_exists() {
+    local instance_to_check="$1"
+    if uci -q get network.${instance_to_check} >/dev/null; then
+        return 0
+    fi
+    return 1
+}
+
+# Count total existing instances
+count_existing_instances() {
+    local count=0
+    for i in $(seq 1 5); do
+        if uci -q get network.${instance_type}${i} >/dev/null; then
+            count=$((count + 1))
+        fi
+    done
+    echo $count
+}
+
+# Check if configuration is already in use
+check_duplicate_config() {
+    local config_name="$1"
+    for i in $(seq 1 5); do
+        existing_config=$(uci -q get network.${instance_type}${i}.config)
+        if [ "$existing_config" = "$config_name" ]; then
+            return 1
+        fi
+    done
+    return 0
+}
+
+# Find first available peer/client configuration
+find_available_peer_config() {
+    local found_config=""
+
+    if [ "$instance_type" = "wgclient" ]; then
+        # For WireGuard, iterate through peers sections
+        config_load wireguard
+        config_foreach handle_peer peers
+    else
+        # For OpenVPN, iterate through clients sections
+        config_load ovpnclient
+        config_foreach handle_client clients
+    fi
+
+    echo "$found_config"
+}
+
+# Handler for WireGuard peer sections
+handle_peer() {
+    local section="$1"
+
+    # Skip if we already found a config
+    [ -n "$found_config" ] && return 0
+
+    # Check if this peer config is not already in use
+    if check_duplicate_config "$section"; then
+        found_config="$section"
+        return 0
+    fi
+}
+
+# Handler for OpenVPN client sections
+handle_client() {
+    local section="$1"
+
+    # Skip if we already found a config
+    [ -n "$found_config" ] && return 0
+
+    # Check if this client config is not already in use
+    if check_duplicate_config "$section"; then
+        found_config="$section"
+        return 0
+    fi
+}
+
+clean_user_group() {
+    sed -i "/^${instance_name}:/d" /etc/group
+}
+
+clean_instance() {
+    local index="$1"
+
+    uci -q delete network.${instance_type}${index}
+
+    uci -q delete dhcp.${instance_type}${index}
+    rm -rf /tmp/dnsmasq.d.${instance_type}${index}
+
+    uci commit network
+    uci commit dhcp
+    uci commit firewall
+
+    clean_user_group
+}
+
+setup_user_group() {
+    local group_num
+    if [ "$instance_type" = "wgclient" ]; then
+        group_num=$((2000 + index * 100))
+    elif [ "$instance_type" = "ovpnclient" ]; then
+        group_num=$((4000 + index * 100))
+    fi
+
+    # Add group if it doesn't exist
+    if ! grep -q "^${instance_name}:" /etc/group; then
+        echo "${instance_name}:x:${group_num}:root" >> /etc/group
+    fi
+}
+
+update_provider_config() {
+    local group_id=$1
+    local peer_id=$2
+    local interface=$3
+
+    local group_name=$(uci -q get wireguard.group_$group_id.group_name)
+    [ "$group_name" = "Hideme" ] && [ "interface" != "" ] && ubus call gl-session call "{\"module\":\"wg_client\",\"func\":\"update_provider_config\",\"params\":{\"group_id\":$group_id, \"peer_id\":$peer_id, \"instance\":\"$interface\", \"update_all\":false}}"
+    [ "$group_name" = "PIA" ] || [ "$group_name" = "IPVanish" ] && ubus call gl-session call "{\"module\":\"wg_client\",\"func\":\"update_provider_config\",\"params\":{\"group_id\":$group_id, \"peer_id\":$peer_id, \"update_all\":false}}"
+    [ "$group_name" = "NordVPN" ] && ubus call gl-session call "{\"module\":\"wg_client\",\"func\":\"update_provider_config\",\"params\":{\"group_id\":$group_id, \"peer_id\":$peer_id, \"update_all\":false}}"
+}
+
+clear_instance_runtime_state() {
+    local index="$1"
+    local interface="${instance_type}${index}"
+
+    case "$instance_type" in
+        ovpnclient)
+            rm -f "/tmp/ovpnclient/${interface}_state"
+            rm -f "/tmp/run/ovpn_resolved_ip/${interface}"
+            ;;
+        wgclient)
+            rm -f "/tmp/wireguard/${interface}_state"
+            rm -f "/tmp/run/wg_resolved_ip/${interface}"
+            ;;
+    esac
+}
+
+generate_network(){
+    if [ -z "$group_id" ] || [ -z "$client_id" ]; then
+        config_name=$(find_available_peer_config)
+        if [ -z "$config_name" ]; then
+            echo "No available ${instance_type} configurations found"
+            exit 1
+        fi
+    else
+        if [ "$instance_type" = "ovpnclient" ]; then
+            config_name="${group_id}_${client_id}"
+        else
+            config_name="peer_${client_id}"
+        fi
+        # Validate config exists
+        if ! uci -q get ${instance_remote_config}."${config_name}" >/dev/null; then
+            echo "Invalid ${instance_type} configuration: ${config_name}"
+            exit 1
+        fi
+        # Check for duplicate configuration
+        if ! check_duplicate_config "${config_name}"; then
+            echo "Configuration ${config_name} is already in use"
+            exit 1
+        fi
+    fi
+    ip4table=$(($route_base+$index))
+    uci set network.${instance_type}${index}=interface
+    uci set network.${instance_type}${index}.proto="${instance_type}"
+    uci set network.${instance_type}${index}.config="${config_name}"
+    uci set network.${instance_type}${index}.disabled='1'
+    uci set network.${instance_type}${index}.ip4table=$ip4table
+    uci set network.${instance_type}${index}.gl_vpn_instance='1'
+
+    [ "$instance_type" = "wgclient" ] && update_provider_config $group_id $client_id ${instance_type}${index}
+
+    local ip6table=${ip4table}
+    uci set network.${instance_type}${index}.ip6table=$ip6table
+
+    uci commit network
+
+	#Todo remove when vpn-policy all cleaned
+	uci -q del network.policy_default_rt_vpn
+	uci -q del network.policy_default_rt_vpn6
+	uci -q del network.policy_default_rt_vpn_ts
+	uci commit network
+}
+
+generate_dhcp(){
+    uci set dhcp.${instance_type}${index}=dnsmasq
+    uci set dhcp.${instance_type}${index}.domainneeded='1'
+    uci set dhcp.${instance_type}${index}.localise_queries='1'
+    uci set dhcp.${instance_type}${index}.rebind_protection='0'
+    uci set dhcp.${instance_type}${index}.boguspriv='0'
+    uci set dhcp.${instance_type}${index}.local='/lan/'
+    uci set dhcp.${instance_type}${index}.domain='lan'
+    uci set dhcp.${instance_type}${index}.expandhosts='1'
+    uci set dhcp.${instance_type}${index}.cachesize='1000'
+    uci set dhcp.${instance_type}${index}.authoritative='1'
+    uci set dhcp.${instance_type}${index}.readethers='1'
+    uci set dhcp.${instance_type}${index}.resolvfile=/tmp/resolv.conf.d/resolv.conf.${instance_type}${index}
+    #uci set dhcp.${instance_type}${index}.localservice='1'
+    uci set dhcp.${instance_type}${index}.ednspacket_max='1232'
+    uci set dhcp.${instance_type}${index}.confdir=/tmp/dnsmasq.d.${instance_type}${index}
+    uci set dhcp.${instance_type}${index}.port=$((${dns_port_base}+${index}*100))
+    uci set dhcp.${instance_type}${index}.filter_aaaa='1'
+    uci set dhcp.${instance_type}${index}.disabled='1'
+    uci set dhcp.${instance_type}${index}.user='dnsmasq_vpn'
+    uci del dhcp.${instance_type}${index}.addnhosts
+    uci add_list dhcp.${instance_type}${index}.addnhosts='/tmp/hosts.vpn'
+    uci set dhcp.${instance_type}${index}.ignore_hosts_dir='1'
+    uci commit dhcp
+
+    mkdir -p /tmp/dnsmasq.d.${instance_type}${index}
+    echo "mark=${mark_value}" >/tmp/dnsmasq.d.${instance_type}${index}/mark
+    echo 'no-dhcp-interface=*' >/tmp/dnsmasq.d.${instance_type}${index}/no-dhcp
+}
+
+sync_override_vpn() {
+    local override_vpn=$(uci -q get gl-dns-v2.@dns[0].override_vpn)
+    local main_noresolv=$(uci -q get dhcp.@dnsmasq[0].noresolv)
+    local main_server=$(uci -q get dhcp.@dnsmasq[0].server)
+
+    # Get VPN DNS port based on instance type and index
+    get_vpn_dns_port() {
+        local type="$1"
+        local num="$2"
+        [ -z "$num" ] && num=1
+        [ "$num" -lt 1 -o "$num" -gt 5 ] && return 1
+
+        case "$type" in
+            wgclient)
+                echo "$((2054 + num * 100))"
+                ;;
+            ovpnclient)
+                echo "$((4054 + num * 100))"
+                ;;
+            *)
+                return 1
+                ;;
+        esac
+    }
+
+    if [ "$override_vpn" = "1" -a "$main_noresolv" = "1" -a -n "$main_server" ]; then
+        # Check if using local DNS service (stubby or dnscrypt-proxy)
+        if echo "$main_server" | grep -q "^127.0.0.1#5453$"; then
+            # Calculate port based on instance type and index
+            local vpn_dns_port=$(get_vpn_dns_port "$instance_type" "$index")
+            if [ -n "$vpn_dns_port" ]; then
+                main_server="127.0.0.1#$vpn_dns_port"
+            fi
+        fi
+        uci -q set dhcp.${instance_type}${index}.noresolv="1"
+        uci del dhcp.${instance_type}${index}.server
+        for server in $main_server; do
+            uci -q add_list dhcp.${instance_type}${index}.server="$server"
+        done
+    else
+        uci -q del dhcp.${instance_type}${index}.noresolv
+        uci -q del dhcp.${instance_type}${index}.server
+    fi
+
+    uci commit dhcp
+}
+
+instance_set_route_rule() {
+    local interface="$1"
+    local mark_value="$2"
+    local ip4table="$(uci -q get network.${interface}.ip4table)"
+    local ip6table="$(uci -q get network.${interface}.ip6table)"
+
+    uci set network.rt_${interface}=rule
+    uci set network.rt_${interface}.mark="${mark_value}/${vpn_mark_mask}"
+    uci set network.rt_${interface}.lookup=$ip4table
+    uci set network.rt_${interface}.priority=$ip_rule_pref
+
+    uci set network.${interface}_blackhole=route
+    uci set network.${interface}_blackhole.target='0.0.0.0'
+    uci set network.${interface}_blackhole.netmask='0.0.0.0'
+    uci set network.${interface}_blackhole.interface="loopback"
+    uci set network.${interface}_blackhole.metric='254'
+    uci set network.${interface}_blackhole.type='blackhole'
+    uci set network.${interface}_blackhole.table="$ip4table"
+
+    uci set network.rt_${interface}_6=rule6
+    uci set network.rt_${interface}_6.mark="${mark_value}/${vpn_mark_mask}"
+    uci set network.rt_${interface}_6.lookup=$ip6table
+    uci set network.rt_${interface}_6.priority=$ip_rule_pref
+
+    uci set network.${interface}_blackhole_6=route6
+    uci set network.${interface}_blackhole_6.target='::0/0'
+    uci set network.${interface}_blackhole_6.interface="loopback"
+    uci set network.${interface}_blackhole_6.metric='25400'
+    uci set network.${interface}_blackhole_6.type='blackhole'
+    uci set network.${interface}_blackhole_6.table="$ip6table"
+
+    uci commit
+}
+
+start_instance() {
+    local index="$1"
+    uci set network.${instance_type}${index}.disabled='0'
+    instance_set_route_rule "${instance_type}${index}" "${mark_value}"
+
+    uci set dhcp.${instance_type}${index}.disabled='0'
+    mkdir -p /tmp/dnsmasq.d.${instance_type}${index}
+    echo "mark=${mark_value}" >/tmp/dnsmasq.d.${instance_type}${index}/mark
+    echo 'no-dhcp-interface=*' >/tmp/dnsmasq.d.${instance_type}${index}/no-dhcp
+    uci commit network
+    uci commit dhcp
+    uci commit firewall
+    uci commit route_policy
+    sync_override_vpn
+}
+
+stop_instance() {
+    local index="$1"
+    uci set network.${instance_type}${index}.disabled='1'
+    uci -q delete network.rt_${instance_type}${index}
+    uci -q delete network.${instance_type}${index}_blackhole
+    uci -q delete network.rt_${instance_type}${index}_6
+    uci -q delete network.${instance_type}${index}_blackhole_6
+
+    uci set dhcp.${instance_type}${index}.disabled='1'
+    uci commit network
+    uci commit dhcp
+    uci commit firewall
+    uci commit route_policy
+    clear_instance_runtime_state "$index"
+}
+
+# Check if instance is running
+is_instance_running() {
+    local index="$1"
+    local network_disabled=$(uci -q get network.${instance_type}${index}.disabled)
+    local dhcp_disabled=$(uci -q get dhcp.${instance_type}${index}.disabled)
+
+    if [ "$network_disabled" = "0" ] || [ "$dhcp_disabled" = "0" ]; then
+        return 0
+    fi
+    return 1
+}
+
+uci -q del firewall.process_mark_dns
+uci commit firewall
+
+case "$operation" in
+generate|gen)
+    validate_instance "$instance_name"
+    setup_user_group
+    generate_network
+    generate_dhcp
+    ;;
+clean)
+    if [ "$instance_name" = "all" ]; then
+        # Clean both wgclient and ovpnclient instances
+        for type in "wgclient" "ovpnclient"; do
+            if set_instance_type "$type"1; then
+                for i in $(seq 5 -1 1); do
+                    if check_instance_exists "${instance_type}${i}"; then
+                        if is_instance_running "$i"; then
+                            echo "Instance ${instance_type}${i} is still running. Please stop it first."
+                            exit 1
+                        fi
+                        clean_instance "$i"
+                    fi
+                done
+            fi
+        done
+    else
+        validate_instance "$instance_name"
+        if is_instance_running "$index"; then
+            echo "Instance ${instance_name} is still running. Please stop it first."
+            exit 1
+        fi
+        clean_instance "$index"
+    fi
+    ;;
+start|stop)
+    validate_instance "$instance_name"
+    if [ "$operation" = "start" ]; then
+        start_instance "$index"
+    else
+        stop_instance "$index"
+    fi
+    ;;
+*)
+    show_help
+    echo "unknown operation"
+    exit 1
+    ;;
+esac

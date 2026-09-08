@@ -1,0 +1,10 @@
+Package: gl-sdk4-utils
+Version: git-2026.156.38854-8ce5888-1
+Depends: libc, gl-sdk4-uci, libubus20210630, libblobmsg-json20210516, libcurl4, ethtool, swconfig, jansson4
+Source: feeds/glinet/gl-sdk4-utils
+SourceName: gl-sdk4-utils
+Section: base
+SourceDateEpoch: 1780656454
+Architecture: aarch64_cortex-a53
+Installed-Size: 45144
+Description:  It encapsulates some functions that are used more frequently for Gl.Inet

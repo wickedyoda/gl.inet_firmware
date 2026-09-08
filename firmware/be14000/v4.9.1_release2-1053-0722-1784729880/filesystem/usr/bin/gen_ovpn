@@ -1,0 +1,282 @@
+#!/bin/sh
+
+NAME=ovpnserver
+. /lib/functions/gl_util.sh
+
+remote_array=$1
+
+uci_get_by_name() {
+	local ret=$(uci get $NAME.$1.$2 2>/dev/null)
+	echo ${ret:=$3}
+}
+
+uci_get_by_type() {
+	local ret=$(uci get $NAME.@$1[0].$2 2>/dev/null)
+	echo ${ret:=$3}
+}
+
+# Define global variable
+VPN_DIR="/etc/openvpn/cert"
+OVPN_DIR="/etc/openvpn/ovpn"
+
+CA_CRT="$VPN_DIR/ca.crt"
+SERVER_KEY="$VPN_DIR/server.key"
+SERVER_CRT="$VPN_DIR/server.crt"
+CLIENT_KEY="$VPN_DIR/client.key"
+CLIENT_CRT="$VPN_DIR/client.crt"
+DH_KEY="$VPN_DIR/dh1024.pem"
+TA_KEY="$VPN_DIR/ta.key"
+
+CLIENT_OVPN="$OVPN_DIR/client.ovpn"
+SERVER_OVPN="$OVPN_DIR/server.ovpn"
+
+create_server_ovpn() {
+	# uci
+	local auth=$(uci_get_by_name vpn auth)
+	local proto=$(uci_get_by_name vpn proto)
+	local port=$(uci_get_by_name vpn port)
+	local dev=$(uci_get_by_name vpn dev)
+	local dev_type=$(uci_get_by_name vpn dev_type)
+	local cipher=$(uci_get_by_name vpn cipher)
+	local comp=$(uci_get_by_name vpn comp)
+	local subnet=$(uci_get_by_name vpn subnet)
+	local mask=$(uci_get_by_name vpn mask)
+	local dns=$(uci_get_by_name vpn dns)
+	local model=$(get_model)
+	local str=$(uci_get_by_name vpn start)
+	local end=$(uci_get_by_name vpn end)
+	local ip_str="${subnet%.*}.$str"
+	local ip_end="${subnet%.*}.$end"
+	local subnetv6="$(uci_get_by_name vpn subnetv6)/64"
+	local ipv6_status="$(ifstatus wan6 2>/dev/null|grep '\"up\": true')"
+	local ipv6_enable="$(uci get glipv6.globals.enabled)"
+	local ipv6_mode="$(uci get glipv6.lan.mode)"
+
+	if [ "$ipv6_status" != "" -a "$ipv6_enable" = "1" -a "$ipv6_mode" != "relay" ];then
+		local ipv6="1"
+	else
+		local ipv6="0"
+	fi
+
+	local redirect_gateway="redirect-gateway def1"
+	[ "$ipv6" = "1" ] && redirect_gateway="redirect-gateway def1 ipv6"
+
+	if [ "$dev_type" = "tap-s2s" ]; then
+		dev_type=tap
+	fi
+cat > $SERVER_OVPN << EOF
+client-to-client
+persist-key
+persist-tun
+auth ${auth:="SHA256"}
+cipher ${cipher:="AES-256-GCM"}
+ncp-disable
+dev ${dev:="tun-SERVER"}
+dev-type ${dev_type:="tun"}
+group nogroup
+keepalive 10 120
+mode server
+mute 5
+port ${port:="1194"}
+proto ${proto:="udp"}
+push "persist-key"
+push "persist-tun"
+push "${redirect_gateway}"
+route-gateway dhcp
+server $subnet $mask
+server-ipv6 $subnetv6
+topology subnet
+duplicate-cn
+user nobody
+verb 3
+EOF
+	[ ! -z "$dns" ] && echo "push \"dhcp-option DNS $dns\"" >> $SERVER_OVPN
+	# [ ! -z "$private_subnet" -a ! -z "$private_mask" ] && echo "push \"route $private_subnet $private_mask\"" >> $SERVER_OVPN
+
+	# Append the ca file
+	echo "<ca>" >> $SERVER_OVPN
+	cat $CA_CRT >> $SERVER_OVPN
+	echo "</ca>" >> $SERVER_OVPN
+
+	# Append the cert file
+	echo "<cert>" >> $SERVER_OVPN
+	cat $SERVER_CRT >> $SERVER_OVPN
+	echo "</cert>" >> $SERVER_OVPN
+
+	# Append the key file
+	echo "<key>" >> $SERVER_OVPN
+	cat $SERVER_KEY >> $SERVER_OVPN
+	echo "</key>" >> $SERVER_OVPN
+
+	# Append Diffie Hellman file
+	echo "<dh>" >> $SERVER_OVPN
+	cat $DH_KEY >> $SERVER_OVPN
+	echo "</dh>" >> $SERVER_OVPN
+
+	# Setting ovpn to uci
+	uci set vpn_service.global.ovpn="$SERVER_OVPN"
+	uci commit vpn_service
+}
+
+wan_ip() {
+	. /lib/functions/network.sh
+
+	local host
+	network_get_ipaddr host wan
+
+	[ -z "$host" ] && return 0
+	echo "$host"
+}
+
+create_client_ovpn() {
+	local dev_type=$(uci_get_by_name vpn dev_type)
+	local proto=$(uci_get_by_name vpn proto)
+	local port=$(uci_get_by_name vpn port)
+	local auth=$(uci_get_by_name vpn auth)
+	local cipher=$(uci_get_by_name vpn cipher)
+	local comp=$(uci_get_by_name vpn comp)
+	local client_auth=$(uci_get_by_name vpn client_auth)
+	local lzo=$(uci_get_by_name vpn lzo)
+	local hmac=$(uci_get_by_name vpn hmac)
+	local ta=$(uci_get_by_name vpn ta)
+	local compress
+
+	if [ "${lzo}" = "1" ]; then
+		compress="comp-lzo"
+	fi
+
+	local host=""
+	if [ -z "$remote_array" ];then
+		host=$(curl -s --connect-timeout 1 tool.gl-inet.com/ip | grep -m 1 -o '[0-9]\{1,3\}\.[0-9]\{1,3\}\.[0-9]\{1,3\}\.[0-9]\{1,3\}')
+		if [ -z "$host" ];then
+			host=$(ubus call network.interface.wan status | grep '\"address\": \"' | grep -oE '[0-9]{1,3}.[0-9]{1,3}.[0-9]{1,3}.[0-9]{1,3}')
+			if [ -z "$host" ];then
+				host=$(uci get network.lan.ipaddr)
+			fi
+		fi
+	else
+		host="$remote_array"
+	fi
+	if [ -z "$host" ];then
+		echo 1 > /tmp/ovpn_export
+		exit 1
+	fi
+	echo 0 > /tmp/ovpn_export
+	host=${host:="127.0.0.1"}
+
+
+if [ "$dev_type" = "tap-s2s" ];then
+cat > $CLIENT_OVPN << EOF
+client
+dev tap
+dev-type tap
+proto ${proto:="udp"}
+EOF
+
+for address in ${host}; do
+        local remote=$(echo "${address}" | grep -oE '\b([0-9]{1,3}\.){3}[0-9]{1,3}\b' | head -n 1)
+        [ -z "${remote}" ] && {
+                remote=$(echo "${address}" | grep -oE '\b([0-9a-fA-F]{0,4}:){1,7}[0-9a-fA-F]{0,4}\b' | head -n 1)
+                [ -z "${remote}" ] && {
+                        remote=$(echo "${address}" | grep -oE '\b([0-9a-zA-Z._-]){1,}\b')
+                        [ "$remote" != "${address}" ] && remote=''
+                }
+        }
+        [ -n "${remote}" ] && {
+                echo "remote ${remote} ${port:="1194"}" >>$CLIENT_OVPN
+        }
+done
+
+cat >> $CLIENT_OVPN << EOF
+float
+resolv-retry infinite
+nobind
+persist-key
+persist-tun
+auth ${auth:="SHA256"}
+cipher ${cipher:="AES-256-GCM"}
+nice 0
+mute 5
+verb 3
+${compress}
+EOF
+else
+cat > $CLIENT_OVPN << EOF
+client
+dev tun
+dev-type tun
+proto ${proto:="udp"}
+EOF
+
+for address in ${host}; do
+        local remote=$(echo "${address}" | grep -oE '\b([0-9]{1,3}\.){3}[0-9]{1,3}\b' | head -n 1)
+        [ -z "${remote}" ] && {
+                remote=$(echo "${address}" | grep -oE '\b([0-9a-fA-F]{0,4}:){1,7}[0-9a-fA-F]{0,4}\b' | head -n 1)
+                [ -z "${remote}" ] && {
+                        remote=$(echo "${address}" | grep -oE '\b([0-9a-zA-Z._-]){1,}\b')
+                        [ "$remote" != "${address}" ] && remote=''
+                }
+        }
+        [ -n "${remote}" ] && {
+                echo "remote ${remote} ${port:="1194"}" >>$CLIENT_OVPN
+        }
+done
+
+cat >> $CLIENT_OVPN << EOF
+float
+resolv-retry infinite
+nobind
+persist-key
+persist-tun
+auth ${auth:="SHA256"}
+cipher ${cipher:="AES-256-GCM"}
+nice 0
+mute 5
+verb 3
+${compress}
+EOF
+fi
+
+	if [ "$client_auth" = "2" -o "$client_auth" = "3" ]; then
+		echo "auth-user-pass" >> $CLIENT_OVPN
+	fi
+
+	# Append the ca file
+	echo "<ca>" >> $CLIENT_OVPN
+	cat $CA_CRT >> $CLIENT_OVPN
+	echo "</ca>" >> $CLIENT_OVPN
+
+	if [ "$client_auth" = "1" -o "$client_auth" = "3" ]; then
+		# Append the cert file
+		echo "<cert>" >> $CLIENT_OVPN
+		cat $CLIENT_CRT >> $CLIENT_OVPN
+		echo "</cert>" >> $CLIENT_OVPN
+
+		# Append the key file
+		echo "<key>" >> $CLIENT_OVPN
+		cat $CLIENT_KEY >> $CLIENT_OVPN
+		echo "</key>" >> $CLIENT_OVPN
+	fi
+
+	if [ "${hmac}" = "1" ]; then
+		if [ -e "$TA_KEY" ]; then
+			echo "<tls-auth>" >> $CLIENT_OVPN
+			cat $TA_KEY >> $CLIENT_OVPN
+			echo "</tls-auth>" >> $CLIENT_OVPN
+		fi
+	fi
+
+	# Setting host to uci
+	uci set vpn_service.vpn.host="$host"
+	uci commit vpn_service
+}
+
+[ -e "$CA_KEY" ] && [ -e "$CA_CRT" ] && \
+	[ -e "$SERVER_KEY" ] && [ -e "$SERVER_CRT" ] && \
+	[ -e "$CLIENT_KEY" ] && [ -e "$CLIENT_CRT" ] && \
+	[ "$FORCE"x != "force"x ] && exit 0
+
+# Start generate ovpn file
+[ ! -d "$OVPN_DIR" ] && mkdir -p $OVPN_DIR
+create_server_ovpn
+create_client_ovpn

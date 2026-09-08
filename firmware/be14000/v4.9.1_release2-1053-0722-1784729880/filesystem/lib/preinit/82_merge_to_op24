@@ -1,0 +1,90 @@
+. /lib/functions.sh 
+
+do_merge_a1300() {
+    [ -d /sys/class/net/lan1 ] || return
+
+    uci -q get network.@switch[0] > /dev/null || return
+
+    uci delete network.@switch[0]
+    uci delete network.@switch_vlan[1]
+    uci delete network.@switch_vlan[0]
+
+    uci delete network.@device[0].ports
+    uci add_list network.@device[0].ports=lan1
+    uci add_list network.@device[0].ports=lan2
+
+    uci set network.@device[1].name=lan1
+    uci set network.@device[2].name=lan2
+    uci set network.@device[3].name=wan
+
+    uci set network.wan.device=wan
+
+    uci commit network
+}
+
+do_merge_ax1800() {
+    [ -d /sys/class/net/lan1 ] || return
+
+    uci -q get network.@switch[0] > /dev/null || return
+
+    uci delete network.@switch[0]
+
+    uci delete network.@device[0].ports
+    uci add_list network.@device[0].ports=lan1
+    uci add_list network.@device[0].ports=lan2
+    uci add_list network.@device[0].ports=lan3
+    uci add_list network.@device[0].ports=lan4
+
+    uci set network.@device[1].name=lan1
+    uci set network.@device[2].name=lan2
+    uci set network.@device[3].name=lan3
+    uci set network.@device[4].name=lan4
+    uci set network.@device[5].name=wan
+
+    uci set network.wan.device=wan
+
+    uci commit network
+
+    uci set wireless.radio0.path='platform/soc@0/c000000.wifi'
+    uci set wireless.radio1.path='platform/soc@0/c000000.wifi+1'
+    uci commit wireless
+}
+
+do_merge_axt1800() {
+    [ -d /sys/class/net/lan1 ] || return
+
+    uci -q get network.@switch[0] > /dev/null || return
+
+    uci delete network.@switch[0]
+
+    uci delete network.@device[0].ports
+    uci add_list network.@device[0].ports=lan1
+    uci add_list network.@device[0].ports=lan2
+
+    uci set network.@device[1].name=lan1
+    uci set network.@device[2].name=lan2
+    uci set network.@device[3].name=wan
+
+    uci set network.wan.device=wan
+
+    uci commit network
+
+    uci set wireless.radio0.path='platform/soc@0/c000000.wifi'
+    uci set wireless.radio1.path='platform/soc@0/c000000.wifi+1'
+    uci commit wireless
+}
+
+do_merge() {
+    local board=$(cat /tmp/sysinfo/board_name)
+
+    case $board in
+    glinet,gl-a1300)
+        do_merge_a1300
+        ;;
+    glinet,gl-axt1800)
+        do_merge_axt1800
+        ;;
+    esac
+}
+
+boot_hook_add preinit_main do_merge

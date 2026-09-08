@@ -1,0 +1,10 @@
+/usr/lib/oui-httpd/rpc/wg-server.so
+/etc/wireguard/scripts/before_wgserver_ifup.sh
+/etc/config/wireguard_server
+/usr/bin/wgserver_set_append
+/etc/uci-defaults/99-wgserver
+/lib/netifd/proto/wgserver.sh
+/etc/wireguard/scripts/wgserver_func.sh
+/usr/share/gl-validator.d/wg-server.lua
+/etc/wireguard/scripts/wgserver-route-update.sh
+/etc/wireguard/scripts/after_wgserver_if_down.sh

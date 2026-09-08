@@ -1,0 +1,41 @@
+#!/bin/sh
+. /lib/functions.sh
+
+found=0
+
+find_include() {
+    local section="$1"
+    local enabled path
+
+    config_get enabled "$section" enabled
+    config_get path "$section" path
+
+    if [ -n "$path" ] && echo "$path" | grep -q "netifyd"; then
+        found=1
+        local reload
+        config_get reload "$section" reload
+        if [ -z "$reload" ]; then
+            uci set firewall.$section.reload='1'
+        fi
+    fi
+}
+
+config_load firewall
+config_foreach find_include include
+uci commit firewall
+
+if [ $found -eq 0 ]; then
+    uci add firewall include
+    uci set firewall.@include[-1].enabled='1'
+    uci set firewall.@include[-1].type='script'
+
+    if [ -f /sbin/fw4 ]; then
+        uci set firewall.@include[-1].path='/etc/netifyd/nftables-init'
+    else
+        uci set firewall.@include[-1].path='/etc/netifyd/iptables-init.sh'
+    fi
+
+    uci set firewall.@include[-1].reload='1'
+    uci set firewall.@include[-1].fw4_compatible='1'
+    uci commit firewall
+fi

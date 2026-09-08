@@ -1,0 +1,16 @@
+[ ! -f "/etc/config/mtkhnat" ] && exit
+[ -f "/proc/gl-hw-info/build-in-modem" ] && exit
+
+model=$(cat /proc/gl-hw-info/model)
+
+if [ "$model" != "be10000" -a "$model" != "be19000" ]; then
+    #old model hwnat don't work if enable hwqos Per-port-per-queue mode
+    [ -f "/etc/init.d/pppq-ebl.init" ] && rm /etc/init.d/pppq-ebl.init
+fi
+
+actype=`uci -q get mtkhnat.global.actype`
+[ "$actype" == "" ] && {
+    uci set mtkhnat.global.actype='1'
+    uci commit mtkhnat
+}
+

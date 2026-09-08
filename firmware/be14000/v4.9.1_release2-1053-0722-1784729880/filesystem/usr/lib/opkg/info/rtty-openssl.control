@@ -1,0 +1,14 @@
+Package: rtty-openssl
+Version: 8.1.5-2
+Depends: libc, libev, libuci20130104, libopenssl1.1
+Provides: rtty
+Source: feeds/gl_feed_common/rtty
+SourceName: rtty-openssl
+License: MIT
+LicenseFiles: LICENSE
+Section: utils
+SourceDateEpoch: 1774335198
+Maintainer: Jianhui Zhao <zhaojh329@gmail.com>
+Architecture: aarch64_cortex-a53
+Installed-Size: 25804
+Description:  Access your terminals from anywhere via the web

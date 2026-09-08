@@ -1,0 +1,23 @@
+#!/bin/sh /etc/rc.common
+
+START=17
+
+qsdk_disable_phy_smart_speed() {
+    [ -f /proc/gl-hw-info/qsdk ] || return
+
+    phy_addr=$1
+    [ -z "$phy_addr" ] && return
+    ssdk_sh debug phy set $phy_addr 0x14 0x80c
+    ssdk_sh debug phy set $phy_addr 0x0 0x9140
+}
+
+start() {
+    model=$(cat /proc/gl-hw-info/model)
+
+    case $model in
+    be3600)
+        qsdk_disable_phy_smart_speed 24
+        qsdk_disable_phy_smart_speed 28
+        ;;
+    esac
+}

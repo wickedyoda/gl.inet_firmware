@@ -1,0 +1,10 @@
+Package: kmod-mt7990
+Version: 5.4.281+TEST-1
+Depends: kernel (=5.4.281-1-df4fa332840f56a774a5d60bd140aaf6), kmod-mt_hwifi
+Source: feeds/mt7988/drivers/mt_hwifi
+SourceName: kmod-mt7990
+Section: kernel
+SourceDateEpoch: 1760147463
+Architecture: aarch64_cortex-a53
+Installed-Size: 5405330
+Description:  MediaTek HWIFI MT7990 driver

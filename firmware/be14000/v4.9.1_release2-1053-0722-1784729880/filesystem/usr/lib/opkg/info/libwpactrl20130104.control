@@ -1,0 +1,12 @@
+Package: libwpactrl20130104
+Version: 1
+Depends: libc
+Provides: libwpactrl
+Source: feeds/mt7988/applications/libwpactrl
+SourceName: libwpactrl
+Section: libs
+SourceDateEpoch: 1760147463
+ABIVersion: 20130104
+Architecture: aarch64_cortex-a53
+Installed-Size: 33642
+Description:  C library for the wpa ctrl interface

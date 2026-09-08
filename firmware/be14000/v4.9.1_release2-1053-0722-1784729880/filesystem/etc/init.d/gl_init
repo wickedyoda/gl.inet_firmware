@@ -1,0 +1,38 @@
+#!/bin/sh /etc/rc.common
+. /lib/functions/gl_util.sh
+START=99
+
+irq_handle() {
+    for irq in `cat /proc/interrupts |grep -E "ethernet|0000:00:00.0" | cut -d ':' -f1`
+    do
+        echo '2' > /proc/irq/$irq/smp_affinity
+    done
+}
+
+rps_handle(){
+    [ -f "/sys/devices/virtual/net/rax0/queues/rx-0/rps_cpus" ] && echo '3' > /sys/devices/virtual/net/rax0/queues/rx-0/rps_cpus
+
+    [ -f "/sys/devices/virtual/net/rax0/queues/rx-0/rps_flow_cnt" ] && echo '32768' > /sys/devices/virtual/net/rax0/queues/rx-0/rps_flow_cnt
+
+    [ -f "/sys/devices/virtual/net/rax0/queues/tx-0/xps_rxqs" ] && echo '1' > /sys/devices/virtual/net/rax0/queues/tx-0/xps_rxqs
+}
+
+usb_irq_handle(){
+    irq_usb=$(grep 'xhci-hcd' /proc/interrupts | cut -d: -f1 | tr -d ' ')
+    [ -e /proc/irq/${irq_usb}/smp_affinity ] && echo 4 > /proc/irq/${irq_usb}/smp_affinity
+}
+
+start() {
+    model=$(get_model)
+    case "$model" in
+        "x3000"|\
+        "xe3000")
+            irq_handle
+            rps_handle
+            ;;
+	"be10000")
+            usb_irq_handle
+            ;;
+        *)
+    esac
+}

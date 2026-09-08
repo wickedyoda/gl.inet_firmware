@@ -1,0 +1,44 @@
+. /lib/functions.sh
+
+delete_ipv4_ping() {
+    config_get name "$1" name
+
+    [ "$name" = "Allow-Ping" ] && {
+        uci delete firewall.$1
+    }
+}
+
+delete_ipv6_ping() {
+    config_get name "$1" name
+
+    [ "$name" = "Allow-ICMPv6-Input" ] || [ "$name" = "Allow-ICMPv6-Forward" ] && {
+        config_get icmp_types "$1" icmp_type
+
+        [ "$icmp_types" != "" ] && uci delete firewall.$1.icmp_type
+        for type in $icmp_types; do
+            [ "$type" != "echo-request" ] && [ "$type" != "echo-reply" ] && uci add_list firewall.$1.icmp_type="$type"
+        done
+    }
+}
+
+delete_specific_character() {
+    config_get name "$1" name
+    if echo "$name" | grep -q '["%]'; then
+        name=$(echo "$name" | tr -d '"%')
+        uci set firewall.$1.name=$name
+    fi
+}
+
+config_load firewall
+config_foreach delete_ipv4_ping rule
+
+config_load firewall
+config_foreach delete_ipv6_ping rule
+
+config_load firewall
+config_foreach delete_specific_character rule
+
+config_load firewall
+config_foreach delete_specific_character redirect
+
+uci commit

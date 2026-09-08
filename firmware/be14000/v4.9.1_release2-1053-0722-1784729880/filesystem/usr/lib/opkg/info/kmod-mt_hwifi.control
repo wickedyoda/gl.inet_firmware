@@ -1,0 +1,10 @@
+Package: kmod-mt_hwifi
+Version: 5.4.281+TEST-1
+Depends: kernel (=5.4.281-1-df4fa332840f56a774a5d60bd140aaf6), kmod-mt_wifi7, kmod-mt_wifi_osal
+Source: feeds/mt7988/drivers/mt_hwifi
+SourceName: kmod-mt_hwifi
+Section: kernel
+SourceDateEpoch: 1760147463
+Architecture: aarch64_cortex-a53
+Installed-Size: 5656975
+Description:  Provide HW abstraction layer for CONNAC3/5 interface, mac80211 driver

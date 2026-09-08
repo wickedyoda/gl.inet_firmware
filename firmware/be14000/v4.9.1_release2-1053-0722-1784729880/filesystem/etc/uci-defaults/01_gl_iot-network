@@ -1,0 +1,87 @@
+#!/bin/sh
+
+[ "$(uci get network.iot)" = "interface" ] && {
+    exit 0
+}
+
+uci -q batch <<-EOF
+    add_list gl-tertf.@tertf[0].local_network='br-iot'
+    commit gl-tertf
+EOF
+
+uci -q batch <<-EOF
+    add_list route_policy.global.append_source_if='iot'
+    commit route_policy
+EOF
+
+uci -q batch <<-EOF
+    set gl-black_white_list.iot="secure_option"
+    set gl-black_white_list.iot.ap_isolate='1'
+    set gl-black_white_list.iot.wan_isolate='0'
+    set gl-black_white_list.iot.transfer_enable='0'
+    commit gl-black_white_list
+EOF
+
+MODEL=$(cat /proc/gl-hw-info/model 2>/dev/null)
+uci -q batch <<-EOF
+    set network.iot=interface
+    set network.iot.force_link='1'
+$(if [ "$MODEL" = "sft1200" ]; then
+    echo "set network.iot.type='bridge'"
+else
+    echo "set network.iot.device='br-iot'"
+    echo "add network device"
+    echo "set network.@device[-1].name='br-iot'"
+    echo "set network.@device[-1].type='bridge'"
+    echo "set network.@device[-1].bridge_empty='1'"
+fi)
+    set network.iot.proto='static'
+    set network.iot.ipaddr='192.168.10.1'
+    set network.iot.netmask='255.255.255.0'
+    set network.iot.ip6assign='60'
+    set network.iot.multicast_querier='1'
+    set network.iot.igmp_snooping='0'
+    set network.iot.isolate='0'
+    set network.iot.disabled='1'
+
+    commit network
+EOF
+
+uci -q batch <<-EOF
+    set dhcp.iot=dhcp
+    set dhcp.iot.interface=iot
+    set dhcp.iot.start=100
+    set dhcp.iot.limit=150
+    set dhcp.iot.leasetime='12h'
+    set dhcp.iot.dhcpv6=disabled
+    set dhcp.iot.ra=disabled
+    commit dhcp
+EOF
+
+uci -q batch <<-EOF
+    add firewall zone
+    set firewall.@[-1].name=iot
+    set firewall.@[-1].network=iot
+    set firewall.@[-1].forward=REJECT
+    set firewall.@[-1].output=ACCEPT
+    set firewall.@[-1].input=REJECT
+
+    add firewall forwarding
+    set firewall.@[-1].src=iot
+    set firewall.@[-1].dest=wan
+
+    add firewall rule
+    set firewall.@[-1].name='Allow-DHCP'
+    set firewall.@[-1].src=iot
+    set firewall.@[-1].target=ACCEPT
+    set firewall.@[-1].proto=udp
+    set firewall.@[-1].dest_port='67-68'
+
+    add firewall rule
+    set firewall.@[-1].name='Allow-DNS'
+    set firewall.@[-1].src=iot
+    set firewall.@[-1].target=ACCEPT
+    set firewall.@[-1].proto='tcp udp'
+    set firewall.@[-1].dest_port=53
+    commit firewall
+EOF

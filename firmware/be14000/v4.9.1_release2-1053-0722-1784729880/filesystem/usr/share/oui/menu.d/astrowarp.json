@@ -1,0 +1,29 @@
+{
+  "index": 20,
+  "view": "astrowarp",
+  "title": {
+    "translate": "menu_sdwan"
+  },
+  "level": 2,
+  "parent": "cloud",
+  "parent_title": {
+    "translate": "cloud.service_label"
+  },
+  "parent_icon": "cloud-services",
+  "parent_index": 39,
+  "country": {
+    "exclude": true,
+    "codes": [
+      "cn"
+    ]
+  },
+  "show_mode": [
+    "router"
+  ],
+  "global_sockets": [
+    "mptun.IPRB_status"
+  ],
+  "disables": [
+    "taps2s"
+  ]
+}

@@ -1,0 +1,10 @@
+Package: gl-sdk4-logread
+Version: git-2026.093.07599-cda42cb-1
+Depends: libc, gl-sdk4-uci
+Source: feeds/glinet/gl-sdk4-logread
+SourceName: gl-sdk4-logread
+Section: base
+SourceDateEpoch: 1775181999
+Architecture: aarch64_cortex-a53
+Installed-Size: 15718
+Description:  glinet SDK4 logread module

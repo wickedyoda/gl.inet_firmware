@@ -1,0 +1,57 @@
+#!/bin/sh
+# GL.iNet VLAN info helper (OR0089)
+# Provides port-to-subnet mapping, subnet listing, and tertf bridge list.
+#
+# Usage:
+#   gl-vlan-info map              - output full port mapping table
+#   gl-vlan-info lookup <device>  - lookup subnet for a device (e.g. lan2)
+#   gl-vlan-info subnets          - list all subnet network names
+#   gl-vlan-info tertf-subnets    - list bridge devices for tertf registration
+
+MAP_FILE="/tmp/vlan_port_map"
+
+cmd_map() {
+    [ -f "$MAP_FILE" ] && cat "$MAP_FILE"
+}
+
+cmd_lookup() {
+    local device="$1"
+    [ -z "$device" ] && return 1
+    [ -f "$MAP_FILE" ] || return 1
+    awk -v dev="$device" '$1 == dev { print $2; exit }' "$MAP_FILE"
+}
+
+cmd_subnets() {
+    echo "lan"
+    uci -q get network.guest >/dev/null 2>&1 && echo "guest"
+    uci -q get network.iot >/dev/null 2>&1 && echo "iot"
+    uci show network 2>/dev/null | grep "=interface$" | sed -n 's/^network\.\(vlan[0-9]*\)=.*/\1/p'
+}
+
+cmd_tertf_subnets() {
+    echo "br-lan"
+    uci -q get network.guest >/dev/null 2>&1 && echo "br-guest"
+    uci -q get network.iot >/dev/null 2>&1 && echo "br-iot"
+    uci show network 2>/dev/null | grep "=interface$" | sed -n 's/^network\.vlan\([0-9]*\)=.*/br-vlan\1/p'
+}
+
+case "$1" in
+    map)
+        cmd_map
+        ;;
+    lookup)
+        cmd_lookup "$2"
+        ;;
+    subnets)
+        cmd_subnets
+        ;;
+    tertf-subnets)
+        cmd_tertf_subnets
+        ;;
+    *)
+        echo "Usage: $0 {map|lookup <device>|subnets|tertf-subnets}" >&2
+        exit 1
+        ;;
+esac
+
+exit 0

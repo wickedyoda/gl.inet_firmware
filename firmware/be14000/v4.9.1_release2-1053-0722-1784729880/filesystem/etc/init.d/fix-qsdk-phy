@@ -1,0 +1,99 @@
+#!/bin/sh /etc/rc.common
+
+START=95
+
+soft_reset_phy() {
+    iface=$1
+    [ ! -d  "/sys/class/net/""$iface" ] && return
+    link_status=$(cat /sys/class/net/$iface/carrier)
+    link_speed=$(cat /sys/class/net/$iface/speed)
+    rx_pkt=$(cat /sys/class/net/$iface/statistics/rx_packets)
+    if [ "$link_status" = "1" ] && [ "$link_speed" -eq 2500 ] && [ "$rx_pkt" -eq 0 ]; then
+        ifconfig $iface down
+        sleep 1
+        ifconfig $iface up
+        sleep 1
+        link_status=$(cat /sys/class/net/$iface/carrier)
+        rx_pkt=$(cat /sys/class/net/$iface/statistics/rx_packets)
+        if [ "$link_status" = "1" ] && [ "$rx_pkt" -eq 0 ]; then
+            reset_rtl8221.sh
+            sleep 1
+            echo "r" > /sys/kernel/debug/rtl8221/phy_restart
+            sleep 1
+            ifconfig $iface down
+            sleep 1
+            ifconfig $iface up
+        fi
+    fi
+}
+
+check_be9300_any_port_connected() {
+    for i in `seq 4 7`
+    do
+        link_status=$(swconfig dev switch1 port $i show|grep "link:up"|wc -l)
+        if [ "$link_status" -gt 0 ]; then
+            return 0
+        fi
+    done
+    return 1
+}
+
+check_iface_rx_packets() {
+    iface=$1
+    [ ! -d  "/sys/class/net/""$iface" ] && return
+    rx_pkt=$(cat /sys/class/net/$iface/statistics/rx_packets)
+    if [ "$rx_pkt" -eq 0 ]; then
+        return 0
+    else
+        return 1
+    fi
+}
+
+reset_rtl8372_serdes() {
+    iface=$1
+    [ ! -d  "/sys/class/net/""$iface" ] && return
+    check_be9300_any_port_connected
+    lan_ports_connection_status=$?
+    #if lan ports are connected
+    if [ "$lan_ports_connection_status" -eq 0 ]; then
+        # wait for 2 seconds before checking rx packets
+        for i in `seq 0 2`
+        do
+            check_iface_rx_packets "$iface"
+            iface_rx_packets=$?
+            [ "$iface_rx_packets" -eq 1 ] && exit 0
+            sleep 2
+        done
+
+        for i in `seq 1 2`
+        do
+            echo "0" > /sys/kernel/debug/rtl8372n/serdes_reset_tgr_tgx
+            echo "0" > /sys/kernel/debug/rtl8372n/serdes_reset_tgx
+            sleep 1
+            for port in `seq 4 7`
+            do
+                echo "$port" > /sys/kernel/debug/rtl8372n/phy_an_restart
+            done
+
+            for k in `seq 0 2` #check rx packets every 2 seconds
+            do
+                check_iface_rx_packets "$iface"
+                iface_rx_packets=$?
+                [ "$iface_rx_packets" -eq 1 ] && exit 0
+                sleep 2
+            done
+        done
+    fi
+}
+
+start() {
+    model=$(cat /proc/gl-hw-info/model)
+
+    case $model in
+    "be9300"|\
+    "be6500")
+        soft_reset_phy "eth0"
+        reset_rtl8372_serdes "eth1"
+    ;;
+    esac
+}

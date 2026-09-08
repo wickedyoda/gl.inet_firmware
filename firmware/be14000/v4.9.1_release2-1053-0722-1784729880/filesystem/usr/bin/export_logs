@@ -1,0 +1,163 @@
+#!/bin/sh
+
+# shellcheck disable=SC2164 SC2045
+
+export_oops()
+{
+    log_dev=$(cat /proc/mtd | grep log | awk -F ':' '{print $1}')
+
+    [ -n "$(ls /sys/fs/pstore/ |grep "dmesg")" ] && {
+        for x in $(ls /sys/fs/pstore/dmesg*)
+        do
+            cat $x >> /tmp/$1/crash.log
+            echo >> /tmp/$1/crash.log
+        done
+        return
+    }
+
+    [ -n "$log_dev" ] && {
+        oopslog /dev/$log_dev > /tmp/$1/crash.log
+    }
+
+    [ -f "/tmp/log/crash_log" ] && cp /tmp/log/crash_log /tmp/$1/crash.log
+}
+
+output_file="debug_info_src"
+output_file_mask="debug_info.log"
+log_command() 
+{
+    local cmd="$1"
+    echo "==================================================================" >> "$output_file"
+    echo "$cmd" >> "$output_file"
+    echo "==================================================================" >> "$output_file"
+    eval "$cmd" >> "$output_file" 2>&1
+}
+
+mask_sensitive_info()
+{
+    sed -E -e 's/(password[[:space:]]*'\''[^'\''[:space:]]*'\''|password[[:space:]]*"[^"[:space:]]*")/password '\''*****'\''/g' \
+        -e 's/(username[[:space:]]*'\''[^'\''[:space:]]*'\''|username[[:space:]]*"[^"[:space:]]*")/username '\''*****'\''/g' \
+        -e 's/([[:xdigit:]]{2}):([[:xdigit:]]{2}):([[:xdigit:]]{2}):([[:xdigit:]]{2}):([[:xdigit:]]{2}):([[:xdigit:]]{2})/\1:\2:**:**:**:\6/g' \
+        -e 's/password=.*/password="********"/g' \
+        -e 's/psk=.*/psk="********"/g' \
+        -e 's/auth_server_shared_secret=.*/auth_server_shared_secret=********/g' \
+        -e 's/wpa_passphrase=.*/wpa_passphrase=********/g' \
+        -e 's/([[:alnum:]_.-]+)@/*****@/g' \
+        -e "s/(option param_enc ')[^']+/\1*******/g" \
+        -e "s/(option (domain|lookup_host) ')[^'.]+/\1*******/g" \
+        -e "s/(option iccid '[0-9]{5})[0-9]{6}([0-9]+')/\1******\2/g" \
+        -e "s/(option phone_number ')[^']+/\1************/g" \
+        -e "s/(option pincode ')[^']+/\1********/g" \
+        "$1"
+}
+
+debug_info_export()
+{
+    log_command "cat /etc/config/glmodem"
+    log_command "cat /proc/gl-hw-info/build-in-modem"
+    log_command "cat /proc/gl-hw-info/usb-port"
+    log_command "ls -la /tmp/usbnode/"
+    log_command "cat /var/run/hostapd*"
+    log_command "cat /var/run/wpa_supplicant*.conf"
+    log_command "cat /etc/config/network"
+    log_command "ifstatus wan"
+    log_command "lsmod | grep 80211"
+    log_command "lsmod | grep wifi"
+    log_command "ps | grep dnsmasq"
+    log_command "cat /tmp/etc/dnsmasq.conf.cfg*"
+    log_command "cat /etc/config/upgrade"
+    log_command "cat /proc/net/wifidog-ng/config"
+    log_command "cat /proc/oui-tertf/term"
+    log_command "ip neigh"
+    log_command "cat /etc/opkg/distfeeds.conf"
+    log_command "ps | grep nas"
+    log_command "df -h"
+    log_command "mount -n"
+    log_command "cat /etc/AdGuardHome/config.yaml"
+    log_command "cat /tmp/resolv.conf"
+    log_command "cat /etc/config/firewall"
+    log_command "cat /var/lib/tor/control.log"
+    log_command "cat /etc/tor/torrc"
+    log_command "cat /etc/config/dhcp"
+    log_command "cat /etc/config/rs485"
+    log_command "cat /tmp/rs485_forward_log"
+    log_command "cat /etc/config/oui-httpd"
+    log_command "cat /etc/config/uhttpd"
+    log_command "cat /etc/config/dropbear"
+    log_command "cat /etc/config/gl_ddns"
+    log_command "cat /etc/config/dhcp"
+    log_command "cat /etc/sysctl.conf"
+    log_command "uci get gl_s2s.global.enable"
+    log_command "cat /proc/gl-hw-info/fan"
+    log_command "cat /etc/config/gl-black_white_list"
+    log_command "cat /proc/gl-black_white_list/list"
+    log_command "cat /proc/gl-black_white_list/net_secure"
+    log_command "cat /proc/gl-black_white_list/control"
+    log_command "lsmod | grep xt_FULLCONENAT"
+    log_command "iptables -t nat -nvL | grep FULLCONENAT"
+    log_command "ifconfig"
+    log_command "tailscale status"
+    log_command "cat /etc/config/route_policy"
+    mask_sensitive_info $output_file > $output_file_mask
+    rm -rf $output_file
+}
+
+export_logs()
+{
+
+    model=$(cat /proc/gl-hw-info/model)
+    glversion=$(cat /etc/glversion)
+    log_dir_name="${model}_${glversion}_log"
+
+    if [ -e "/tmp/logread.tar" ];then
+        rm -rf /www/js/logread.tar
+        rm -rf /tmp/$log_dir_name/
+        rm -rf /tmp/logread.tar
+    fi
+
+    mkdir -p /tmp/$log_dir_name/nginx
+    mkdir -p /tmp/$log_dir_name/net_dbg
+    if [ -f "/root/esim/log.txt" ]; then
+        mkdir -p /tmp/$log_dir_name/esim
+    fi
+
+    export_oops $log_dir_name
+    logread > /tmp/$log_dir_name/system.log
+    dmesg > /tmp/$log_dir_name/kernel.log
+    logread -e gl-cloud > /tmp/$log_dir_name/cloud.log
+    cp -r /var/log/nginx/*.log /tmp/$log_dir_name/nginx
+    if [ -f "/tmp/$log_dir_name/nginx/error.log" ]; then
+        mv "/tmp/$log_dir_name/nginx/error.log" "/tmp/$log_dir_name/nginx/nginx.log"
+    fi
+    if [ -f "/root/esim/log.txt" ]; then
+        cp /root/esim/log.txt /tmp/$log_dir_name/esim/
+    fi
+
+    cd /tmp/$log_dir_name/net_dbg
+    sh /usr/bin/net_dbg.sh
+    if [ "$1" == "with_debug_log" ]; then
+        debug_info_export
+    fi
+    cd /tmp
+    chmod 777 -R logread/*
+
+    if [ "$model" = "e5800" ]; then
+        cp -r /data/vendor/modem_crash_log $log_dir_name/
+        tar -cf /data/vendor/logread.tar $log_dir_name/
+        rm -r $log_dir_name
+        mv /data/vendor/logread.tar /tmp/
+    else
+        tar -cf logread.tar $log_dir_name/
+        rm -r $log_dir_name
+    fi
+}
+
+
+if [ "$1" == "only_debug_log" ]; then
+    debug_info_export
+elif [ "$1" == "with_debug_log" ]; then
+    export_logs "$1"
+else
+    export_logs
+fi
+

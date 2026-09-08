@@ -1,0 +1,24 @@
+#!/bin/sh /etc/rc.common
+
+START=99
+
+USE_PROCD=1
+PROG=/usr/bin/check_modem_crash.sh
+
+start_service() {
+    [ "$(cat /proc/gl-hw-info/model)" = "e5800" ] && {
+        modemrstlevel=$(atcmd AT+QCFG=\"modemrstlevel\" |grep ",1" |wc -l)
+        aprstlevel=$(atcmd AT+QCFG=\"aprstlevel\" |grep ",1" |wc -l)
+        [ "$modemrstlevel" = "1" -a "$aprstlevel" = "1" ] && {
+            echo enabled > /sys/class/remoteproc/remoteproc0/coredump
+            echo enabled > /sys/class/remoteproc/remoteproc0/recovery
+            echo mini > /sys/kernel/dload/dload_mode
+            echo 1 > /sys/module/qcom_ramdump/parameters/enable_dump_collection
+
+            procd_open_instance
+            procd_set_param command "$PROG"
+            procd_set_param respawn
+            procd_close_instance
+        }
+    }
+}

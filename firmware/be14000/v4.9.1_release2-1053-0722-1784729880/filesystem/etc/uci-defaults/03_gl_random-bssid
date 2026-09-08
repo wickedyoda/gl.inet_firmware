@@ -1,0 +1,95 @@
+. /lib/functions/gl_util.sh
+
+mlo_random_bssid_en=$(uci -q get mlo.global.random_bssid)
+
+qca_6g_wifi_macaddr_add() {
+    local mac=$1
+    local val=$2
+    local oui=${mac%:*}
+    local nic=${mac#*:*:*:*:*:}
+
+    nic=$(printf "%02x" $((0x${nic} + $val & 0xff)) )
+    echo $oui:$nic
+}
+
+get_random_bssid() {
+    local bytes byte h l
+    local last_bytes last_byte
+
+    for i in $(seq 1 4); do
+        byte=$(hexdump -n 1 -e '/1 "%02X"' /dev/urandom)
+        bytes="$bytes $byte"
+    done
+
+    last_byte=$(hexdump -n 1 -e '/1 "%u"' /dev/urandom)
+    while [ $last_byte -ge 246 ]
+    do
+        last_byte=$(hexdump -n 1 -e '/1 "%u"' /dev/urandom)
+    done
+    last_bytes=$(printf "%02X\n" $last_byte)
+    bytes="$bytes $last_bytes"
+
+
+    local limits='2 6 A E'
+
+    byte=$(hexdump -n 1 -e '/1 "%02X"' /dev/urandom)
+    h=${byte%?}
+    l=$(echo $limits | cut -d ' ' -f $(( (0x${byte#?} % 4) + 1 )))
+
+    echo "$h$l ${bytes#* }" | tr ' ' ':' | tr '[:lower:]' '[:upper:]'
+}
+
+qcawifi_6g_random_bssid="$(get_random_bssid)"
+
+wifi_iface_cb() {
+    local is_mlo_interface="0"
+    config_get mode "$1" mode
+    config_get device "$1" device
+    config_get random_bssid "$1" random_bssid  ""
+    if [ -z "$random_bssid" ]; then
+        config_get random_bssid "$device" random_bssid
+    fi
+    config_get mld "$1" mld
+    config_get band "$device" band
+    config_get type "$device" type
+
+    if [ "$type" = "qcawificfg80211" ] && [ "$band" = "6g" ]
+    then
+        if [ "$random_bssid" = "1" ]; then
+            uci set wireless.$1.macaddr="$qcawifi_6g_random_bssid"
+            qcawifi_6g_random_bssid=$(qca_6g_wifi_macaddr_add $qcawifi_6g_random_bssid 1)
+        fi
+        return
+    else
+        if [ "$random_bssid" = "0" ] && [[ "$1" != *"wlanmld"* ]]; then
+            return
+        elif [[ "$1" = *"wlanmld"* ]]; then
+            if [ "$mlo_random_bssid_en" = "0" ]; then
+                return
+            else
+                is_mlo_interface="1"
+            fi
+        fi
+    fi
+
+    [ "$mode" = "ap" ] || return
+
+    local random_macaddr="$(get_random_bssid)"
+    [ "$is_mlo_interface" != "1" ] && uci set wireless.$device.random_bssid=1
+    uci set wireless.$1.macaddr="$random_macaddr"
+    if [ "$type" = "mtkwifi" ]; then
+        [ -n "$mld" ] && uci set wireless.$mld.mld_addr="$(macaddr_add $random_macaddr 2)"
+    else
+        [ -n "$mld" ] && uci set wireless.$mld.mld_macaddr="$(macaddr_add $random_macaddr 2)"
+    fi
+}
+
+[ -f /tmp/.gl-wifi-default-load ] && return 0
+
+[ -f /tmp/.gl-wifi-default ] && return 1
+
+config_load wireless
+config_foreach wifi_iface_cb wifi-iface
+uci commit wireless
+
+return 1

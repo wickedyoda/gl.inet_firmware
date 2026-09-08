@@ -1,0 +1,10 @@
+/etc/dnsproxy/provider/cleanbrowsing
+/etc/dnsproxy/provider/cloudflare
+/etc/init.d/dnsproxy
+/etc/dnsproxy/provider/opendns
+/etc/dnsproxy/dnsproxy.yaml
+/etc/dnsproxy/provider/quad9
+/etc/dnsproxy/provider/google_dns
+/usr/sbin/dnsproxy
+/etc/dnsproxy/provider/adguard_dns
+/etc/dnsproxy/provider/controld

@@ -1,0 +1,81 @@
+#!/bin/sh /etc/rc.common
+
+START=99
+
+. /lib/functions.sh
+
+set_nf_conntrack_helper() {
+    config_get name "$1" name
+    config_get enabled "$1" enabled
+    config_get dest_port "$1" dest_port
+
+    [ "$enabled" = "1" ] && {
+        [ -n "$name" ] && [ -n "$(echo "$name" | grep -E 'GL-DMZ')" ] && echo 1 > /proc/sys/net/netfilter/nf_conntrack_helper
+        [ "$dest_port" = "21" ] && echo 1 > /proc/sys/net/netfilter/nf_conntrack_helper
+    }
+}
+
+fw3_flush_rule() {
+    echo 0 > /proc/sys/net/netfilter/nf_conntrack_helper
+    config_load firewall
+    config_foreach set_nf_conntrack_helper redirect
+}
+
+fw4_flush_rule() {
+    local handle_nums=$(nft --handle list ruleset|grep 'SIP VoIP'|awk '{print $NF}')
+    [ -z "$handle_nums" ] && return
+
+    for num in $handle_nums; do
+        nft delete rule inet fw4 helper_lan handle $num 2>/dev/null
+        nft delete rule inet fw4 helper_guest handle $num 2>/dev/null
+    done
+    nft delete ct helper inet fw4 sip
+}
+
+flush_sip_rule() {
+    [ -e /sbin/fw4 ] && {
+        fw4_flush_rule
+        return
+    }
+    [ "$(uci get sip_alg.global.helper)" = "1" ] && ruturn
+    fw3_flush_rule
+}
+
+stop() {
+    flush_sip_rule
+    if [ -e /proc/sys/net/netfilter/nf_conntrack_disable_sip_alg ]; then
+        echo 1 > /proc/sys/net/netfilter/nf_conntrack_disable_sip_alg
+    else
+        [ -n "$(lsmod|grep nf_nat_sip)" ] && rmmod nf_nat_sip 2>/dev/null
+        [ -n "$(lsmod|grep nf_conntrack_sip)" ] && rmmod nf_conntrack_sip 2>/dev/null
+    fi
+}
+
+start() {
+    [ -z "$(cat /etc/config/sip_alg|grep helper)" ] && {
+        uci set sip_alg.global.helper='0'
+        uci commit sip_alg
+        sync
+    }
+
+    if [ "$(uci get sip_alg.global.enable)" = "1" ]; then
+        if [ -e /proc/sys/net/netfilter/nf_conntrack_disable_sip_alg ]; then
+            echo 0 > /proc/sys/net/netfilter/nf_conntrack_disable_sip_alg
+        else
+            insmod nf_conntrack_sip 2>/dev/null
+            insmod nf_nat_sip 2>/dev/null
+        fi
+        if [ -e /sbin/fw4 ]; then
+            /etc/init.d/firewall reload
+        else
+            if [ $(cat /proc/sys/net/netfilter/nf_conntrack_helper) -eq 0 ]; then
+                echo 1 > /proc/sys/net/netfilter/nf_conntrack_helper
+            else
+                uci set sip_alg.global.helper='1'
+                uci commit sip_alg
+                sync
+            fi
+        fi
+        conntrack -F
+    fi
+}

@@ -1,0 +1,17 @@
+{
+    "aggregator": 1,
+    "batched_rows": 0,
+    "compressor": "gz",
+    "format": "json",
+    "log_interval": 15,
+    "nested_mode": false,
+    "privacy_mode": false,
+    "sinks": {
+        "sink-socket": {
+            "default": {
+                "format": "json",
+                "compressor": "none"
+            }
+        }
+    }
+}

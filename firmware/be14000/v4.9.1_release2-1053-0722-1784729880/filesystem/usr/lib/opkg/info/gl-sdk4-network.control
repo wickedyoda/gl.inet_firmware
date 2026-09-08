@@ -1,0 +1,10 @@
+Package: gl-sdk4-network
+Version: git-2026.117.34453-65ad698-1
+Depends: libc, libuci-lua, gl-sdk4-lua-utils
+Source: feeds/glinet/gl-sdk4-network
+SourceName: gl-sdk4-network
+Section: base
+SourceDateEpoch: 1777282453
+Architecture: aarch64_cortex-a53
+Installed-Size: 8772
+Description:  glinet SDK4 network module

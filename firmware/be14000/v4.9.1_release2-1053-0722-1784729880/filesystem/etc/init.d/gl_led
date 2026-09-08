@@ -1,0 +1,52 @@
+#!/bin/sh /etc/rc.common
+. /lib/functions/gl_util.sh
+START=97
+STOP=10
+
+USE_PROCD=1
+
+EXTRA_COMMANDS="$EXTRA_COMMANDS turnoff turnon restart_iot_led"
+
+turnoff() {
+	uci set gl_led.global.led_enable='0'
+	uci commit gl_led
+	/etc/init.d/gl_led stop
+	turnoff_iot_led
+	sync
+}
+
+turnon() {
+	uci set gl_led.global.led_enable='1'
+	uci commit gl_led
+	/etc/init.d/gl_led start
+	turnon_iot_led
+	sync
+}
+
+restart_iot_led(){
+	turnoff_iot_led
+	enable=`uci -q get gl_led.global.led_enable`
+	if [ "$enable" = "1" ];then
+		turnon_iot_led
+	fi
+}
+
+start_service() {
+	turnoff_led
+	enable=`uci -q get gl_led.global.led_enable`
+	if [ "$enable" = "1" ];then
+		turnon_led
+		led_daemon=`uci -q get gl_led.global.led_daemon`
+		if [ "$led_daemon" = "1" ];then
+			procd_open_instance "gl_led"
+			procd_set_param command "/usr/bin/gl_led"
+			procd_set_param respawn ${respawn_threshold:-3600} ${respawn_timeout:-5} ${respawn_retry:-5}
+			procd_close_instance
+		fi
+	fi
+}
+
+stop_service() {
+	turnoff_led
+}
+

@@ -1,0 +1,5 @@
+#!/bin/sh
+
+[ "$ACTION" = step ] && touch /tmp/modem-ntp-valid || exit 0
+logger "modem_traffic : ntp success..."
+exit 0

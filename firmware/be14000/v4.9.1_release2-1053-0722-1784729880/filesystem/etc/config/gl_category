@@ -1,0 +1,68 @@
+config netifyd dangerous_website
+    list category 'adult'
+    list category 'gambling'
+    list category 'malware'
+
+config netifyd education
+    list category 'education'
+
+config netifyd meeting
+    list category 'voip'
+    list protocol 'voip'
+
+config netifyd work
+    list category 'remote-desktop'
+    list category 'file-sharing'
+    list category 'mail'
+    list category 'financial'
+    list category 'reference'
+    list protocol 'mail'
+    list protocol 'file-server'
+    list protocol 'file-sharing'
+    list protocol 'remote-desktop'
+
+config netifyd webpage
+    list category 'portal'
+    list category 'business'
+    list protocol 'web'
+
+config netifyd game
+    list category 'games'
+    list protocol 'games'
+
+config netifyd social_entertainment
+    list category 'entertainment'
+    list category 'recreation'
+    list category 'sports'
+    list category 'streaming-media'
+    list category 'social-media'
+    list category 'news'
+    list category 'messaging'
+    list protocol 'media'
+    list protocol 'media-provider'
+    list protocol 'messaging'
+
+config netifyd shopping
+    list category 'shopping'
+
+config netifyd advertisement
+    list category 'advertiser'
+
+config netifyd other
+    list category 'hosting'
+    list category 'cybersecurity'
+    list category 'device-iot'
+    list category 'government'
+    list category 'technology'
+    list category 'telco'
+    list category 'cybersecurity'
+    list category 'vpn-and-proxy'
+    list category 'unclassified'
+    list protocol 'unclassified'
+    list protocol 'infrastructure'
+    list protocol 'proxy'
+    list protocol 'vpn'
+    list protocol 'authentication'
+    list protocol 'database'
+    list protocol 'printing'
+    list protocol 'networking'

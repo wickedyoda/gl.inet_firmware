@@ -1,0 +1,12 @@
+/etc/hotplug.d/iface/gl-cable
+/usr/local/lib/lua/5.4/libcable.lua
+/usr/share/gl-ngx/websocket/cable.lua
+/etc/uci-defaults/20_eth_ports_config_map_init
+/etc/hotplug.d/carrier/gl-cable
+/usr/share/gl-validator.d/cable.lua
+/usr/lib/oui-httpd/rpc/cable
+/usr/lib/lua/libcable.lua
+/usr/sbin/gl-update-cable-mac.sh
+/usr/share/gl-eth-ports.json
+/etc/firewall.ethernet_ttl
+/etc/uci-defaults/03_gl-cable

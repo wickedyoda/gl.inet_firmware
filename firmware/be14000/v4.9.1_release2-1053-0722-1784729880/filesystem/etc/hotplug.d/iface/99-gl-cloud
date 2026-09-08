@@ -1,0 +1,4 @@
+[ "$ACTION" = "ifup" -o "$ACTION" = "ifdown" ] || exit 0
+
+ubus call gl-cloud notify-network-info &
+

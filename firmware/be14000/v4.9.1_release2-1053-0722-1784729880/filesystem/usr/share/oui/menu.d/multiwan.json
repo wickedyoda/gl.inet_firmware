@@ -1,0 +1,11 @@
+{
+    "index": 15,
+    "view": "multiwan",
+    "level": 2,
+    "parent": "network",
+    "parent_icon": "network",
+    "parent_index": 48,
+    "show_mode": [
+        "router"
+    ]
+}

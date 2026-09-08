@@ -1,0 +1,10 @@
+Package: gl-sdk4-ovpn-client
+Version: git-2026.133.18841-10c13ec-1
+Depends: libc, gl-sdk4-utils, gl-sdk4-uci, gl-sdk4-log, jansson4, openvpn-openssl, openssl-util, resolveip, unzip
+Source: feeds/glinet/gl-sdk4-ovpn-client
+SourceName: gl-sdk4-ovpn-client
+Section: base
+SourceDateEpoch: 1778649241
+Architecture: aarch64_cortex-a53
+Installed-Size: 43625
+Description:  Openvpn client endpoint api for gl-inet.

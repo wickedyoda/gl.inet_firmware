@@ -1,0 +1,4 @@
+/usr/sbin/minidlnad
+/etc/init.d/minidlna
+/etc/config/minidlna
+/etc/sysctl.d/30-minidlna.conf

@@ -1,0 +1,5 @@
+config global 'global'
+    option enable '0'
+    option manual '0'
+    option countries 'all'
+

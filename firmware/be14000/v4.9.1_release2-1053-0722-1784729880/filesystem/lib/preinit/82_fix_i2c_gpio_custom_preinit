@@ -1,0 +1,18 @@
+#!/bin/sh
+
+do_fix_i2c_gpio_custom(){
+	. /lib/functions/gl_util.sh
+	local model=$(get_model)
+	case "$model" in
+	"ax1800")
+		bus="bus0=0,43,42"
+		;;
+	*)
+		skip=1
+	esac
+	if [ "$skip" != 1 -a ! -f /etc/modules.d/i2c-gpio-custom ]; then
+		echo "i2c-gpio-custom $bus" >/etc/modules.d/i2c-gpio-custom
+	fi
+}
+
+boot_hook_add preinit_main do_fix_i2c_gpio_custom

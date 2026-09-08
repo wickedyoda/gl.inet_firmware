@@ -1,0 +1,7 @@
+#!/bin/sh
+
+if [ -n "$STATUS" ]; then
+    /usr/bin/atp "$STATUS"
+fi
+
+exit 0

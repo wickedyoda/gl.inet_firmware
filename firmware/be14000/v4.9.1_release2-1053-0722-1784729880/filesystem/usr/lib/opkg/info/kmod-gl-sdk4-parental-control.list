@@ -1,0 +1,13 @@
+/lib/functions/parental_control.sh
+/etc/config/parental_control_v2
+/etc/app-metadata.json
+/lib/upgrade/keep.d/kmod-gl-sdk4-parental-control
+/etc/categories.json
+/usr/bin/pc_schedule
+/etc/init.d/parental_control
+/usr/lib/oui-httpd/rpc/parental-control
+/usr/bin/apps_domain_list.lua
+/lib/modules/5.4.281/parental_control.ko
+/etc/config/parental_control_apps
+/etc/apps.conf
+/usr/share/gl-validator.d/parental-control.lua

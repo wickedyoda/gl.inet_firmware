@@ -1,0 +1,69 @@
+#!/bin/sh
+set_wgserver_allow_dns()
+{
+	uci -q batch  <<-EOF
+        	set firewall.wgserver_allow_dns=rule
+        	set firewall.wgserver_allow_dns.name='wgserver_allow_dns'
+        	set firewall.wgserver_allow_dns.src='wgserver'
+        	set firewall.wgserver_allow_dns.target='ACCEPT'
+        	set firewall.wgserver_allow_dns.dest_port='53'
+        	set firewall.wgserver_allow_dns.enabled='1'
+	EOF
+    	uci -q commit firewall
+	sync
+}
+
+create_random_v6_net()
+{
+        local r2=$(dd if=/dev/urandom bs=2 count=1 |hexdump -e '2/1 "%02x"')
+        local r3=$(dd if=/dev/urandom bs=2 count=1 |hexdump -e '2/1 "%02x"')
+        local r4=$(dd if=/dev/urandom bs=2 count=1 |hexdump -e '2/1 "%02x"')
+        address=fd00:$r2:$r3:$r4::1/64
+}
+
+set_v6_address()
+{
+	local address=''
+        create_random_v6_net >/dev/null 2>&1
+        [ -n "$address" ] && {
+		uci -q set wireguard_server.main_server.address_v6="$address"
+		uci -q commit wireguard_server
+	}
+}
+
+delete_old_wgserver_firewall()
+{
+	uci -q delete firewall.wgserver
+	uci -q delete firewall.wgserver_allow
+	uci -q delete firewall.wgserver2lan
+	uci -q delete firewall.wgserver2wgserver
+	uci -q delete firewall.wgserver2wan
+	uci -q delete firewall.lan2wgserver
+	uci -q delete firewall.wgserver_allow_dns
+
+	uci commit firewall
+}
+
+clear_legacy_fwmark()
+{
+	[ -n "$(uci -q get wireguard_server.main_server.fwmark)" ] && {
+		uci delete wireguard_server.main_server.fwmark
+		uci commit wireguard_server
+	}
+}
+
+wgserver_disabled=`uci -q get network.wgserver.disabled`
+[ "$wgserver_disabled" = "0" ] && set_wgserver_allow_dns
+
+clear_legacy_fwmark
+delete_old_wgserver_firewall
+
+if [ "$(uci -q get firewall.wgserver_allow.proto)" = "udp tcp" ]; then
+    uci set firewall.wgserver_allow.proto=udp
+    uci commit firewall
+fi
+
+[ -z "$(uci -q get wireguard_server.main_server.address_v6)" ] && set_v6_address
+
+exit 0
+

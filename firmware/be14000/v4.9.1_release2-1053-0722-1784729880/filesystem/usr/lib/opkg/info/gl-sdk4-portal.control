@@ -1,0 +1,10 @@
+Package: gl-sdk4-portal
+Version: git-2025.015.31488-58ed9e8-1
+Depends: libc, kmod-wifidog-ng
+Source: feeds/glinet/gl-sdk4-portal
+SourceName: gl-sdk4-portal
+Section: base
+SourceDateEpoch: 1736930688
+Architecture: aarch64_cortex-a53
+Installed-Size: 1262
+Description:  GL.iNet SDK4 portal

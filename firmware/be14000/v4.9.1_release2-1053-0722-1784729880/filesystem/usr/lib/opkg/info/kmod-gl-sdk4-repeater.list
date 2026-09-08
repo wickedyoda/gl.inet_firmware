@@ -1,0 +1,3 @@
+/etc/modules.d/30-gl-sdk4-repeater
+/lib/modules/5.4.281/gl-repeater.ko
+/etc/modules-boot.d/30-gl-sdk4-repeater

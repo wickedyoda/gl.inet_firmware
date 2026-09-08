@@ -1,0 +1,19 @@
+config dpi qos
+    option prio_enable '0'
+    option prio_mode '1'
+    option upload '0'
+    option download '0'
+
+config dpi priority_high
+
+config dpi priority_middle
+    list category 'meeting'
+    list category 'education'
+    list category 'work'
+    list category 'webpage'
+    list category 'game'
+    list category 'social_entertainment'
+    list category 'shopping'
+    list category 'other'
+
+config dpi priority_low

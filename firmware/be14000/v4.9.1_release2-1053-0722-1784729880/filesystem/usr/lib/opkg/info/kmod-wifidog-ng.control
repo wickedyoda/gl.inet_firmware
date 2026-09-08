@@ -1,0 +1,13 @@
+Package: kmod-wifidog-ng
+Version: 5.4.281+2.0.0-1
+Depends: kernel (=5.4.281-1-df4fa332840f56a774a5d60bd140aaf6), kmod-nf-nat, kmod-ipt-ipset
+Source: feeds/gl_feed_common/wifidog-ng
+SourceName: kmod-wifidog-ng
+License: LGPL-2.1
+LicenseFiles: LICENSE
+Section: kernel
+SourceDateEpoch: 1774434775
+Maintainer: Jianhui Zhao <zhaojh329@gmail.com>
+Architecture: aarch64_cortex-a53
+Installed-Size: 4354
+Description:  Kernel module for wifidog-ng

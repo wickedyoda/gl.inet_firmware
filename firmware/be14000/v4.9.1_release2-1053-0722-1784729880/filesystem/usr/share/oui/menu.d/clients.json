@@ -1,0 +1,14 @@
+{
+    "index": 30,
+    "view": "clients",
+    "icon": "clients",
+    "level": 1,
+    "show_mode": [
+        "router",
+        "wds",
+        "relay",
+        "mesh",
+        "ap",
+        "agent"
+    ]
+}

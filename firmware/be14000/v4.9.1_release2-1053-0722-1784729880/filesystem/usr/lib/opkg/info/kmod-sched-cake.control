@@ -1,0 +1,11 @@
+Package: kmod-sched-cake
+Version: 5.4.281-1
+Depends: kernel (=5.4.281-1-df4fa332840f56a774a5d60bd140aaf6), kmod-sched-core
+Source: package/kernel/linux
+SourceName: kmod-sched-cake
+License: GPL-2.0
+Section: kernel
+SourceDateEpoch: 1784728420
+Architecture: aarch64_cortex-a53
+Installed-Size: 17180
+Description:  Common Applications Kept Enhanced fq_codel/blue derived shaper

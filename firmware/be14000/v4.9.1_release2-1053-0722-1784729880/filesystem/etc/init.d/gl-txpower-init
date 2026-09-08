@@ -1,0 +1,270 @@
+#!/bin/sh /etc/rc.common
+. /lib/functions/gl_util.sh
+
+START=09
+
+mt798x_sku_update(){
+    file_b0=$(awk -F "=" '/^INDEX0_profile_path/ {print $2}' /etc/wireless/l1profile.dat | awk -F ";" '{print $1}')
+    file_b1=$(awk -F "=" '/^INDEX0_profile_path/ {print $2}' /etc/wireless/l1profile.dat | awk -F ";" '{print $2}')
+
+    [ ! -s "$file_b0" ] && [ -e "/rom/$file_b0" ] && cp /rom/$file_b0 $file_b0
+    [ ! -s "$file_b1" ] && [ -e "/rom/$file_b1" ] && cp /rom/$file_b1 $file_b1
+
+    mt798x11_device=$(uci -q get wireless.wifi2g.device)
+    mt798x12_device=$(uci -q get wireless.wifi5g.device)
+    mt798x11_country=$(uci -q get wireless.$mt798x11_device.country) || mt798x11_country=$(cat /proc/gl-hw-info/country_code)
+    mt798x12_country=$(uci -q get wireless.$mt798x12_device.country) || mt798x12_country=$(cat /proc/gl-hw-info/country_code)
+
+    SKUenable_b0=$(awk -F "=" '/^SKUenable/ {print $2}' $file_b0)
+	SKUenable_b1=$(awk -F "=" '/^SKUenable/ {print $2}' $file_b1)
+
+    case "$mt798x11_country" in
+        "JP")
+            if [ "$SKUenable_b0" = "0" ];then
+                sed -i "s/CountryCode=[^ ]*/CountryCode=${mt798x11_country}/" $file_b0
+                sed -i "s/SKUenable=[^ ]*/SKUenable=1/" $file_b0
+                sed -i "s/SkuTableIdx=[^ ]*/SkuTableIdx=0/" $file_b0
+                sync
+            fi
+            ;;
+        "DE")
+            if [ "$SKUenable_b0" = "0" ];then
+                sed -i "s/CountryCode=[^ ]*/CountryCode=${mt798x11_country}/" $file_b0
+                sed -i "s/SKUenable=[^ ]*/SKUenable=1/" $file_b0
+                sed -i "s/SkuTableIdx=[^ ]*/SkuTableIdx=1/" $file_b0
+                sync
+            fi
+            ;;
+        *)
+            if [ "$SKUenable_b0" = "1" ];then
+                [ -n "$mt798x11_country" ] && {
+                    sed -i "s/CountryCode=[^ ]*/CountryCode=${mt798x11_country}/" $file_b0
+                }
+                sed -i "s/SKUenable=[^ ]*/SKUenable=0/" $file_b0
+                sync
+            fi
+            ;;
+    esac
+
+    case "$mt798x12_country" in
+        "JP")
+            if [ "$SKUenable_b1" = "0" ];then
+                sed -i "s/CountryCode=[^ ]*/CountryCode=${mt798x12_country}/" $file_b1
+                sed -i "s/SKUenable=[^ ]*/SKUenable=1/" $file_b1
+                sed -i "s/SkuTableIdx=[^ ]*/SkuTableIdx=0/" $file_b1
+                sync
+            fi
+            ;;
+        "DE")
+            if [ "$SKUenable_b1" = "0" ];then
+                sed -i "s/CountryCode=[^ ]*/CountryCode=${mt798x12_country}/" $file_b1
+                sed -i "s/SKUenable=[^ ]*/SKUenable=1/" $file_b1
+                sed -i "s/SkuTableIdx=[^ ]*/SkuTableIdx=1/" $file_b1
+                sync
+            fi
+            ;;
+        *)
+            if [ "$SKUenable_b1" = "1" ];then
+                [ -n "$mt798x12_country" ] && {
+                    sed -i "s/CountryCode=[^ ]*/CountryCode=${mt798x12_country}/" $file_b1
+                }
+                sed -i "s/SKUenable=[^ ]*/SKUenable=0/" $file_b1
+                sync
+            fi
+            ;;
+    esac
+}
+
+sft1200_txpower_update(){
+	radio0_country=$(uci -q get wireless.radio0.country) || radio0_country=$(cat /proc/gl-hw-info/country_code)
+	radio1_country=$(uci -q get wireless.radio1.country) || radio1_country=$(cat /proc/gl-hw-info/country_code)
+	radio0_txpower_lvl=$(uci -q get wireless.radio0.txpower_lvl)
+	radio1_txpower_lvl=$(uci -q get wireless.radio1.txpower_lvl)
+
+	case "$radio0_country" in
+		"JP")
+			[ "$radio0_txpower_lvl" != "0" ] && {
+				uci set wireless.radio0.txpower_lvl="0"
+				uci commit
+				sync
+			}
+			;;
+		*)
+			[ -n "$radio0_txpower_lvl" ] && {
+				uci delete wireless.radio0.txpower_lvl
+				uci commit
+				sync
+			}
+	esac
+
+	case "$radio1_country" in
+		"JP")
+			[ "$radio1_txpower_lvl" != "0" ] && {
+				uci set wireless.radio1.txpower_lvl="0"
+				uci commit
+				sync
+			}
+		    ;;
+		*)
+			[ -n "$radio1_txpower_lvl" ] && {
+				uci delete wireless.radio1.txpower_lvl
+				uci commit
+				sync
+			}
+	esac
+}
+
+mt799x_sku_update() {
+    dev_prefix=$(awk -F "=" '/^INDEX0=/ {print $2}' /etc/wireless/l1profile.dat)
+    profile_path=$(awk -F "=" '/^INDEX0_profile_path/ {print $2}' /etc/wireless/l1profile.dat)
+    file_b0=$(awk -F "=" '/^BN0_profile_path/ {print $2}' "${profile_path}")
+    file_b1=$(awk -F "=" '/^BN1_profile_path/ {print $2}' "${profile_path}")
+    file_b2=$(awk -F "=" '/^BN2_profile_path/ {print $2}' "${profile_path}")
+
+    if [ -s "$file_b0" -a -s "$file_b1" ];then
+        content_b0=$(cat "$file_b0")
+        content_b1=$(cat "$file_b1")
+        [ -z "$content_b0" ] && cp /rom/$file_b0 $file_b0
+        [ -z "$content_b1" ] && cp /rom/$file_b1 $file_b1
+    else
+        [ -e "/rom/$file_b0" ] && cp /rom/$file_b0 $file_b0
+        [ -e "/rom/$file_b1" ] && cp /rom/$file_b1 $file_b1
+    fi
+
+    if [ -n "$file_b2" ]; then
+        if [ -s "$file_b2" ]; then
+            content_b2=$(cat "$file_b2")
+            [ -z "$content_b2" ] && [ -e "/rom/$file_b2" ] && cp /rom/$file_b2 $file_b2
+        else
+            [ -e "/rom/$file_b2" ] && cp /rom/$file_b2 $file_b2
+        fi
+    fi
+
+    mt799x11_device="${dev_prefix}_1_1"
+    mt799x12_device="${dev_prefix}_1_2"
+
+    mt799x11_country=$(uci -q get wireless.$mt799x11_device.country) || mt799x11_country=$(cat /proc/gl-hw-info/country_code)
+    mt799x12_country=$(uci -q get wireless.$mt799x12_device.country) || mt799x12_country=$(cat /proc/gl-hw-info/country_code)
+
+    if [ -z "$mt799x11_country" ] || [ -z "$mt799x12_country" ];then
+        return
+    fi
+
+    region_2g=""
+    case "${mt799x11_country}" in
+        CA|CO|DO|GT|MX|NO|PA|PR|TW|US|UZ)
+        region_2g=0
+        ;;
+
+        *)
+        region_2g=1
+        ;;
+    esac
+    sed -i "s/CountryCode=[^ ]*/CountryCode=${mt799x11_country}/" $file_b0
+    sed -i "s/CountryRegion=[^ ]*/CountryRegion=${region_2g}/" $file_b0
+    if [ "$mt799x11_country" = "JP" ]; then
+        sed -i "s/SKUenable=[^ ]*/SKUenable=1/" $file_b0
+    else
+        sed -i "s/SKUenable=[^ ]*/SKUenable=0/" $file_b0
+    fi
+
+    region_5g=""
+    case "${mt799x12_country}" in
+        AL|DZ|AU|BH|BY|CA|CL|CN|CO|CR|DO|EC|SV|GT|HN|HK|IN|IL|JO|KZ|KW)
+        region_5g=0
+        ;;
+
+        LB|MO|MK|MY|MX|MA|NZ|NO|OM|PK|PA|PR|QA|RO|RU|SA|SG|SY|TH|UA|AE|VN|YE|ZW)
+        region_5g=0
+        ;;
+
+        AT|BE|BR|BG|CY|DK|EE|FI|GR|HU|IS|IE|IT|LV|LI|LT|LU|NL|PL|PT)
+        region_5g=1
+        ;;
+
+        SK|SI|ZA|ES|SE|CH|GB|UZ)
+        region_5g=1
+        ;;
+
+        AM|AZ|HR|CZ|EG|FR|GE|MC|TT|TN|TR)
+        region_5g=2
+        ;;
+
+        AR|TW)
+        region_5g=3
+        ;;
+
+        BZ|BO|BN|ID|IR|PE|PH)
+        region_5g=4
+        ;;
+
+        KP|KR|UY|VE)
+        region_5g=5
+        ;;
+
+        JP)
+        region_5g=12
+        ;;
+
+        DE)
+        region_5g=7
+        ;;
+
+        US)
+        region_5g=13
+        ;;
+
+        *)
+        region_5g=13
+        ;;
+    esac
+    sed -i "s/CountryCode=[^ ]*/CountryCode=${mt799x12_country}/" $file_b1
+    sed -i "s/CountryRegionABand=[^ ]*/CountryRegionABand=${region_5g}/" $file_b1
+    if [ "$mt799x12_country" = "JP" ]; then
+        sed -i "s/SKUenable=[^ ]*/SKUenable=1/" $file_b1
+    else
+        sed -i "s/SKUenable=[^ ]*/SKUenable=0/" $file_b1
+    fi
+
+    if [ -n "$file_b2" ] && [ -s "$file_b2" ]; then
+        mt799x13_device="${dev_prefix}_1_3"
+        mt799x13_country=$(uci -q get wireless.$mt799x13_device.country) || mt799x13_country=$(cat /proc/gl-hw-info/country_code)
+        if [ -n "$mt799x13_country" ]; then
+            region_6g=""
+            case "${mt799x13_country}" in
+                BR|CA|CL|CO|DO|GB|GT|JO|KP|KR|KW|LB|MX|NO|NZ|OM|PA|PE|PH|PR|QA|SA|TW|US|UY)
+                region_6g=0
+                ;;
+
+                *)
+                region_6g=1
+                ;;
+            esac
+            sed -i "s/CountryCode=[^ ]*/CountryCode=${mt799x13_country}/" $file_b2
+            sed -i "s/CountryRegionABand=[^ ]*/CountryRegionABand=${region_6g}/" $file_b2
+            if [ "$mt799x13_country" = "JP" ]; then
+                sed -i "s/SKUenable=[^ ]*/SKUenable=1/" $file_b2
+            else
+                sed -i "s/SKUenable=[^ ]*/SKUenable=0/" $file_b2
+            fi
+        fi
+    fi
+
+}
+
+
+start() {
+    model=$(get_model)
+    case "$model" in
+        "mt3000" | "mt6000")
+            mt798x_sku_update
+            ;;
+        "sft1200")
+            sft1200_txpower_update
+            ;;
+        "mt3600be" | "be10000")
+            mt799x_sku_update
+            ;;
+        *)
+    esac
+}

@@ -1,0 +1,10 @@
+Package: gl-sdk4-network-diag
+Version: git-2025.115.13494-368898c-1
+Depends: libc
+Source: feeds/glinet/gl-sdk4-network-diag
+SourceName: gl-sdk4-network-diag
+Section: base
+SourceDateEpoch: 1745552694
+Architecture: aarch64_cortex-a53
+Installed-Size: 1514
+Description:  Rtty API for Gl.inet

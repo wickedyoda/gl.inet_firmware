@@ -1,0 +1,436 @@
+--[[
+    @object-name: tailscale
+    @object-desc: tailscale settings
+--]]
+
+local uci = require "uci"
+local cjson = require "cjson"
+local lnet = require "oui.network"
+local fs = require "oui.fs"
+local rpc = require "oui.rpc"
+local validator = require "gl.validator"
+
+local M = {}
+
+local function tailscale_status(wait_time)
+    local r1 = ngx.pipe.spawn({"timeout", wait_time or "2", "/usr/sbin/tailscale", "status", "--json"})
+    if r1 then
+        local data = r1:stdout_read_all()
+        if data and string.len(data) ~= 0 then
+            local r = cjson.decode(data)
+            if r and type(r) == "table" then
+                return r
+            end
+        end
+        end
+
+    return nil
+end
+
+local function get_exit_node_info()
+    local r = tailscale_status()
+    local res = {}
+    local exit_node_list = {}
+
+    if not r or not r.Peer or type(r.Peer) ~= "table" then
+        return res
+    end
+
+    local peer_list = r.Peer
+    for k, v in pairs(peer_list) do
+        if k and v and v.ExitNodeOption then
+            if v.TailscaleIPs and type(v.TailscaleIPs) == "table" and v.TailscaleIPs[1] then
+                local exit_node = {
+                    ip = v.TailscaleIPs[1]
+                }
+
+                if v.Location and v.Location.Country then
+                    local location = v.Location.Country
+                    if v.Location.City then
+                        location = location .. ", " .. v.Location.City
+                    end
+                    exit_node.location = location
+                elseif v.DNSName then
+                    exit_node.location = v.DNSName:gsub("%..*$", "")
+                else
+                    exit_node.location = "Unknown location"
+                end
+
+                if v.Tags and type(v.Tags) == "table" then
+                    for _, tag in ipairs(v.Tags) do
+                        if tag == "tag:mullvad-exit-node" then
+                            exit_node.provider = "mullvad"
+                            break
+                        end
+                    end
+                end
+
+                exit_node_list[#exit_node_list + 1] = exit_node
+            end
+        end
+    end
+
+    if r.ExitNodeStatus
+        and r.ExitNodeStatus.TailscaleIPs
+        and type(r.ExitNodeStatus.TailscaleIPs) == "table" then
+        local addr = r.ExitNodeStatus.TailscaleIPs[1]
+        local pos  = string.find(addr, "/")
+        res.exit_node_ip = string.sub(addr,1, pos-1)
+    end
+
+    res.exit_node_list = exit_node_list
+
+    return res
+end
+
+--[[
+    @method-type: call
+    @method-name: get_status
+    @method-desc: Get tailscale status
+
+    @out string   status        Status of tailscale [1:login required; 2:authorization required; 3:running; 4:connecting]
+    @out string   login_name    Login username
+    @out string   address_v4    Ipv4 address
+    @out array    dns           Dns servers
+    @out number   ?err_code     Error code [-1:Failed to get status]
+    @out string   ?err_msg      Error message
+    @in-example:  {"jsonrpc":"2.0","method":"call","params":["","tailscale","get_status",{}],"id":1}
+    @out-example: {"id":1,"jsonrpc":"2.0","result":{"login_name":"gl-fan****","status":3,"dns":["192.168.101.10","114.114.114.114"],"address_v4":"100.66.166.89"}}
+--]]
+
+function M.get_status()
+    local r = tailscale_status()
+    local res = {}
+    local dns = {}
+    local c = uci.cursor()
+
+    if r and r.BackendState then
+        if r.BackendState == "NeedsLogin" then
+            res.status = 1
+        end
+
+        if r.BackendState == "NeedsMachineAuth" then
+            res.status = 2
+        end
+
+        if r.BackendState == "Running" then
+            res.status = 3
+        end
+
+        if r.BackendState == "Starting" or r.BackendState == "NoState" or r.BackendState == "Starting" or r.BackendState == "InUseOtherUser" then
+            res.status = 4
+        end
+
+        if r.User and type(r.User) == "table" then
+            local user_list = r.User
+            if r.Self and type(r.Self) == "table" and r.Self.UserID then
+                for k, v in pairs(user_list) do
+                    if k and v and v.LoginName then
+                        if v.ID and r.Self.UserID == v.ID then
+                            res.login_name = v.LoginName
+                        end
+                    end
+                end
+            end
+        end
+
+        if r.TailscaleIPs then
+            if r.TailscaleIPs and type(r.TailscaleIPs) == "table" and r.TailscaleIPs[1] then
+                res.address_v4 = r.TailscaleIPs[1]
+            end
+        end
+    end
+
+    local mode = c:get("gl-dns", "@dns[0]", "mode") or "auto"
+    if mode == "manual" or mode == "proxy"then
+        dns = c:get("dhcp", "@dnsmasq[0]", "server") or {}
+    elseif mode == "auto" then
+        local resolvfile = c:get("dhcp", "@dnsmasq[0]", "resolvfile") or ""
+        if fs.access(resolvfile) then
+            for l in io.lines(resolvfile) do
+                local nameserver = l:match("nameserver (%S+)")
+                if nameserver then
+                    dns[#dns + 1] = nameserver
+                end
+            end
+        end
+
+        local function parse_vpn_resolv(name)
+            local path = "/tmp/resolv.conf." .. name
+            if fs.access(path) then
+                for l in io.lines(path) do
+                    local nameserver = l:match("nameserver (%S+)")
+                    if nameserver then
+                        dns[#dns + 1] = nameserver
+                    end
+                end
+            end
+        end
+        parse_vpn_resolv("ovpn")
+        parse_vpn_resolv("wg")
+    end
+
+    local tmp_dns ={}
+    for _, item in ipairs(dns) do
+        if not item:match(":") then
+            tmp_dns[#tmp_dns + 1] = string.match(item, "([^#]+)")
+        end
+    end
+    res.dns = tmp_dns
+
+    return res
+end
+
+--[[
+    @method-name: get_auth_url
+    @method-type: call
+    @method-desc: Get tailscale login link
+
+    @out string   auth_url    Login link
+    @in-example:  {"jsonrpc":"2.0","id":1,"method":"call","params":["","tailscale","get_auth_url"]}
+    @out-example: {"jsonrpc": "2.0", "id": 1, "result": {"auth_url": "https://login.tailscale.com/a/xxxxxx"}}
+--]]
+
+function M.get_auth_url()
+    local r = tailscale_status()
+    local res = {}
+    if r and r.BackendState and r.BackendState == "NeedsLogin" then
+        --restart tailscale here to get new auth url, for the old one may expired
+        ngx.pipe.spawn({"/usr/bin/gl_tailscale", "restart"}):wait()
+        ngx.sleep(3)
+        local result = tailscale_status("5")
+        if not result then
+            return {
+                err_code = 0,
+                err_msg = "tailscale status error"
+            }
+        end
+
+        if result.AuthURL then
+            res.auth_url = result.AuthURL
+        end
+
+        return res
+    end
+end
+
+--[[
+    @method-name: get_config
+    @method-type: call
+    @method-desc: Get tailscale settings
+
+    @out bool    enabled        Whether to enable [false：Disable; true：Enable]
+    @out bool    wan_enabled    Access the wan port network [false：Disable; true：Enable]
+    @out bool    lan_enabled    Access the lan port network [false：Disable; true：Enable]
+    @out string  lan_ip         Lan ip
+    @out string  exit_node_ip   Device exit node IP
+    @out bool    masq           IP masquerading
+    @out bool    run_exit_node  Run node IP
+
+    @in-example:  {"jsonrpc":"2.0","id":1,"method":"call","params":["","tailscale","get_config"]}
+    @out-example: {"id":1,"jsonrpc":"2.0","result":{"wan_enabled":true,"lan_ip":"192.168.8.0\/24","enabled":true,"lan_enabled":true,"masq":false,"run_exit_node":false}}
+--]]
+
+function M.get_config()
+    local res = {}
+    local c = uci.cursor()
+    local lanip = c:get("network","lan", "ipaddr")
+    local lanmask = c:get("network", "lan", "netmask")
+
+    res.enabled = c:get("tailscale", "settings", "enabled") == "1"
+    res.lan_enabled = c:get("tailscale", "settings", "lan_enabled") == "1"
+    res.wan_enabled = c:get("tailscale", "settings", "wan_enabled") == "1"
+    res.exit_node_ip = c:get("tailscale", "settings", "exit_node_ip")
+    res.masq = c:get("tailscale", "settings", "masq") == "1"
+    res.run_exit_node = c:get("tailscale", "settings", "run_exit_node") == "1"
+
+    if lanip and lanmask then
+        local lan_info = lnet.ipcalc({lanip, lanmask})
+        res.lan_ip = lan_info.network.."/"..lan_info.prefix
+    end
+
+    return res
+end
+
+--[[
+    @method-name: get_exit_node_list
+    @method-type: call
+    @method-desc: Get tailscale settings
+
+    @out array     ?exit_node_list           List of exit nodes
+    @out string    ?exit_node_list.ip        IP address of exit node
+    @out string    ?exit_node_list.location  The location of exit node
+    @out string    ?exit_node_list.provider  Provider of exit node
+    @out string    ?exit_node_ip             The exit node is using now
+
+    @in-example:  {"jsonrpc":"2.0","id":1,"method":"call","params":["","tailscale","get_exit_node_list"]}
+    @out-example: {"jsonrpc": "2.0", "id": 1, "result": {"exit_node_list":[{"location":"Netherlands, Amsterdam","ip":"100.85.175.92","provider":"mullvad"},{"location":"France, Paris","ip":"100.92.217.120"}]}}
+--]]
+
+function M.get_exit_node_list(params)
+    local res = {}
+    local c = uci.cursor()
+    local enabled = c:get("tailscale", "settings", "enabled") == "1"
+
+    if enabled then
+        local exit_node_info = get_exit_node_info()
+
+        if exit_node_info.exit_node_list then
+            res.exit_node_list = exit_node_info.exit_node_list
+        end
+
+        if exit_node_info.exit_node_ip then
+            res.exit_node_ip = exit_node_info.exit_node_ip
+        end
+
+    end
+
+    return res
+end
+
+--[[
+    @method-name: set_config
+    @method-type: call
+    @method-desc: Set tailscale settings
+
+    @in  bool     enabled          Status of tailscale：true：Enable，false: Disable
+    @in  bool     wan_enabled      Access the wan port network，true：Enable，false: Disable
+    @in  bool     lan_enabled      Access the lan port network，true：Enable，false: Disable
+    @in  bool     masq             IP masquerading
+    @in  bool     run_exit_node    Run node IP
+    @in  bool     ?exit_node_ip    Exit node IP
+    @out number   ?err_code        Error code,-1:Setup failed.
+    @out string   ?err_msg         Error message
+
+    @in-example:  {"jsonrpc":"2.0","id":1,"method":"call","params":["","tailscale","set_config",{"enabled":true,"lan_enabled":true,"wan_enabled":true,"exit_node_ip":"100.91.50.xxx","run_exit_node":false,"masq":false}]}
+
+    @out-example: {"id":1,"jsonrpc":"2.0","result":[]}
+--]]
+
+function M.set_config(params)
+    local c = uci.cursor()
+    local enabled = params.enabled
+    local wan_enabled = params.wan_enabled
+    local lan_enabled = params.lan_enabled
+    local exit_node_ip = params.exit_node_ip
+    local run_exit_node = params.run_exit_node
+    local masq = params.masq
+
+    local config_name = c:get("network", "ovpnclient", "config")
+    local client_mode = config_name and c:get("ovpnclient", config_name, "mode") or ""
+    if client_mode == "tap-s2s" then
+        local tap_s2s_disabled = c:get("network", "ovpnclient", "disabled") or "1"
+        if tap_s2s_disabled == "0" then
+            return {
+                err_code = 20022002,
+                err_msg = "function does not work because TAP-S2S Mode is enabled"
+            }
+        end
+    end
+
+    if not validator.base(enabled, "boolean", true) then
+        return rpc.ERROR_CODE_INVALID_PARAMS, "invalid enabled"
+    end
+
+    if not validator.base(wan_enabled, "boolean", true) then
+        return rpc.ERROR_CODE_INVALID_PARAMS, "invalid wan_enabled"
+    end
+
+    if not validator.base(lan_enabled, "boolean", true) then
+        return rpc.ERROR_CODE_INVALID_PARAMS, "invalid lan_enabled"
+    end
+
+    if exit_node_ip ~= "" and exit_node_ip ~= nil and not validator.ip4addr(exit_node_ip) then
+        return rpc.ERROR_CODE_INVALID_PARAMS, "invalid exit_node_ip"
+    end
+
+    if not validator.base(run_exit_node, "boolean", true) then
+        return rpc.ERROR_CODE_INVALID_PARAMS, "invalid run_exit_node"
+    end
+
+    if not validator.base(masq, "boolean", true) then
+        return rpc.ERROR_CODE_INVALID_PARAMS, "invalid masq"
+    end
+
+    if run_exit_node == true and exit_node_ip and exit_node_ip ~= "" then
+        return rpc.ERROR_CODE_INVALID_PARAMS, "exit node conflict"
+    end
+
+    local mode = c:get("glconfig", "general", "mode")
+    if mode ~= "router" and enabled then
+        return {
+            err_code = 0,
+            err_msg = "tailscale can only be used in router mode"
+        }
+    end
+
+    if enabled then
+        c:set("tailscale", "settings", "enabled", 1)
+    end
+
+    if lan_enabled then
+        c:set("tailscale", "settings", "lan_enabled", 1)
+    else
+        c:set("tailscale", "settings", "lan_enabled", 0)
+    end
+
+    if wan_enabled then
+        c:set("tailscale", "settings", "wan_enabled", 1)
+    else
+        c:set("tailscale", "settings", "wan_enabled", 0)
+    end
+
+    if masq then
+        c:set("tailscale", "settings", "masq", 1)
+    else
+        c:set("tailscale", "settings", "masq", 0)
+    end
+
+    if run_exit_node then
+        c:set("tailscale", "settings", "run_exit_node", 1)
+        c:set("tailscale", "settings", "exit_node_ip", "")
+    else
+        c:set("tailscale", "settings", "run_exit_node", 0)
+        if exit_node_ip then
+            c:set("tailscale", "settings", "exit_node_ip", exit_node_ip)
+        else
+            c:set("tailscale", "settings", "exit_node_ip", "")
+        end
+    end
+
+    if enabled == false then
+        c:set("tailscale", "settings", "enabled", 0)
+    end
+
+    c:commit("tailscale")
+    ngx.pipe.spawn({"/usr/bin/ts_killswitch"}):wait()
+    fs.sync()
+    ngx.pipe.spawn({"/usr/bin/gl_tailscale", "restart"})
+end
+
+--[[
+    @method-type: call
+    @method-name: logout
+    @method-desc: Logout of tailscale
+
+    @out number   ?err_code   Error code
+    @out string   ?err_msg    Error message
+
+    @in-example:  {"jsonrpc":"2.0","id":1,"method":"call","params":["","tailscale","logout"]}
+    @out-example: {"id":1,"jsonrpc":"2.0","result":[]}
+--]]
+function M.logout()
+    ngx.pipe.spawn({"/usr/sbin/tailscale", "logout"}):wait()
+    local c = uci.cursor()
+    c:set("tailscale", "settings", "exit_node_ip", "")
+    c:commit("tailscale")
+    ngx.pipe.spawn({"/usr/bin/ts_killswitch"}):wait()
+
+    local state_file = c:get("tailscale", "settings", "state_file")
+    if state_file then
+        os.remove(state_file)
+    end
+    fs.sync()
+end
+
+return M

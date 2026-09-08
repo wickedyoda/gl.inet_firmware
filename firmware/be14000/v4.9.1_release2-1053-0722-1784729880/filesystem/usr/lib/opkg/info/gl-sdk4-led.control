@@ -1,0 +1,10 @@
+Package: gl-sdk4-led
+Version: git-2026.073.33984-001bfce-1
+Depends: libc, gl-sdk4-base-files
+Source: feeds/glinet/gl-sdk4-led
+SourceName: gl-sdk4-led
+Section: base
+SourceDateEpoch: 1773480384
+Architecture: aarch64_cortex-a53
+Installed-Size: 3085
+Description:  Oui Support for led

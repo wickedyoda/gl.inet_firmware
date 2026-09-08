@@ -1,0 +1,31 @@
+#!/bin/sh
+
+interface=$1
+remote_addr=$2
+
+client_info_dir="/var/ovpnclient"
+[ -d ${client_info_dir} ] || mkdir -p ${client_info_dir}
+
+set_remote_address_info()
+{
+	local interface=$1
+	local addr_info=$2
+	local remote
+	local remote_port=$3
+
+	remote=$(echo "$addr_info" | awk -F '\\[|\\]| ' '{print$3}')
+
+	[ -f ${client_info_dir}/status_table ] || touch ${client_info_dir}/status_table
+	[ "`uci -q -c ${client_info_dir} get status_table.${interface}.name`" = "" ] && {
+		uci -q -c ${client_info_dir} set status_table.${interface}='status'
+		uci -q -c ${client_info_dir} set status_table.${interface}.name="${interface}"
+	}
+
+	uci -q -c ${client_info_dir} set status_table.${interface}.endpoint="${remote%\%*}"
+	uci -q -c ${client_info_dir} set status_table.${interface}.remote_port="${remote_port}"
+
+	uci -q -c ${client_info_dir} commit status_table
+}
+
+set_remote_address_info ${interface} ${remote_addr}
+

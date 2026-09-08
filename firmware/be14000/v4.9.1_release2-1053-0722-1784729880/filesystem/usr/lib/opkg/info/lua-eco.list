@@ -1,0 +1,15 @@
+/usr/local/lib/lua/5.4/eco/time.lua
+/usr/lib/libeco.so.3.16.0
+/usr/local/lib/lua/5.4/eco/core/sys.so
+/usr/local/lib/lua/5.4/eco/core/time.so
+/usr/local/lib/lua/5.4/eco/sys.lua
+/usr/local/lib/lua/5.4/eco/encoding/hex.lua
+/usr/bin/eco
+/usr/lib/libeco.so.3
+/usr/local/lib/lua/5.4/eco/channel.lua
+/usr/local/lib/lua/5.4/eco/core/file.so
+/usr/local/lib/lua/5.4/eco/core/bufio.so
+/usr/local/lib/lua/5.4/eco/sync.lua
+/usr/local/lib/lua/5.4/eco/file.lua
+/usr/lib/libeco.so
+/usr/local/lib/lua/5.4/eco/bufio.so

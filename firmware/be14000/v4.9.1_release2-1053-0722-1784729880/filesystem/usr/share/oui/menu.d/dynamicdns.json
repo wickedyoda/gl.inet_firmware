@@ -1,0 +1,10 @@
+{
+  "index": 12,
+  "view": "dynamicdns",
+  "level": 2,
+  "parent": "applications",
+  "parent_icon": "application",
+  "parent_index": 55,
+  "lang_hide": ["zh-cn"],
+  "show_mode": ["router", "wds", "relay", "mesh", "ap", "agent"]
+}

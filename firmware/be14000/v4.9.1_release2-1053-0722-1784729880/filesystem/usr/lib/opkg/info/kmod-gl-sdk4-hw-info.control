@@ -1,0 +1,10 @@
+Package: kmod-gl-sdk4-hw-info
+Version: 5.4.281+git-2026.085.22538-317b10e-1
+Depends: kernel (=5.4.281-1-df4fa332840f56a774a5d60bd140aaf6), uboot-envtools
+Source: feeds/gl_feed_common/gl-sdk4-hw-info
+SourceName: kmod-gl-sdk4-hw-info
+Section: kernel
+SourceDateEpoch: 1774505738
+Architecture: aarch64_cortex-a53
+Installed-Size: 6683
+Description:  GL.iNet hardware information

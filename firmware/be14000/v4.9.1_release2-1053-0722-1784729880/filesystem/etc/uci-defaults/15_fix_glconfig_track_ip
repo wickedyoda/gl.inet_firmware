@@ -1,0 +1,29 @@
+#!/bin/sh
+
+[ ! -f /etc/config/glconfig ] && exit 0
+. /lib/functions/gl_util.sh
+
+[ "$(uci -q get glconfig.general.inited)" = "1" -a -n "$(uci -q get glconfig.general.track_ip)" ] && exit 0
+country=$(cat /proc/gl-hw-info/country_code)
+uci delete glconfig.general.track_ip
+uci delete glconfig.general.track_ipv6
+if [ "$country" = "CN" ]; then
+    uci add_list glconfig.general.track_ipv6="2400:3200::1"
+    uci add_list glconfig.general.track_ipv6="2400:3200:baba::1"
+    uci add_list glconfig.general.track_ipv6="2402:4e00::"
+    uci add_list glconfig.general.track_ipv6="2402:f000:1:416:101:6:6:6"
+    uci add_list glconfig.general.track_ip="223.5.5.5"
+    uci add_list glconfig.general.track_ip="223.6.6.6"
+    uci add_list glconfig.general.track_ip="119.29.29.29"
+    uci add_list glconfig.general.track_ip="182.254.118.118"
+else
+    uci add_list glconfig.general.track_ipv6="2001:4860:4860::8844"
+    uci add_list glconfig.general.track_ipv6="2001:4860:4860::8888"
+    uci add_list glconfig.general.track_ipv6="2620:0:ccd::2"
+    uci add_list glconfig.general.track_ipv6="2620:0:ccc::2"
+    uci add_list glconfig.general.track_ip="1.1.1.1"
+    uci add_list glconfig.general.track_ip="8.8.8.8"
+    uci add_list glconfig.general.track_ip="208.67.222.222"
+    uci add_list glconfig.general.track_ip="208.67.220.220"
+fi
+uci commit glconfig

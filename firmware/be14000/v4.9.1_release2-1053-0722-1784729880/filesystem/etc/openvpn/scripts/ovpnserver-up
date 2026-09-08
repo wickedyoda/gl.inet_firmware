@@ -1,0 +1,107 @@
+#!/bin/sh
+
+# include netifd library
+. /lib/netifd/netifd-proto.sh
+. /lib/functions.sh
+
+uci_interface="$1"
+
+logger -t ovpnserver-up "env value:"`env`
+
+add_default_route()
+{
+	local subnetv4
+	local mask
+	local dev_type
+
+	config_load ovpnserver
+	config_get dev_type "vpn" "dev_type"
+	config_get subnetv4 "vpn" "subnetv4"
+	config_get mask "vpn" "mask"
+
+	if [ "${dev_type}" = "tun" ]; then
+		proto_add_ipv4_route "$subnetv4" "$mask"
+	fi
+}
+
+add_default_route_6()
+{
+	local subnetv6
+	local mask
+	local dev_type
+
+	config_load ovpnserver
+	config_get dev_type "vpn" "dev_type"
+	config_get subnetv6 "vpn" "subnetv6"
+	mask=${subnetv6##*/}
+	subnetv6=${subnetv6%%/*}
+
+	if [ "${dev_type}" = "tun" ]; then
+		proto_add_ipv6_route "$subnetv6" "$mask"
+	fi
+}
+
+add_route_rules()
+{
+	local route_flag
+	local dest
+	local mask
+	local gateway
+	local metric
+	local mtu
+	local scope
+
+	config_get route_flag "$1" "route_flag"
+	config_get dest "$1" "dest"
+	config_get mask "$1" "mask"
+	config_get gateway "$1" "gateway"
+	config_get metric "$1" "metric"
+	config_get mtu "$1" "mtu"
+	config_get scope "$1" "scope"
+
+	logger -t ovpnserver-up "route_flag=$route_flag, dest=$dest, mask=$mask, gateway=$gateway, metric=$metric, mtu=$mtu"
+
+	if [ $route_flag = "4" ]; then
+		if [ "$scope" = "nowhere" ] ;then
+			ip route add blackhole "$dest"/"$mask"
+		else
+			#proto_add_ipv4_route "$dest" "$mask" "$gateway" "" "$metric"
+			ip route add "$dest"/"$mask" ${gateway:+via $gateway} dev "ovpnserver" ${scope:+scope $scope} ${mtu:+mtu $mtu} ${metric:+metric $metric}
+		fi
+	elif [ $route_flag = "6" ]; then
+		if [ "$scope" = "nowhere" ] ;then
+			ip -6 route add blackhole "$dest"/"$mask"
+		else
+			#proto_add_ipv6_route "$dest" "$mask" "$gateway" "$metric"
+			ip -6 route add "$dest"/"$mask" ${gateway:+via $gateway} dev "ovpnserver" ${scope:+scope $scope} ${mtu:+mtu $mtu} ${metric:+metric $metric}
+		fi
+	fi
+}
+
+add_custom_route_settings()
+{
+	config_load ovpnserver
+	config_foreach add_route_rules route_rules
+}
+
+enable_v6='0'
+[ "`uci -q get glipv6.globals.enabled`" = "1" ] && enable_v6='1'
+# ifconfig_netmask is in xxx.xxx.xxx.xxx format, convert it to bit format. get from environment variable
+ipv4_mask_bit=$(ipcalc.sh 0.0.0.0 ${ifconfig_netmask} | grep "PREFIX" | cut -d '=' -f2)
+[ "$ipv4_mask_bit" = "0" ] && ipv4_mask_bit="32"
+
+proto_init_update "${dev}" 1
+proto_set_keep 1
+proto_add_ipv4_address "$ifconfig_local" "${ipv4_mask_bit}"
+add_default_route
+[ "$enable_v6" = '1' -a "$ifconfig_ipv6_local" != "" ] && {
+	ipv6_netbits=${ifconfig_ipv6_netbits:-128}
+	proto_add_ipv6_address "$ifconfig_ipv6_local" "${ipv6_netbits}"
+	add_default_route_6
+}
+proto_send_update "$uci_interface"
+add_custom_route_settings
+
+/etc/openvpn/scripts/ovpnserver_func.sh "ovpnserver" "set_dhcp" "up"
+
+exit 0

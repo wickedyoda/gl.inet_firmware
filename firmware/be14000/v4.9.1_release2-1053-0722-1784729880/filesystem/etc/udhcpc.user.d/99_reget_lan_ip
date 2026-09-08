@@ -1,0 +1,49 @@
+#!/bin/sh
+
+kick_all_clients() {
+    . /lib/functions/gl_util.sh
+    disconnect_lan_clients
+}
+
+get_network_mode() {
+    local mode=$(uci get glconfig.general.mode 2>/dev/null)
+    echo "$mode"
+}
+
+TARGET=$(ip route | grep default | grep -v 'proto ra' | awk '{print $3}' | head -1 | tr -d '\n')
+GATEWAY_FILE="/tmp/gateway_last"
+
+check_network() {
+    if [ -f "$GATEWAY_FILE" ]; then
+        LAST_GATEWAY=$(cat "$GATEWAY_FILE")
+        if [ -z "$TARGET" ] || [ "$TARGET" = "$LAST_GATEWAY" ]; then
+            return 0
+        else
+            logger "Current gateway: ($TARGET) is inconsistent with the last one ($LAST_GATEWAY),refresh all clients"
+            echo "$TARGET" > "$GATEWAY_FILE"
+            kick_all_clients
+            return 1
+        fi
+    else
+        echo "$TARGET" > "$GATEWAY_FILE"
+        return 0
+    fi
+}
+
+main() {
+    local event="$1"
+    local mode=$(get_network_mode)
+    if [ "$mode" != "router" ]; then
+        case "$event" in
+            bound|leasefail|nak)
+                sleep 3
+                check_network
+                ;;
+            *)
+                ;;
+        esac
+        exit 0
+    fi
+}
+
+main "$1"

@@ -1,0 +1,10 @@
+Package: gl-sdk4-dpi
+Version: 1.0.2-git-2026.120.05590-3f1e10e
+Depends: libc, gl-sdk4-utils, tc, kmod-sched-core, kmod-ifb, kmod-dpi
+Source: feeds/glinet/gl-sdk4-dpi
+SourceName: gl-sdk4-dpi
+Section: base
+SourceDateEpoch: 1777512790
+Architecture: aarch64_cortex-a53
+Installed-Size: 2440841
+Description:  Oui Support for dpi, and dpi api

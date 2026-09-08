@@ -1,0 +1,16 @@
+#!/bin/sh
+
+# dhcpv6 hotplug added by glinet
+# code at odhcpd
+
+mode=`uci -q get glipv6.lan.mode`
+if [ -n "$ADDR" -a -n "$MASTER" -a "$mode" = "relay" ];then
+	ifconfig br-lan | grep -q "$ADDR"
+	if [ "$?" = "1" ];then
+		device=`ifstatus $MASTER | jsonfilter -e @.l3_device`
+		if [ -n "$device" ];then
+			ip -6 neigh add proxy $ADDR dev $device
+			ip -6 route add $ADDR dev br-lan proto static metric 1024 pref medium
+		fi
+	fi
+fi

@@ -1,0 +1,10 @@
+Package: kmod-mtfwd
+Version: 5.4.281-1
+Depends: kernel (=5.4.281-1-df4fa332840f56a774a5d60bd140aaf6)
+Source: feeds/mt7988/drivers/mtfwd
+SourceName: kmod-mtfwd
+Section: kernel
+SourceDateEpoch: 1760147463
+Architecture: aarch64_cortex-a53
+Installed-Size: 10955
+Description:  MTK forward module

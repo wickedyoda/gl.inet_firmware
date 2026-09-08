@@ -1,0 +1,9 @@
+{
+        "name": "glddns.com",
+        "ipv4": {
+                "url": "get_ddns_post_cmd.lua"
+        },
+        "ipv6": {
+                "url": "get_ddns_post_cmd.lua"
+        }
+}

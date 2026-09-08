@@ -1,0 +1,11 @@
+{
+    "index": 90,
+    "view": "advanced",
+    "level": 2,
+    "parent": "system",
+    "parent_icon": "setting",
+    "parent_index": 70,
+    "hidden_mode": [
+        "agent"
+    ]
+}

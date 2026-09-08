@@ -1,0 +1,15 @@
+{
+  "index": 100,
+  "view": "bark",
+  "level": 2,
+  "parent": "applications",
+  "parent_icon": "application",
+  "parent_index": 55,
+  "country": {
+    "exclude": false,
+    "codes": ["us"]
+  },
+  "firmware_categories": ["2c"],
+  "show_mode": ["router"],
+  "disables": ["portal", "taps2s"]
+}

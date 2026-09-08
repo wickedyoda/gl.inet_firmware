@@ -1,0 +1,10 @@
+#!/bin/sh
+
+if [ "$INTERFACE" = "lan" -o "$INTERFACE" = "guest"  ];then
+    if [ "$ACTION" = "ifup" ];then
+        already_restart=`ps | grep -v grep | grep "gl_dpi"`
+        if [ -z "$already_restart" ];then
+            /etc/init.d/gl_dpi start &
+        fi
+    fi
+fi

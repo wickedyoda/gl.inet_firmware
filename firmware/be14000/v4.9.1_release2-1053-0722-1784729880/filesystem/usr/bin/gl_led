@@ -1,0 +1,109 @@
+#!/bin/sh
+
+. /lib/functions/gl_util.sh
+
+check_vpn_status() {
+    vpn_states="/tmp/wireguard/wgclient*_state /tmp/ovpnclient/ovpnclient*_state"
+    for state in $vpn_states;
+    do
+        [ -f "$state" ] || continue;
+        [ "$(cat $state)" = "connected" ] && {
+            vpn_online_led_display
+            return
+        }
+    done
+
+    for state in $vpn_states;
+    do
+        [ -f "$state" ] || continue;
+        [ "$(cat $state)" = "connecting" ] && {
+            vpn_offline_led_display
+            return
+        }
+    done
+    vpn_off_led_display
+}
+
+g_cloud_led_status=""
+check_cloud_status() {
+    [ -d "/sys/class/leds/cloud/" ] || return
+    local status_tmp="0"
+    status_tmp=$(ubus call gl-cloud status 2>/dev/null) || {
+        [ "$g_cloud_led_status" != "off" ] && {
+            cloud_offline_led_display
+            g_cloud_led_status="off"
+        }
+        return
+    }
+
+    local cloud_status=$(echo $status_tmp|jsonfilter -e @.connected)
+    local dev_bind_status=`uci show gl-cloud | grep bindtime`
+    if [ "$cloud_status" = "0" ] || [ "$1" = "0" ] || [ -z $dev_bind_status ];then
+        [ "$g_cloud_led_status" != "off" ] && {
+            cloud_offline_led_display
+            g_cloud_led_status="off"
+        }
+    else
+        [ "$g_cloud_led_status" != "on" ] && {
+            cloud_online_led_display
+            g_cloud_led_status="on"
+        }
+    fi
+}
+
+while true
+do
+    status="0"
+    check_vpn_status
+
+    #kmwan will not be used in the AP/WDS mode
+    mode=`uci -q get glconfig.general.mode`
+    if [ "$mode" = "ap" -o "$mode" = "wds" -o "$mode" = "agent" ];then
+        [ "$status" = 1 ] && sleep 10
+        lan_status=`ubus call network.interface.lan status | jsonfilter -q -e @.up`
+        if [ "$lan_status" = "true" ];then
+            for track_ip in `uci get glconfig.general.track_ip`
+            do
+                ping "$track_ip" -c1 -W1 | grep "1 packets rec" && status="1" && break
+            done
+        fi
+    else
+        ifnet_status=""
+        [ -e "/proc/gl-kmwan/config" ] && ifnet_status=$(cat /proc/gl-kmwan/config | grep online)
+        if [ -n "$ifnet_status" ]; then
+            repeater_portal_status=$(ubus call repeater status|jsonfilter -e '@.portal')
+            if [ "$repeater_portal_status" = "true" ]; then
+                status="0"
+            else
+                status="1"
+            fi
+        else
+            ifaces=$(ubus list|grep interface.|grep -v 'loopback\|lan'|cut -d'.' -f3 | grep -E '^(.*[^6]$|modem.*6$)')
+            config_load kmwan
+
+            for item in $ifaces; do
+                if [[ $item == *modem*_6 ]]; then
+                    config_get disabled $item "disabled" "1"
+                    [ "$disabled" = "1" ] || continue
+                else
+                    config_get check $item "check" "1"
+                    [ "$check" = "0" ] || continue
+                fi
+                up=$(ubus call network.interface.$item status|jsonfilter -e '@.up')
+                [ "$up" = "true" ] || continue
+                status="1"
+                break
+            done
+        fi
+    fi
+
+    if [ "$status" = "0" ];then
+        offline_led_display
+    else
+        online_led_display
+    fi
+
+    check_cloud_status $status
+
+    sleep 2
+done

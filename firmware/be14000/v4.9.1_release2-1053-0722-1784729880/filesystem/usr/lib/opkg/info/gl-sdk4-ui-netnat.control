@@ -1,0 +1,10 @@
+Package: gl-sdk4-ui-netnat
+Version: git-2026.183.23603-dfffd51-1
+Depends: libc
+Source: feeds/glinet/gl-ui4.0/module/netnat
+SourceName: gl-sdk4-ui-netnat
+Section: base
+SourceDateEpoch: 1782974003
+Architecture: aarch64_cortex-a53
+Installed-Size: 15645
+Description:  gl-sdk4-ui-netnat

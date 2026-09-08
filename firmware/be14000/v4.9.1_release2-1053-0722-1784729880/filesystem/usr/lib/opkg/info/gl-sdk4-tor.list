@@ -1,0 +1,8 @@
+/etc/hotplug.d/iface/97-tor
+/etc/uci-defaults/99_torrc_init
+/etc/gl-switch.d/tor.sh
+/etc/firewall.tor.nft
+/etc/hotplug.d/kmwan/98-tor
+/usr/lib/oui-httpd/rpc/tor
+/usr/bin/tor.sh
+/etc/config/tor

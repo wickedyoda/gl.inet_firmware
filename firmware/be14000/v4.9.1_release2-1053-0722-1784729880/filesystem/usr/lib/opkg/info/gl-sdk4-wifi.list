@@ -1,0 +1,15 @@
+/etc/uci-defaults/03_gl_random-bssid
+/etc/uci-defaults/05_gl_mtk-factory-macaddr
+/usr/share/gl-validator.d/wifi.lua
+/etc/uci-defaults/02_gl_wifi
+/usr/lib/lua/wpacli.so
+/usr/lib/oui-httpd/rpc/wifi
+/usr/lib/lua/gl/scan.so
+/usr/lib/lua/regulatory.so
+/usr/lib/lua/gl/wifi_mtkwifi7.lua
+/usr/lib/lua/gl/wifi.lua
+/usr/share/wifi-features-MT7990_1_1
+/usr/share/wifi-features-MT7990_1_2
+/usr/share/wifi-features-MT7990_1_3
+/etc/uci-defaults/wifi.d/10-start-disabled
+/etc/uci-defaults/04_gl_ramdom-bssid-sync

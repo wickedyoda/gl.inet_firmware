@@ -1,0 +1,19 @@
+#!/bin/sh
+
+[ ! -f /etc/config/zerotier ] && exit 0
+. /lib/functions/gl_util.sh
+
+[ "$(uci -q get glconfig.general.inited)" = "1" -a -n "$(uci -q get zerotier.gl.enabled)" ] && exit 0
+if [ -n "$(uci -q get zerotier.sample_config)" ]; then
+uci -q batch <<-EOF
+    delete zerotier.sample_config
+
+    set zerotier.gl=zerotier
+    set zerotier.gl.enabled='0'
+    set zerotier.gl.nat='0'
+    set zerotier.gl.wan_nat='0'
+    commit zerotier
+EOF
+
+fi
+

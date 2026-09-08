@@ -1,0 +1,10 @@
+Package: kmod-mt_spectrum
+Version: 5.4.281-1
+Depends: kernel (=5.4.281-1-df4fa332840f56a774a5d60bd140aaf6), spectrumd
+Source: feeds/mt7988/drivers/mt_spectrum
+SourceName: kmod-mt_spectrum
+Section: kernel
+SourceDateEpoch: 1760147463
+Architecture: aarch64_cortex-a53
+Installed-Size: 36714
+Description:  MTK spectrum analyzer module

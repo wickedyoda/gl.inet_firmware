@@ -1,0 +1,72 @@
+#!/bin/sh
+. /lib/functions.sh
+
+upstreams=''
+
+parse_stubby_resolver() {
+        local config=$1
+        local addr
+        local port
+        local tmp_upstream
+        config_get addr "${config}" "address"
+
+        tmp_upstream="${addr:?''}"
+        [ -n "${tmp_upstream}" ] && upstreams="${upstreams}${upstreams:+" "}${tmp_upstream}"
+}
+
+get_stubby_upstreams() {
+        config_load stubby
+        config_foreach parse_stubby_resolver resolver
+}
+
+get_upstream_from_dnsmasq() {
+        local tmp_data=`uci -q get dhcp.@dnsmasq[0].server`
+        local tmp_char
+        local tmp_server
+
+        for addr in ${tmp_data};do
+                tmp_char="${addr%%#*}"
+                tmp_server="${tmp_server}${tmp_server:+" "}${tmp_char?''}"
+        done
+        [ -n "${tmp_server}" ] && upstreams="${upstreams}${upstreams:+" "}${tmp_server}"
+}
+
+get_upstream_info() {
+        local mode=`uci -q get gl-dns.@dns[0].mode`
+        local proto=`uci -q get gl-dns.@dns[0].proto`
+
+        [ "`uci -q get adguardhome.config.enabled`" = '1' ] && mode="adguard"
+
+        case "$mode" in
+                "secure")
+                        if [ "${proto}" = 'DoT' ];then
+                                get_stubby_upstreams
+                        else
+                                #get_dnscrypt_porxy_upstreams
+                                /etc/init.d/dnscrypt-proxy restart
+                        fi
+                ;;
+                "manual"|\
+                "proxy")
+                        get_upstream_from_dnsmasq
+                ;;
+                "adguard")
+                        /etc/init.d/adguardhome restart
+                ;;
+        esac
+}
+
+clean_upstreams_conntrack() {
+        for upstream in ${upstreams};do
+                [ -n ${upstream} ] && conntrack -D -d ${upstream} >/dev/null 2>&1
+        done
+}
+
+clean_dns_conntrack() {
+        get_upstream_info
+        clean_upstreams_conntrack
+}
+
+clean_dns_conntrack
+
+

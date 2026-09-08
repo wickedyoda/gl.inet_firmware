@@ -1,0 +1,11 @@
+Package: kmod-ipt-raw6
+Version: 5.4.281-1
+Depends: kernel (=5.4.281-1-df4fa332840f56a774a5d60bd140aaf6), kmod-ipt-core, kmod-ip6tables
+Source: package/kernel/linux
+SourceName: kmod-ipt-raw6
+License: GPL-2.0
+Section: kernel
+SourceDateEpoch: 1784728420
+Architecture: aarch64_cortex-a53
+Installed-Size: 1930
+Description:  Netfilter IPv6 raw table support

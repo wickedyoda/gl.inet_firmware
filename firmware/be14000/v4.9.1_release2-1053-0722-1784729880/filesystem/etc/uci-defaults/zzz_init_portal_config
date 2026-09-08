@@ -1,0 +1,21 @@
+set_dns_redirect()
+{
+    already_set=`uci -q get dhcp.@dnsmasq[0].address`
+    [ -z "$already_set" ] && {
+        uci add_list dhcp.@dnsmasq[0].address='/#/192.168.8.1'
+        uci commit dhcp
+    }
+}
+
+disable_lan_to_wan()
+{
+    uci -q set firewall.@forwarding[0].enabled=0
+    uci commit firewall
+}
+
+[ "$(uci -q get glconfig.general.inited)" = "1" ] || [ "$(uci -q get oui-httpd.main.inited)" = "1" ] && exit 0
+
+#Do not perform these operation before production testing.
+[ -f "/proc/gl-hw-info/device_mac" ] && set_dns_redirect
+[ -f "/proc/gl-hw-info/device_mac" ] && disable_lan_to_wan
+

@@ -1,0 +1,21 @@
+#!/bin/sh
+
+# shellcheck disable=SC3037 SC3014
+
+PORT=$(cat /etc/nginx/conf.d/gl.conf |grep -E "    listen [0-9]+;" |grep -oE '[0-9]+'| head -1)
+
+if [ "$PORT" != "" -a "$PORT" != "80" ];then
+    URL="http://127.0.0.1:$PORT/rpc"
+else
+    URL="http://127.0.0.1/rpc"
+fi
+
+langs=$(curl -H 'glinet: 1' -k $URL -d "{\"jsonrpc\":\"2.0\",\"method\":\"call\",\"params\":[\"\",\"ui\",\"get_lang\",{}],\"id\":1}" | jsonfilter -e '@.result.list[@].value')
+langs_list=$(echo -e "${langs}" | sed 's/^/"/; s/$/"/' | tr '\n' ',' | sed 's/,\s*$//')
+if [ -n "${langs_list}" ];then
+    if [ "$1" == 1 ];then
+        enable=true
+    fi
+    curl -H 'glinet: 1' -k $URL -d "{\"jsonrpc\":\"2.0\",\"method\":\"call\",\"params\":[\"\",\"ui\",\"update_langs\",{\"list\":[${langs_list}], \"enable\":${enable}, \"week\":[$2], \"hour\":\"$3\", \"min\":\"$4\"}],\"id\":1}"
+fi
+

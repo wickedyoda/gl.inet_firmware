@@ -1,0 +1,11 @@
+Package: mwctl
+Version: 1
+Depends: libc, libnl-tiny1
+Source: feeds/mt7988/applications/mwctl
+SourceName: mwctl
+License: GPLv2
+Section: devel
+SourceDateEpoch: 1781490743
+Architecture: aarch64_cortex-a53
+Installed-Size: 52898
+Description:  vendor cmd for logan/mt76 driver

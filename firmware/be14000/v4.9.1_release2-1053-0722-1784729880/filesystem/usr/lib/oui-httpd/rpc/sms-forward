@@ -1,0 +1,317 @@
+--[[
+    @object-name: sms-forward
+    @object-desc: sms-forward settings
+--]]
+local fs = require "oui.fs"
+local cjson = require "cjson"
+
+local M = {}
+
+--[[
+    @method-type: call
+    @method-name: get_config
+    @method-desc: Get sms-forward settings
+
+    @out object   single_sim                              Single SIM settings
+    @out bool     single_sim.enable                       Enable single SIM mode
+    @out array    single_sim.phone_numbers                List of phone numbers
+    @out string   single_sim.phone_numbers.country_code   Country code for a phone number
+    @out string   single_sim.phone_numbers.phone_number   Phone number
+    @out string   single_sim.phone_numbers.full_number    Full phone number
+    @out object   dual_sim                                Dual SIM settings
+    @out object   dual_sim.sim1                           SIM1 settings
+    @out bool     dual_sim.sim1.enable                    Enable SIM1
+    @out array    dual_sim.sim1.phone_numbers             List of phone numbers for SIM1
+    @out string   dual_sim.sim1.phone_numbers.country_code   SIM1 Country code for a phone number
+    @out string   dual_sim.sim1.phone_numbers.phone_number   SIM1 Phone number
+    @out string   dual_sim.sim1.phone_numbers.full_number    SIM1 Full phone number
+    @out object   dual_sim.sim2                              SIM2 settings
+    @out bool     dual_sim.sim2.enable                       Enable SIM2
+    @out array    dual_sim.sim2.phone_numbers                List of phone numbers for SIM2
+    @out string   dual_sim.sim2.phone_numbers.country_code   SIM2 Country code for a phone number
+    @out string   dual_sim.sim2.phone_numbers.phone_number   SIM2 Phone number
+    @out string   dual_sim.sim2.phone_numbers.full_number    SIM2 Full phone number
+    @out object   email                                      Mailbox related settings
+    @out bool     email.enable                               Enable mailbox forwarding
+    @out array    email.emails                               Target email list.
+    @out string   email.account                              This server email account name.
+    @out string   email.password                             This server email account password.
+    @out number   email.encryption                           Encryption[0: none , 1: ssl, 2: startTLS ].
+    @out string   email.smtp                                 Smtp.
+    @out string   email.subject                              This server email subject.
+    @out number   ?err_code                                  Error code.
+    @out string   ?err_msg                                   Error messag.
+    @in-example:  {"jsonrpc":"2.0","method":"call","params":["","sms-forward","get_config",{"modem_mode": "single"}],"id":1}
+    @out-example: {"id":1,"jsonrpc":"2.0","result":{"phone":{"enable":true,"phone_numbers":[{"phone_number":"13155558889","country_code":"+86","full_number":"+8613155558889"},{"phone_number":"12345678","country_code":"","full_number":"12345678"}],"modem_mode":"single"},"email":{"password":"1234567abC","emails":["12345678963@gmail.com","12345678941@gmail.com"],"subject":"GL-X750","encryption":1,"enable":true,"smtp":"smtp.gmail.com:465","account":"12396325841@gmail.com"}}}
+--]]
+function M.get_config(params)
+    if not params or not params.modem_mode then
+        return {err_code = -1, err_msg = "Missing modem_mode parameter"}
+    end
+    if params.modem_mode ~= "single" and params.modem_mode ~= "dual" then
+        return {err_code = -1, err_msg = "Invalid modem_mode, must be 'single' or 'dual'"}
+    end
+
+    local config_path = "/etc/config/cellular/sms_forward.json"
+
+    local file = io.open(config_path, "r")
+    if not file then
+        return {err_code = -2, err_msg = "config file read fail"}
+    end
+
+    local content = file:read("*a")
+    file:close()
+    if not content or content == "" then
+        return {err_code = -3, err_msg = "config file nil"}
+        end
+
+    local config_data
+    local success, result = pcall(cjson.decode, content)
+    if not success then
+        return {err_code = -4, err_msg = "JSON decode fail"}
+    end
+
+    config_data = result
+    local result_data = {}
+
+    if params.modem_mode == "single" then
+        result_data.modem_mode = "single"
+        result_data.enable = config_data.single_sim and config_data.single_sim.enable or false
+        result_data.phone_numbers = config_data.single_sim and config_data.single_sim.phone_numbers or {}
+    else
+        result_data.modem_mode = "dual"
+        result_data.sim1 = {
+            enable = config_data.dual_sim and config_data.dual_sim.sim1 and config_data.dual_sim.sim1.enable or false,
+            phone_numbers = config_data.dual_sim and config_data.dual_sim.sim1 and config_data.dual_sim.sim1.phone_numbers or {}
+        }
+        result_data.sim2 = {
+            enable = config_data.dual_sim and config_data.dual_sim.sim2 and config_data.dual_sim.sim2.enable or false,
+            phone_numbers = config_data.dual_sim and config_data.dual_sim.sim2 and config_data.dual_sim.sim2.phone_numbers or {}
+        }
+    end
+
+    return {
+        err_code = 0,
+        phone = result_data,
+        email = config_data.email
+    }
+end
+
+--[[
+    @method-type: call
+    @method-name: set_phone_number
+    @method-desc: set sms-forward phone number
+
+    @in string    modem_mode                            modem operation mode: "single" or "dual"
+    @in object    single_sim                            Single SIM configuration
+    @in bool      single_sim.enable                     Enable single SIM mode
+    @in array     single_sim.phone_numbers              Phone number list for single SIM mode
+    @in string    single_sim.phone_numbers.country_code     Country code
+    @in string    single_sim.phone_numbers.phone_number     Phone number
+    @in string    single_sim.phone_numbers.full_number      Full phone number (country_code + phone_number)
+    @in object    dual_sim                              Dual SIM configuration
+    @in object    dual_sim.sim1                         SIM1 configuration
+    @in bool      dual_sim.sim1.enable                  Enable SIM1
+    @in array     dual_sim.sim1.phone_numbers           Phone number list for SIM1
+    @in string    dual_sim.sim1.phone_numbers.country_code  SIM1 Country code
+    @in string    dual_sim.sim1.phone_numbers.phone_number  SIM1 Phone number
+    @in string    dual_sim.sim1phone_numbers.full_number    SIM1 Full phone number
+    @in object    dual_sim.sim2                         SIM2 configuration
+    @in bool      dual_sim.sim2.enable                  Enable SIM2
+    @in array     dual_sim.sim2.phone_numbers           Phone number list for SIM2
+    @in string    dual_sim.sim2.phone_numbers.country_code  SIM2 Country code
+    @in string    dual_sim.sim2.phone_numbers.phone_number  SIM2 Phone number
+    @in string    dual_sim.sim2.phone_numbers.full_number   SIM2 Full phone numbe
+
+    @out number   ?err_code                      Error code
+    @out string   ?err_msg                       Error message
+    @in-example:  {"jsonrpc":"2.0","method":"call","params":["","sms-forward","set_phone_number",{"modem_mode":"single",enable":true,"phone_numbers":[{"country_code":"+86","phone_number":"14785296323"},{"country_code":"+83","phone_number":"12345677412"}]}],"id":1}
+    @out-example: {"jsonrpc": "2.0", "id": 1, "result": null}
+--]]
+function M.set_phone_number(params)
+    if not fs.access("/etc/forward") then
+        return {err_code = -1, err_msg = "Forward configuration file not found"}
+    end
+
+    if not params.modem_mode then
+        return {err_code = -3, err_msg = "Missing required parameter: modem_mode"}
+    end
+
+    if params.modem_mode ~= "single" and params.modem_mode ~= "dual" then
+        return {err_code = -4, err_msg = "Invalid modem_mode, must be 'single' or 'dual'"}
+    end
+
+    local config_path = "/etc/config/cellular/sms_forward.json"
+    local config_data = {}
+
+    if fs.access(config_path) then
+        local config_file = io.open(config_path, "r")
+        if config_file then
+            local content = config_file:read("*a")
+            config_file:close()
+            local ok, parsed = pcall(cjson.decode, content)
+            if ok and parsed then
+                config_data = parsed
+            end
+        end
+    end
+
+    local success, err = pcall(function()
+        config_data.modem_mode = params.modem_mode
+
+        local function process_phone_numbers(phone_list)
+            if not phone_list or type(phone_list) ~= "table" or #phone_list == 0 then
+                return {}
+            end
+            local processed_numbers = {}
+            local forward_array = {}
+            for _, value in ipairs(phone_list) do
+                if value.phone_number then
+                    local cleaned_number = ((value.country_code or "") .. value.phone_number):gsub("[^%d+]", "")
+                    table.insert(processed_numbers, {
+                        country_code = value.country_code or "",
+                        phone_number = value.phone_number,
+                        full_number = cleaned_number
+                    })
+                    table.insert(forward_array, cleaned_number)
+                end
+            end
+            return processed_numbers, forward_array
+        end
+        if params.modem_mode == "single" then
+            config_data.single_sim = config_data.single_sim or {}
+            config_data.single_sim.enable = params.enable == true
+            local phone_numbers, forward_array = process_phone_numbers(params.phone_numbers)
+            config_data.single_sim.phone_numbers = phone_numbers
+            config_data.single_sim.forward_numbers = forward_array
+        else
+            config_data.dual_sim = config_data.dual_sim or {}
+            config_data.dual_sim.sim1 = config_data.dual_sim.sim1 or {}
+            config_data.dual_sim.sim2 = config_data.dual_sim.sim2 or {}
+            -- SIM1
+            config_data.dual_sim.sim1.enable = params.sim1 and params.sim1.enable == true
+            local sim1_numbers, sim1_forward = process_phone_numbers(params.sim1 and params.sim1.phone_numbers)
+            config_data.dual_sim.sim1.phone_numbers = sim1_numbers
+            config_data.dual_sim.sim1.forward_numbers = sim1_forward
+            -- SIM2
+            config_data.dual_sim.sim2.enable = params.sim2 and params.sim2.enable == true
+            local sim2_numbers, sim2_forward = process_phone_numbers(params.sim2 and params.sim2.phone_numbers)
+            config_data.dual_sim.sim2.phone_numbers = sim2_numbers
+            config_data.dual_sim.sim2.forward_numbers = sim2_forward
+        end
+
+        local config_file = io.open(config_path, "w")
+        if not config_file then
+            error("Failed to open config file for writing: " .. config_path)
+        end
+
+        config_file:write(cjson.encode(config_data))
+        config_file:close()
+    end)
+
+    if not success then
+        return {err_code = -4, err_msg = "Configuration save failed: " .. tostring(err)}
+    end
+
+end
+
+--[[
+    @method-type: call
+    @method-name: set_email
+    @method-desc: set sms-forward email
+
+    @in object    email                     Email configuration
+    @in bool      email.enable              Enable email notifications
+    @in array     emails                    Target email list.
+    @in string    account                   This server email account name.
+    @in string    password                  This server email account password.
+    @in number    email.encryption          Enable email encryption[0: none , 1: ssl, 2: startTLS ]
+    @in string    email.subject             Email subject
+    @in string    smtp                      Smtp.
+
+    @out number   ?err_code         Error code,-1:Forward file don't exist, -2:ssmtp don't exist.
+    @out string   ?err_msg          Error message
+    @in-example:  {"jsonrpc":"2.0","method":"call","params":["","sms-forward","set_email",{"enable":true,"emails":["12345678963@gmail.com","12345678941@gmail.com"],"account":"12396325841@gmail.com","password":"1234567abC","encryption":1,"smtp":"smtp.gmail.com:465","subject":"GL-X750"}],"id":1}
+    @out-example: {"jsonrpc": "2.0", "id": 1, "result": null}
+--]]
+function M.set_email(params)
+    if not fs.access("/etc/forward") then
+        return {err_code = -1, err_msg = "Forward file don't exist"}
+    end
+
+    if not fs.access("/usr/sbin/ssmtp") then
+        return {err_code = -2, err_msg = "ssmtp don't exist"}
+    end
+
+    local config_path = "/etc/config/cellular/sms_forward.json"
+    local config_data = {}
+
+    if fs.access(config_path) then
+        local config_file = io.open(config_path, "r")
+        if config_file then
+            local content = config_file:read("*a")
+            config_file:close()
+            local ok, parsed = pcall(cjson.decode, content)
+            if ok and parsed then
+                config_data = parsed
+            end
+        end
+    end
+
+    local success, err = pcall(function()
+        config_data.email = config_data.email or {}
+        config_data.email.enable = not not params.enable
+        config_data.email.encryption = params.encryption or 0
+        config_data.email.subject = tostring(params.subject or "")
+        config_data.email.account = tostring(params.account or "")
+        config_data.email.password = tostring(params.password or "")
+        config_data.email.smtp = tostring(params.smtp or "")
+
+        if params.emails and #params.emails > 0 then
+            config_data.email.emails = params.emails
+        else
+            config_data.email.emails = nil
+        end
+
+        local config_file = io.open(config_path, "w")
+        if not config_file then
+            error("Failed to open config file for writing: " .. config_path)
+        end
+
+
+        config_file:write(cjson.encode(config_data))
+        config_file:close()
+    end)
+
+    if not success then
+        return {err_code = -4, err_msg = "Configuration save failed: " .. tostring(err)}
+    end
+
+    local domain = params.account:match("@([^@]+)$") or ""
+    local ssl = params.encryption == 0 and "#" or ""
+    local startTLS = params.encryption == 2 and "" or "#"
+    os.remove("/etc/ssmtp/ssmtp.conf")
+    local f = io.open("/etc/ssmtp/ssmtp.conf", "a")
+    local ssmtp_data =
+        string.format(
+        "root=%s\nmailhub=%s\nrewriteDomain=%s\nhostname=%s\nAuthUser=%s\nAuthPass=%s\nAuthMethod=LOGIN\n%sUseTLS=YES\nFromLineOverride=Yes\n%sUseSTARTTLS=Yes\n",
+        params.account,
+        params.smtp,
+        domain,
+        domain,
+        params.account,
+        params.password,
+        ssl,
+        startTLS
+    )
+    f:write(ssmtp_data)
+    f:close()
+
+    os.remove("/etc/ssmtp/revaliases")
+    f = io.open("/etc/ssmtp/revaliases", "a")
+    local revaliases = string.format("root:%s:%s\n", params.account, params.smtp)
+    f:write(revaliases)
+    f:close()
+end
+
+return M

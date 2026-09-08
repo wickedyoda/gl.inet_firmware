@@ -1,0 +1,12 @@
+. /lib/functions.sh 
+
+uci set glconfig.general.mode="router"
+uci commit glconfig
+
+uci -q delete network.stabridge
+uci commit network
+
+uci -q delete kmwan.lan
+uci commit kmwan
+/etc/init.d/kmwan reload
+/etc/init.d/edgerouter restart

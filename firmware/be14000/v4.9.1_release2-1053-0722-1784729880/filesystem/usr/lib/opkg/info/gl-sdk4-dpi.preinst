@@ -1,0 +1,17 @@
+#!/bin/sh
+[ -n "${IPKG_INSTROOT}" ] || {
+    if [ -d /etc/netifyd_ipks ]; then
+        rm -rf /etc/netifyd_ipks/*
+    fi
+
+    cp /etc/config/gl_dpi_qos /etc/config/gl_dpi_qos.bak
+    cp /etc/config/gl_dpi_content_protection /etc/config/gl_dpi_content_protection.bak
+    cp /etc/config/gl_dpi_flow_statistics /etc/config/gl_dpi_flow_statistics.bak
+    cp /etc/config/gl_dpi /etc/config/gl_dpi.bak
+
+    cp /etc/netifyd/app-metadata.json /etc/netifyd/app-metadata.json.bak
+    cp /etc/netifyd/license.json /etc/netifyd/license.json.bak
+    cp /etc/netifyd/netify-apps.conf /etc/netifyd/netify-apps.conf.bak
+    cp /etc/netifyd/netify-categories.json /etc/netifyd/netify-categories.json.bak
+}
+exit 0

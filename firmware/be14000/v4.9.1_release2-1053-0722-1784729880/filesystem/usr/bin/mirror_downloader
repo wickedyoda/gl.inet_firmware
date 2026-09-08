@@ -1,0 +1,128 @@
+#!/bin/sh
+
+if [ $# -lt 1 ]; then
+	echo "$0: Pass URL to download as argument"
+	exit 1
+fi
+
+rm -f /tmp/firmware.img
+tmp_dir=/tmp/mirror_dl_dir
+rm -fr $tmp_dir
+mkdir -p $tmp_dir
+
+url=$1
+parts=6
+
+site=$(echo $url|sed 's/https:\/\/\([^/]*\)\/.*/\1/')
+
+if [ "$site" = "fw.gl-inet.com" ]; then
+	site_mirror=fw.gl-inet.cn
+	mirror_url="$(echo $url|sed "s/$site/$site_mirror/")"
+fi
+
+if [ "$site" = "fw.gl-inet.cn" ]; then
+	site_mirror=fw.gl-inet.com
+	mirror_url="$(echo $url|sed "s/$site/$site_mirror/")"
+fi
+
+#url=https://fw.gl-inet.cn/firmware/a1300/release/openwrt-a1300-4.4.6-0908-1694153586.tar 
+#mirror_url=https://fw.gl-inet.cn/firmware/a1300/release/openwrt-a1300-4.4.6-0908-1694153586.tar 
+
+curl_size_tmp_file=$tmp_dir/curl_size_tmp_file
+curl --max-time 10 -w "time1=%{time_total}\n" -I -s $url >$curl_size_tmp_file
+ret1=$?
+[ $ret1 = 0 ] && http_ok1=$(cat "$curl_size_tmp_file" | head -1 |grep 200)
+
+if [ $ret1 = 0 -a -n "$http_ok1" ]; then
+	size1="$(cat $curl_size_tmp_file | grep -iE 'content-length' | awk '{print $2}' | tr -d '\r\n')"
+	eval "$(cat $curl_size_tmp_file |tail -1)"
+fi
+
+rm -f $curl_size_tmp_file
+
+if [ -n "$mirror_url" ]; then
+	curl --max-time 10 -w "time2=%{time_total}\n" -I -s $mirror_url >$curl_size_tmp_file
+	ret2=$?
+	[ $ret2 = 0 ] && http_ok2=$(cat "$curl_size_tmp_file" | head -1 |grep 200)
+	if [ $ret2 = 0 -a -n "$http_ok2" ]; then
+		size2="$(cat $curl_size_tmp_file | grep -iE 'content-length' | awk '{print $2}' | tr -d '\r\n')"
+		eval "$(cat $curl_size_tmp_file |tail -1)"
+	fi
+	cp $curl_size_tmp_file /tmp
+	rm -f $curl_size_tmp_file
+fi
+
+if [ -n "$size2" ]; then
+	size=$size2
+	url_1=$mirror_url
+	url_2=$url
+fi
+
+if [ -n "$size1" ]; then
+	size=$size1
+	url_1=$url
+	url_2=$mirror_url
+fi
+
+if [ -n "$time2" -a -n "$time1" ]; then
+	time1=$(awk -v n=$time1 'BEGIN{print int(n*1000000)}')
+	time2=$(awk -v n=$time2 'BEGIN{print int(n*1000000)}')
+	echo "time url=$time1 , time mirror_url=$time2"
+	if [ "$time2" -lt "$time1" ]; then
+		url_1=$mirror_url
+		url_2=$url
+	else
+		url_1=$url
+		url_2=$mirror_url
+	fi
+fi
+
+if [ -z "$size" ]; then
+	logger -t one_click_upgrade "downloader: Network error......"
+	exit 1
+fi
+
+for c in $(seq 1 $parts)
+do
+	from="$((($size * ($c - 1)) / $parts))"
+	if [ $c -ne $parts ]; then
+		to="$((($size * $c) / $parts - 1))"
+	else
+		to="$((($size * $c) / $parts))"
+		to="$(($to -1 ))"
+	fi
+	out="$tmp_dir/temp.part$c"
+	part_size=$(($to - $from + 1))
+	while true; do
+		echo "curl --max-time 300 -s --range $from-$to -o $out $url_1"
+		curl --max-time 300 -s --range $from-$to -o $out $url_1
+		ret=$?
+		if [ $ret = 0 -a "$(wc -c <$out)" = "$part_size" ]; then
+			touch ${out}_done
+			break
+		fi
+		sleep 5
+		echo "curl --max-time 300 -s --range $from-$to -o $out $url_2"
+		curl --max-time 300 -s --range $from-$to -o $out $url_2
+		ret=$?
+		if [ $ret = 0 -a "$(wc -c <$out)" = "$part_size" ]; then
+			touch ${out}_done
+			break
+		fi
+	done &
+done
+
+while true; do
+	num_done=$(ls -l $tmp_dir/*done 2>/dev/null | wc -l)
+	[ $num_done = $parts ] && break
+	sleep 1
+done
+
+for c in $(seq 1 $parts)
+do
+	cat "$tmp_dir/temp.part$c" >> /tmp/firmware.img
+	rm "$tmp_dir/temp.part$c"
+done
+
+rm -fr $tmp_dir
+

@@ -1,0 +1,16 @@
+//锁屏页面样式
+WAKE_DISPLAY_STYLE 0
+//主页和锁屏是否共用壁纸
+WALLPAPER_PAIR 1
+//亮度配置
+BRIGHTNESS 75
+//自动锁屏时间配置
+AUTO_LOCK_TIME 600
+//屏幕常亮配置
+ALWAYS_ON 0
+//时间格式
+HOUR_FORMAT 0
+//锁屏密码开关
+ENABLE_PASSCODE 0
+// 初始化屏幕状态
+INITIAL_SCREEN 0

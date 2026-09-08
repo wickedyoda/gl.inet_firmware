@@ -1,0 +1,76 @@
+#!/bin/sh
+. /lib/functions/gl_util.sh
+
+get_modem_iface()
+{
+    if [ -e "/lib/functions/modem.sh" ]; then
+        . /lib/functions/modem.sh
+        bus=`get_modem_bus "usb"`
+        if [ -n "$bus" ]; then
+            if [ -n "$(echo $bus | grep '-')" ]; then
+                modem_iface="modem_$(echo $bus | sed 's/-/_/g' | sed 's/\./_/g')"
+            else
+                modem_iface="modem_$(echo ${bus%%:*})"
+            fi
+        fi
+        echo $modem_iface
+    fi
+}
+
+if [ "$(uci -q get glconfig.general.inited)" != "1" ]; then
+    # SRRC need enable ipv6 by default
+    if [ -f /proc/gl-hw-info/country_code ];then
+        if [ "$(cat /proc/gl-hw-info/country_code)" = "CN" ]; then
+            uci set glipv6.globals.enabled='1'
+            uci set glipv6.lan.mode='native'
+            uci commit glipv6
+            members=$(uci show kmwan | grep "=member" | cut -d'=' -f1 | cut -d'.' -f2)
+            for member in $members; do
+                uci set kmwan.$member.disabled='0'
+                uci set kmwan.$member.track_proto='2'
+            done
+            uci commit kmwan
+            /etc/init.d/kmwan restart
+        fi
+    fi
+    exit 0
+fi
+
+if [ -z "$(uci -q get network.wan6)" -o -z "$(uci -q get network.tethering6)" -o -z "$(uci -q get network.wwan6)" ]; then
+    uci set network.wan6.ifname='@wan'
+    [ -n "$(uci -q get network.wan6.device)" ] && uci delete network.wan6.device
+    [ -z "$(uci -q get network.wan.ipv6)" ] && uci set network.wan.ipv6='0'
+    [ -z "$(uci -q get network.wan6.disabled)" ] && uci set network.wan6.disabled='1'
+
+    uci set network.tethering6='interface'
+    uci set network.tethering6.ifname='@tethering'
+    uci set network.tethering6.proto='dhcpv6'
+    [ -z "$(uci -q get network.tethering6.disabled)" ] && uci set network.tethering6.disabled='1'
+
+    uci set network.wwan6='interface'
+    uci set network.wwan6.ifname='@wwan'
+    uci set network.wwan6.proto='dhcpv6'
+    [ -z "$(uci -q get network.wwan6.disabled)" ] && uci set network.wwan6.disabled='1'
+    uci commit network
+
+    # add modem config
+    modem_iface=$(get_modem_iface)
+    if [ -n "$modem_iface" ]; then
+        uci set network.${modem_iface}_6='interface'
+        uci set network.${modem_iface}_6.ifname="@${modem_iface}"
+        uci set network.${modem_iface}_6.proto='dhcpv6'
+        [ -z "$(uci -q get network.${modem_iface}_6.disabled)" ] && uci set network.${modem_iface}_6.disabled='1'
+    fi
+fi
+
+if [ -z "$(uci -q get glipv6.secondwan)" ]; then
+    uci set glipv6.secondwan=interface
+    uci set glipv6.secondwan.interface='secondwan'
+    uci set glipv6.secondwan.addrmode='auto'
+    uci set glipv6.secondwan.dnsmode='auto'
+    uci commit glipv6
+fi
+
+#Default does not handle IPV6 DNS
+uci set dhcp.@dnsmasq[0].filter_aaaa="1"
+uci commit dhcp

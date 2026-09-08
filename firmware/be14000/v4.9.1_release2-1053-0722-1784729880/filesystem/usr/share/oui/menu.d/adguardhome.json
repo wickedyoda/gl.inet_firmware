@@ -1,0 +1,19 @@
+{
+    "index": 80,
+    "view": "adguardhome",
+    "level": 2,
+    "title": "AdGuard Home",
+    "parent": "applications",
+    "parent_icon": "application",
+    "parent_index": 55,
+    "show_mode": [
+        "router"
+    ],
+    "lang_hide": [
+        "zh-cn"
+    ],
+    "disables": [
+        "portal",
+        "taps2s"
+    ]
+}

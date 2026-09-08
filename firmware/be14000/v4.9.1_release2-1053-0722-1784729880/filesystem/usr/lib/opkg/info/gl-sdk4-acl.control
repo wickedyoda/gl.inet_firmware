@@ -1,0 +1,10 @@
+Package: gl-sdk4-acl
+Version: git-2025.042.14435-c2946a3-1
+Depends: libc, libuci-lua
+Source: feeds/glinet/gl-sdk4-acl
+SourceName: gl-sdk4-acl
+Section: base
+SourceDateEpoch: 1739246435
+Architecture: aarch64_cortex-a53
+Installed-Size: 2715
+Description:  glinet SDK4 ACL module

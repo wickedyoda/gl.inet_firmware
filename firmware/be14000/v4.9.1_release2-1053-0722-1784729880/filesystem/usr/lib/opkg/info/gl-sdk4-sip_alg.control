@@ -1,0 +1,10 @@
+Package: gl-sdk4-sip_alg
+Version: git-2025.219.32438-913177f-1
+Depends: libc, kmod-nf-nathelper-extra
+Source: feeds/glinet/gl-sdk4-sip_alg
+SourceName: gl-sdk4-sip_alg
+Section: base
+SourceDateEpoch: 1754557238
+Architecture: aarch64_cortex-a53
+Installed-Size: 958
+Description:  SIP ALG OPTION

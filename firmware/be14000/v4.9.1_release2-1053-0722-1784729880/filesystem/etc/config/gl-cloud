@@ -1,0 +1,2 @@
+config cloud
+    option log 'INFO'

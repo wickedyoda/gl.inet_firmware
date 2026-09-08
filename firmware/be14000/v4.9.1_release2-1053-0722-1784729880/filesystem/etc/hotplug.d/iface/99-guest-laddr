@@ -1,0 +1,7 @@
+if [ "$DEVICE" == "br-guest" -a "$ACTION" == "ifup" ];then
+        [ "$(uci get glipv6.globals.enabled)" != "1" ] && exit
+        ip link show br-guest | grep -q NO-CARRIER && {
+                sysctl -w net.ipv6.conf.br-guest.addr_gen_mode=1
+                sysctl -w net.ipv6.conf.br-guest.addr_gen_mode=0
+        }
+fi

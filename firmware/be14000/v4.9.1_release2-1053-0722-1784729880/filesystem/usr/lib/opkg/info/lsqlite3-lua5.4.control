@@ -1,0 +1,12 @@
+Package: lsqlite3-lua5.4
+Version: 0.9.5-1
+Depends: libc, libsqlite3-0, liblua5.4-5.4
+Source: feeds/gl_feed_common/lsqlite3-lua5.4
+SourceName: lsqlite3-lua5.4
+License: MIT
+Section: lang
+SourceDateEpoch: 1744285670
+Maintainer: Oskari Rauta <oskari.rauta@gmail.com>
+Architecture: aarch64_cortex-a53
+Installed-Size: 15835
+Description:  Lua wrapper for the SQLite3 library

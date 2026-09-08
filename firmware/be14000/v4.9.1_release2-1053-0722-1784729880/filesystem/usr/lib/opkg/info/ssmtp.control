@@ -1,0 +1,16 @@
+Package: ssmtp
+Version: 2.64-7
+Depends: libc, libopenssl1.1
+Source: feeds/gl_feed_common/ssmtp
+SourceName: ssmtp
+License: GPL-2.0-or-later
+Section: mail
+SourceDateEpoch: 1660112613
+CPE-ID: cpe:/a:ssmtp:ssmtp
+Maintainer: Dirk Brenken <dev@brenken.org>
+Architecture: aarch64_cortex-a53
+Installed-Size: 12450
+Description:  A secure, effective and simple way of getting mail off a system to your mail hub.
+ Mail is simply forwarded to the configured mailhost, no daemons running in the background.
+ Extremely easy configuration.
+ 

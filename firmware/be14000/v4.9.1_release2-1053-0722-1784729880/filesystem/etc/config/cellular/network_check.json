@@ -1,0 +1,8 @@
+{
+    "check_period_sec": 40,
+    "offline_threshold": 3,
+    "restore_trigger_window_sec": 300,
+    "restore_trigger_max_cnt": 3,
+    "restore_block_sec": 300
+}
+

@@ -1,0 +1,14 @@
+Package: libxml2
+Version: 2.9.14-1
+Depends: libc, libpthread, zlib
+Source: feeds/packages/libs/libxml2
+SourceName: libxml2
+License: MIT
+LicenseFiles: COPYING
+Section: libs
+SourceDateEpoch: 1654027450
+CPE-ID: cpe:/a:xmlsoft:libxml2
+Maintainer: Michael Heimpold <mhei@heimpold.de>
+Architecture: aarch64_cortex-a53
+Installed-Size: 502238
+Description:  A library for manipulating XML and HTML resources.

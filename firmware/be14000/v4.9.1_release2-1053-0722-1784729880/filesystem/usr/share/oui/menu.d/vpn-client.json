@@ -1,0 +1,17 @@
+{
+    "index": 11,
+    "view": "vpn-client",
+    "level": 2,
+    "parent": "vpn",
+    "parent_icon": "vpn",
+    "parent_index": 40,
+    "lang_hide": [
+        "zh-cn"
+    ],
+    "show_mode": [
+        "router"
+    ],
+    "disables": [
+        "portal"
+    ]
+}

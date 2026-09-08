@@ -1,0 +1,59 @@
+#!/bin/sh
+
+# shellcheck disable=SC3010
+init_ethernet_force()
+{
+    iptables -t mangle -N ETHERNET_TTL 2>/dev/null
+    iptables -t mangle -C POSTROUTING -j ETHERNET_TTL
+    [ ! "$?" = "0" ] && iptables -t mangle -I POSTROUTING -j ETHERNET_TTL
+    iptables -t mangle -F ETHERNET_TTL
+
+    ip6tables -t mangle -N ETHERNET_TTL 2>/dev/null
+    ip6tables -t mangle -C POSTROUTING -j ETHERNET_TTL
+    [ ! "$?" = "0" ] && ip6tables -t mangle -I POSTROUTING -j ETHERNET_TTL
+    ip6tables -t mangle -F ETHERNET_TTL
+}
+
+force_ethernet_ttl()
+{
+    [ -n "$(uci show network | grep network.wan.ttl)" ] && {
+        local dev=$(uci get network.wan.device)
+        [ "$dev" = "" ] && dev=$(uci get network.wan.ifname)
+        local ttl=$(uci get network.wan.ttl)
+        local proto=$(uci get network.wan.proto)
+        [ "$proto" = "pppoe" ] && dev="pppoe-wan"
+        [ "$ttl" != "" ] && iptables -t mangle -A ETHERNET_TTL -o $dev -j TTL --ttl-set $ttl
+
+        local ttl_ipv6=$(uci get network.wan.ttl_ipv6)
+        [ "$ttl_ipv6" != "" ] && ip6tables -t mangle -A ETHERNET_TTL -o $dev -m hl ! --hl-eq 255 -j HL --hl-set $ttl_ipv6
+    }
+
+    [ -n "$(uci show network | grep network.secondwan.ttl)" ] && {
+        local secondwan_dev=$(uci get network.secondwan.device)
+        [ "$secondwan_dev" = "" ] && secondwan_dev=$(uci get network.secondwan.ifname)
+        [ "$secondwan_dev" != "" ] && {
+            local secondwan_proto=$(uci get network.secondwan.proto)
+            [ "$secondwan_proto" = "pppoe" ] && secondwan_dev="pppoe-secondwan"
+            local secondwan_ttl=$(uci get network.secondwan.ttl)
+            local secondwan_ttl_ipv6=$(uci get network.secondwan.ttl_ipv6)
+
+            [ "$secondwan_ttl" != "" ] && iptables -t mangle -A ETHERNET_TTL -o $secondwan_dev -j TTL --ttl-set $secondwan_ttl
+
+            [ "$secondwan_ttl_ipv6" != "" ] && ip6tables -t mangle -A ETHERNET_TTL -o $secondwan_dev -m hl ! --hl-eq 255 -j HL --hl-set $secondwan_ttl_ipv6
+        }
+    }
+}
+
+if [[ -n "$(uci show network | grep network.wan.ttl)" || -n "$(uci show network | grep network.secondwan.ttl)" ]];then
+    init_ethernet_force
+    force_ethernet_ttl
+else
+    iptables -t mangle -F ETHERNET_TTL
+    iptables -t mangle -D POSTROUTING -j ETHERNET_TTL
+    iptables -t mangle -X ETHERNET_TTL
+
+    ip6tables -t mangle -F ETHERNET_TTL
+    ip6tables -t mangle -D POSTROUTING -j ETHERNET_TTL
+    ip6tables -t mangle -X ETHERNET_TTL
+fi
+

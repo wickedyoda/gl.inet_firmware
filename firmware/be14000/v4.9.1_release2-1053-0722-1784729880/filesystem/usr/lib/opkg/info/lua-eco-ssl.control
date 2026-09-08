@@ -1,0 +1,13 @@
+Package: lua-eco-ssl
+Version: 3.16.0-0
+Depends: libc, lua-eco, libopenssl1.1, lua-eco-socket
+Source: feeds/gl_feed_common/lua-eco
+SourceName: lua-eco-ssl
+License: MIT
+LicenseFiles: LICENSE
+Section: lang
+SourceDateEpoch: 1774447581
+Maintainer: Jianhui Zhao <zhaojh329@gmail.com>
+Architecture: aarch64_cortex-a53
+Installed-Size: 8362
+Description:  ssl support for lua-eco

@@ -1,0 +1,25 @@
+[ ! -e /etc/init.d/uhttpd ] && exit 0
+
+no_dirlists=$(uci -q get uhttpd.main.no_dirlists)
+[ "$no_dirlists" != "1" ] && {
+    uci set uhttpd.main.no_dirlists="1"
+    uci commit uhttpd
+}
+
+[ "$(uci -q get uhttpd.main.inited)" = "1" ] && {
+    sh /usr/bin/init_luci.sh &
+    exit 0
+}
+
+http_listen_ip=$(uci -q get uhttpd.main.listen_http | cut -d ':' -f1)
+
+[ "$(uci -q get oui-httpd.main.inited)" = "1" ] && [ ! -e /etc/nginx/error.log ] && [ "$http_listen_ip" = "0.0.0.0" ] && {
+    sh /usr/bin/init_luci.sh &
+    exit 0
+}
+
+uci delete uhttpd.main.listen_http
+uci delete uhttpd.main.listen_https
+uci add_list uhttpd.main.listen_http="127.0.0.1:8080"
+uci add_list uhttpd.main.listen_https="127.0.0.1:8443"
+uci commit uhttpd

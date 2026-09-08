@@ -1,0 +1,16 @@
+
+ "single_sim": {
+    "enable": false
+  },
+  "dual_sim": {
+    "sim1": {
+      "enable": false
+    },
+    "sim2": {
+      "enable": false
+    }
+  },
+  "email": {
+    "enable": false
+  }
+}

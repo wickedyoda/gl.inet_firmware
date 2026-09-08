@@ -1,0 +1,23 @@
+#!/bin/sh /etc/rc.common
+
+START=99
+
+start() {
+    model=$(cat /proc/gl-hw-info/model)
+
+    case $model in
+    be10000|be9300|be6500|be3600|mt3600be)
+        echo 1 > /sys/class/gpio/usb_power/value
+        ;;
+    esac
+}
+
+stop() {
+    model=$(cat /proc/gl-hw-info/model)
+
+    case $model in
+    be10000|be9300|be6500|be3600|mt3600be)
+        echo 0 > /sys/class/gpio/usb_power/value
+        ;;
+    esac
+}

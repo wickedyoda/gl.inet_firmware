@@ -1,0 +1,10 @@
+Package: gl-sdk4-clients
+Version: git-2026.133.14510-ef891b2-1
+Depends: libc, lua, libuci-lua, libubox-lua, libubus-lua, kmod-gl-sdk4-tertf, iwinfo, luasocket
+Source: feeds/glinet/gl-sdk4-clients
+SourceName: gl-sdk4-clients
+Section: base
+SourceDateEpoch: 1778644910
+Architecture: aarch64_cortex-a53
+Installed-Size: 20612
+Description:  Oui Support for client mgmt, and client mgmt API

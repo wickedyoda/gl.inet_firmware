@@ -1,0 +1,13 @@
+Package: samba4-libs
+Version: 4.18.8-1
+Depends: libc, libtirpc, libreadline8, libpopt0, libcap, zlib, libgnutls, libtasn1, libuuid1, libopenssl1.1, libpthread, liburing, attr, libavahi-client
+Source: feeds/gl_feed_common/samba4
+SourceName: samba4-libs
+License: GPL-3.0-only
+LicenseFiles: COPYING
+Section: net
+SourceDateEpoch: 1749729434
+CPE-ID: cpe:/a:samba:samba
+Architecture: aarch64_cortex-a53
+Installed-Size: 9078910
+Description:  Samba 4.18.8 libs

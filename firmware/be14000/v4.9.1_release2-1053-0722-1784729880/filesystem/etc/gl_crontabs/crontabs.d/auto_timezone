@@ -1,0 +1,6 @@
+* * * * * /usr/bin/auto_timezone
+* * * * * sleep 10; /usr/bin/auto_timezone
+* * * * * sleep 20; /usr/bin/auto_timezone
+* * * * * sleep 30; /usr/bin/auto_timezone
+* * * * * sleep 40; /usr/bin/auto_timezone
+* * * * * sleep 50; /usr/bin/auto_timezone

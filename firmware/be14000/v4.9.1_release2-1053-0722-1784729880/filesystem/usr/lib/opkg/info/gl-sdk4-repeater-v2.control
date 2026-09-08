@@ -1,0 +1,10 @@
+Package: gl-sdk4-repeater-v2
+Version: git-2026.194.08662-218a02a-1
+Depends: libc, libuci-lua, libuci-lua54, gl-oui-rpc, gl-sdk4-wifi, libiwinfo-lua54, lua-eco-ubus, lua-eco-log, lua-eco-nl80211, lua-eco-ip, lua-eco-http, lua-cjson-lua5.4, lua-htmlparser, kmod-gl-sdk4-repeater
+Source: feeds/glinet/gl-sdk4-repeater-v2
+SourceName: gl-sdk4-repeater-v2
+Section: base
+SourceDateEpoch: 1783909462
+Architecture: aarch64_cortex-a53
+Installed-Size: 56634
+Description:  Repeater management for Gl.inet

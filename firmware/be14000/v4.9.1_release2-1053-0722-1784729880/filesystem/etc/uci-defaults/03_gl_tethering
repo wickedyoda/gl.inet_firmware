@@ -1,0 +1,18 @@
+. /lib/functions/gl_util.sh
+
+[ "$(uci -q get glconfig.general.inited)" = "1" ] && {
+    exit 0
+}
+
+set_default_config() {
+    model=$(get_model  | awk '{ print toupper($1) }')
+    if [ "$model" == "E5800" ]; then
+        touch /etc/config/tethering
+        uci add tethering main
+        uci set tethering.@main[0].auto='1'
+        uci commit tethering
+    fi
+}
+
+set_default_config
+

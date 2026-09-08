@@ -1,0 +1,26 @@
+#!/bin/sh
+
+if [ -n "$(uci -q get firewall.dns_over_lan)" ]; then
+uci -q del firewall.dns_over_lan
+uci -q del firewall.dns_over_guest
+uci set gl-dns-v2.@dns[0].force_dns='1'
+fi
+
+uci -q del firewall.adguard_home
+uci -q del firewall.adguard_home_guest
+
+uci set firewall.dns_order=include
+uci set firewall.dns_order.type='script'
+uci set firewall.dns_order.path='/etc/firewall.dns_order'
+uci set firewall.dns_order.reload='1'
+uci set firewall.dns_order.enabled='1'
+
+for iface in guest iot; do
+    if [ "$(uci -q get dhcp.$iface)" = "dhcp" ]; then
+        uci set dhcp.$iface.force='1'
+    fi
+done
+uci commit dhcp
+
+uci commit firewall
+uci commit gl-dns-v2

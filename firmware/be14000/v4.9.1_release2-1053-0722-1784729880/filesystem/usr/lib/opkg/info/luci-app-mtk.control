@@ -1,0 +1,11 @@
+Package: luci-app-mtk
+Version: git-26.201.13228-f1c2376
+Depends: libc, libmapd, datconf-lua
+Source: feeds/mt7988/applications/luci-app-mtk
+SourceName: luci-app-mtk
+Section: luci
+SourceDateEpoch: 1784518828
+Maintainer: OpenWrt LuCI community
+Architecture: aarch64_cortex-a53
+Installed-Size: 577517
+Description:  MediaTek Proprietary Configuration.

@@ -1,0 +1,13 @@
+#!/bin/sh /etc/rc.common
+
+#should be run before network starts
+# E5800 network starts at S13, must be less than 13 to run before network
+START=12
+
+start() {
+    client_tap=$(uci -q get ovpnclient.$(uci -q get network.ovpnclient.config).mode)
+    if [ "$client_tap" = tap-s2s -o "$client_tap" = tap ]; then
+        /usr/bin/setup_tap_s2s client_ifdown
+    fi
+}
+

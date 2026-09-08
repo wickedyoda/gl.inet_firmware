@@ -1,0 +1,10 @@
+Package: gl-sdk4-webdav
+Version: git-2026.083.28385-3e2192c
+Depends: libc, libpthread, libopenssl1.1, libsqlite3-0
+Source: feeds/glinet/gl-sdk4-webdav
+SourceName: gl-sdk4-webdav
+Section: base
+SourceDateEpoch: 1774338785
+Architecture: aarch64_cortex-a53
+Installed-Size: 137099
+Description:  this is gl webdav package

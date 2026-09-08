@@ -1,0 +1,14 @@
+if [ ! -f /etc/config/gl_dpi ]; then
+    touch /etc/config/gl_dpi
+    uci -q batch <<EOF
+        set gl_dpi.dpi_config=dpi_config
+        set gl_dpi.dpi_config.expire_time='0'
+        set gl_dpi.dpi_config.log='INFO'
+        set gl_dpi.dpi_config.lib_auto_upgrade='0'
+        set gl_dpi.dpi_config.ota_auto_upgrade='0'
+        set gl_dpi.dpi_config.lib_update_time='0'
+        set gl_dpi.dpi_config.updateTime='0'
+        set gl_dpi.dpi_config.app_close_state='000'
+        commit gl_dpi
+EOF
+fi

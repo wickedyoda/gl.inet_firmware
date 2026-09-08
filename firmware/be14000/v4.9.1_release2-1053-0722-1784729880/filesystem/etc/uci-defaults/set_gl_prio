@@ -1,0 +1,28 @@
+#!/bin/sh
+
+. /lib/functions.sh
+
+process_rule() {
+    local section="$1"
+    local name
+    local gl_prio
+    config_get name "$section" "name"
+    config_get gl_prio "$section" "gl_prio"
+    [ -n "$gl_prio" ] && return 0
+    case "$section" in
+        ssh_wan|ssh_wan6|https_wan|https_wan6|ping_wan|ping_wan6|wan_guest_isolate|wan_iot_isolate|glnas_ser|webdav_wan|sambasharelan|sambasharewan)
+            uci set firewall.$section.gl_prio="2"
+            ;;
+        *)
+            [ -n "$name" ] && case "$name" in
+                GL-*) uci set firewall.$section.gl_prio="2" ;;
+            esac
+            ;;
+    esac
+}
+
+config_load firewall
+config_foreach process_rule rule
+uci commit firewall
+
+exit 0

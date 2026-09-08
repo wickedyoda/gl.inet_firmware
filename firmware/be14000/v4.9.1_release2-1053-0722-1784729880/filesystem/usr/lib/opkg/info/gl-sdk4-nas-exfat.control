@@ -1,0 +1,10 @@
+Package: gl-sdk4-nas-exfat
+Version: 1.6-1
+Depends: libc, libpthread
+Source: feeds/glinet/gl-sdk4-nas-exfat
+SourceName: gl-sdk4-nas-exfat
+Section: base
+SourceDateEpoch: 1739866401
+Architecture: aarch64_cortex-a53
+Installed-Size: 31293
+Description:  lib exfat

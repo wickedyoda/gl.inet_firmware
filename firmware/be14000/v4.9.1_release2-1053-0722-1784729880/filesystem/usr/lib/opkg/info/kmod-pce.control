@@ -1,0 +1,15 @@
+Package: kmod-pce
+Version: 5.4.281-1
+Depends: kernel (=5.4.281-1-df4fa332840f56a774a5d60bd140aaf6), kmod-mediatek_hnat
+Source: feeds/mtk_openwrt_feed/feed/kernel/pce
+SourceName: kmod-pce
+Section: kernel
+SourceDateEpoch: 1761795500
+Architecture: aarch64_cortex-a53
+Installed-Size: 14525
+Description:  Support for Mediatek Packet Classification Engine. The HW provides abilities
+ to redirect specific packet type to different Mediatek HW offload engine.
+ In addition, the HW can be configured with multiple rules, such as IP protocol,
+ destination IP address, Layer 4 header or data, to match with the inbound packet.
+ Support HW offload engine includes tunnel offload engine, inline crypto offload
+ engine.

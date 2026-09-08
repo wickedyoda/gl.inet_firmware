@@ -1,0 +1,13 @@
+Package: adguardhome-conntrack
+Version: 0.107.73-1
+Depends: libc, ca-bundle
+Source: feeds/gl_feed_common/adguardhome-conntrack
+SourceName: adguardhome-conntrack
+License: GPL-3.0-only
+LicenseFiles: LICENSE.txt
+Section: net
+SourceDateEpoch: 1774608052
+Maintainer: Dobroslaw Kijowski <dobo90@gmail.com>
+Architecture: aarch64_cortex-a53
+Installed-Size: 10745454
+Description:  Free and open source, powerful network-wide ads and trackers blocking DNS server.

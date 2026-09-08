@@ -1,0 +1,21 @@
+{
+    "support_lock_tower": [
+        "xe3000",
+        "x3000",
+        "x2000",
+        "e5800"
+    ],
+    "support_lock_operator": [
+        "xe3000",
+        "x3000",
+        "x2000",
+        "e5800"
+    ],
+    "support_historical_signal": [
+        "xe3000",
+        "x3000",
+        "xe300v2",
+        "e5800",
+        "x2000"
+    ]
+}

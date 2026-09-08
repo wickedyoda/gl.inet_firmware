@@ -1,0 +1,33 @@
+uci set system.@system[0].cronloglevel="10"
+
+[ -z "$(uci -q get system.@system[0].zonename)" ] && {
+    uci set system.@system[0].zonename='UTC'
+    uci set system.@system[0].timezone='UTC'
+}
+
+uci commit system
+[ "$(uci -q get glconfig.general.inited)" = "1" ] && exit 0
+
+uci set system.@system[0].ttylogin=1
+
+[ ! -f /etc/board.json ] && {
+    . /lib/functions/gl_util.sh
+    model=$(get_model  | awk '{ print toupper($1) }')
+    uci set system.@system[0].hostname="GL-$model"
+}
+
+log_size=$(uci -q get system.@system[0].log_size)
+[ "$log_size" -le 128 ] && {
+    total_mem_kb=$(grep 'MemTotal:' /proc/meminfo | awk '{print $2}')
+    total_mem_mb=$((total_mem_kb / 1024))
+
+    #Since a portion of memory is allocated to subsystems like nss, the total memory obtained from /proc/meminfo is less than the actual memory. Therefore, it is necessary to divide by 85% here to estimate the actual memory.
+    mem_threshold=$((total_mem_mb * 85 / 100))
+    if [ $mem_threshold -ge 512 ]; then
+        uci set system.@system[0].log_size=512
+    elif [ $mem_threshold -ge 256 ]; then
+        uci set system.@system[0].log_size=256
+    fi
+}
+
+uci commit

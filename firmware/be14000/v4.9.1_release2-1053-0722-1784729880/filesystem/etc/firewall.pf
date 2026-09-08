@@ -1,0 +1,80 @@
+#!/bin/sh
+
+COMMENT="!pf: Accept DNAT forwards"
+
+if which fw4 >/dev/null 2>&1; then
+
+    TABLE_FAMILY="inet"
+    TABLE_NAME="fw4"
+
+    CHAINS="$(nft list table $TABLE_FAMILY $TABLE_NAME 2>/dev/null | \
+              awk '/chain forward_/ { print $2 }')"
+
+    for chain in $CHAINS; do
+        if nft list chain $TABLE_FAMILY $TABLE_NAME "$chain" 2>/dev/null | \
+           grep -q "$COMMENT"; then
+            continue
+        fi
+
+        HANDLE="$(nft -a list chain $TABLE_FAMILY $TABLE_NAME "$chain" 2>/dev/null \
+            | awk '/jump reject_/ { print $NF; exit }' \
+            | sed 's/[^0-9]//g')"
+
+        if [ -n "$HANDLE" ]; then
+            nft insert rule $TABLE_FAMILY $TABLE_NAME "$chain" position "$HANDLE" \
+                ct status dnat accept \
+                comment \"$COMMENT\"
+        else
+            nft insert rule $TABLE_FAMILY $TABLE_NAME "$chain" \
+                ct status dnat accept \
+                comment \"$COMMENT\"
+        fi
+    done
+
+    INPUT_CHAIN="input_guest"
+    INPUT_COMMENT="!pf: Accept DNAT guest input"
+
+    if nft list chain $TABLE_FAMILY $TABLE_NAME "$INPUT_CHAIN" >/dev/null 2>&1; then
+        if ! nft list chain $TABLE_FAMILY $TABLE_NAME "$INPUT_CHAIN" 2>/dev/null | \
+             grep -q "$INPUT_COMMENT"; then
+
+            HANDLE="$(nft -a list chain $TABLE_FAMILY $TABLE_NAME "$INPUT_CHAIN" 2>/dev/null \
+                | awk '/jump reject_/ { print $NF; exit }' \
+                | sed 's/[^0-9]//g')"
+
+            if [ -n "$HANDLE" ]; then
+                nft insert rule $TABLE_FAMILY $TABLE_NAME "$INPUT_CHAIN" position "$HANDLE" \
+                    ct status dnat accept \
+                    comment \"$INPUT_COMMENT\"
+            else
+                nft insert rule $TABLE_FAMILY $TABLE_NAME "$INPUT_CHAIN" \
+                    ct status dnat accept \
+                    comment \"$INPUT_COMMENT\"
+            fi
+        fi
+    fi
+
+    exit 0
+fi
+
+if command -v iptables >/dev/null 2>&1; then
+    if ! iptables -C FORWARD \
+        -m conntrack --ctstate DNAT \
+        -j ACCEPT 2>/dev/null; then
+        iptables -I FORWARD 1 \
+            -m conntrack --ctstate DNAT \
+            -j ACCEPT
+    fi
+
+    for chain in $(iptables -S | awk '/^-N zone_.*_forward$/ { print $2 }'); do
+        if ! iptables -C "$chain" \
+            -m conntrack --ctstate DNAT \
+            -j ACCEPT 2>/dev/null; then
+            iptables -I "$chain" 1 \
+                -m conntrack --ctstate DNAT \
+                -j ACCEPT
+        fi
+    done
+fi
+
+exit 0

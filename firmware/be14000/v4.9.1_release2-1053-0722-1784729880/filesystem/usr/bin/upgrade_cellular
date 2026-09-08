@@ -1,0 +1,184 @@
+#!/bin/sh
+
+# shellcheck disable=SC3010
+# shellcheck disable=SC2053
+# shellcheck disable=SC3037
+# shellcheck disable=SC2089
+
+
+upgrade_cellular_tmp=/tmp/upgrade_cellular            #cellular upgrade directory
+firmware_zip_path=$upgrade_cellular_tmp/firmware.zip  #cellular zip file
+upgrade_status_path=$upgrade_cellular_tmp/status      #cellular upgrade status code
+unzip_log=$upgrade_cellular_tmp/unzip.log             #cellular unzip log
+upgrade_log=$upgrade_cellular_tmp/upgrade.log         #cellular upgrade log
+firmware_size=$upgrade_cellular_tmp/size              #cellular zip file size
+max_retries=120
+at_port="/dev/ttyUSB2"                                #cellular at port
+mcu_port=$(cat /proc/gl-hw-info/mcu | grep /dev/ttyUSB0)
+[ -n "$mcu_port" ] && at_port="/dev/ttyUSB3"          #If the MCU uses ttyUSB0, at port +1
+
+# status_code
+#status_init=0             # 0:init
+status_downloading=1      # 1:downloading
+status_download_failed=2  # 2:download_failed
+status_download_ok=3      # 3:download_ok
+#status_unzipping=4        # 4:unzipping
+status_unzipping_failed=5 # 5:unzipping_failed
+#status_verify_failed=6    # 6.verify_failed
+status_upgrading=7        # 7:upgrading
+status_upgrade_failed=8   # 8:upgrade_failed
+status_upgrade_ok=9       # 9:upgrade_ok
+
+exec > $upgrade_log 2>&1 ;set -x
+check_timeout() {
+    check_file=$1
+    kill_proc=$2
+
+    while true; do
+        sleep 5
+        [ -e $check_file ] || break
+        perc=$(du -s $check_file | awk '{print $1}')
+
+        sleep 25
+        [ -e $check_file ] || break
+        perc_s=$(du -s $check_file | awk '{print $1}')
+
+        if [ "$perc" -eq "$perc_s" ]; then
+            kill -9 $(ps | grep "$kill_proc" | grep -v grep | awk '{print $1}')
+            break
+        fi
+    done
+}
+
+if [[ ! -e $upgrade_cellular_tmp ]]; then
+    mkdir $upgrade_cellular_tmp
+fi
+
+firmware_url=$1
+
+if [[ $firmware_url == "again" ]]; then
+    if [[ -e $firmware_path ]]; then
+        echo $status_upgrading >$upgrade_status_path
+        QFirehose -f $firmware_path >$upgrade_log
+        if [[ $? != 0 ]]; then
+            echo $status_upgrade_failed >$upgrade_status_path
+            rm -rf $firmware_path
+        else
+            echo $status_upgrade_ok >$upgrade_status_path
+            rm -rf $firmware_path
+            sleep 5
+            reboot
+        fi
+    fi
+    exit
+fi
+
+upgrade_type=$4
+if [[ -z $upgrade_type ]]; then
+    upgrade_type=$(cat /tmp/upgrade_cellular/upgrade_type)
+fi
+
+if [[ -e /tmp/upgrade_cellular/unzip_path ]]; then
+    firmware_path=$(cat /tmp/upgrade_cellular/unzip_path)
+else
+    firmware_path=/root/firmware
+fi
+
+if [[ $firmware_url != "local" ]]; then
+    sha256=$2
+    size=$3
+    echo $size >$firmware_size
+    echo $status_downloading >$upgrade_status_path
+
+    check_timeout $firmware_zip_path "curl -Ls --connect-timeout 6" &
+
+    rm -f $firmware_zip_path
+    curl -Ls --connect-timeout 6 $firmware_url -o $firmware_zip_path >>/dev/null
+    if [[ $? != 0 ]]; then
+        echo $status_download_failed >$upgrade_status_path
+        rm $firmware_zip_path
+        exit
+    fi
+
+    cur_sha256=$(sha256sum $firmware_zip_path | awk '{printf $1}')
+    if [[ $cur_sha256 != $sha256 ]]; then
+        echo $status_download_failed >$upgrade_status_path
+        rm $firmware_zip_path
+        exit
+    else
+        echo $status_download_ok >$upgrade_status_path
+    fi
+
+    if [[ "$upgrade_type" = "full" ]]; then
+        rm -rf $firmware_path
+        echo $status_upgrading >$upgrade_status_path
+
+        check_timeout $firmware_path "unzip -o $firmware_zip_path" &
+        unzip -o $firmware_zip_path -d $firmware_path >$unzip_log 2>&1
+        if [[ $? != 0 ]]; then
+            echo $status_unzipping_failed >$upgrade_status_path
+            rm -f $firmware_zip_path
+            exit
+        fi
+        rm -f $firmware_zip_path
+        sync
+    fi
+fi
+
+if [[ "$upgrade_type" = "diff" ]]; then
+    /etc/init.d/modem-init stop
+    echo -e 'AT+QFDEL="*"\r\n' > $at_port & timeout 5 cat $at_port
+    tmp="AT+QFUPL=\"firmware.zip\",$size"
+    echo -e "$tmp" > $at_port & timeout 5 cat $at_port
+    quec_upload -f $firmware_zip_path -p $at_port
+    echo -e 'at+qflst\r\n' > $at_port & timeout 5 cat $at_port
+    echo -e "AT+QFOTADL=\"/usrdata/cache/ufs/firmware.zip\"\r\n" > $at_port & timeout 5 cat $at_port
+    sleep 10
+
+    retries=0
+    while [ ! -e "$at_port" ] && [ $retries -lt $max_retries ]; do
+        sleep 1
+        retries=$((retries + 1))
+    done
+
+    sleep 5
+
+    cat $at_port | grep "\"FOTA\",\"END\",0"
+    if [[ $? != 0 ]]; then
+        echo $status_upgrade_failed >$upgrade_status_path
+        /etc/init.d/modem-init start
+        exit
+    fi
+
+    retries=0
+    while [ ! -e "$at_port" ] && [ $retries -lt $max_retries ]; do
+        sleep 1
+        retries=$((retries + 1))
+    done
+
+    sleep 10
+    /etc/init.d/modem-init start
+    while [[ -n "$(/etc/init.d/modem-init restart)" ]]; do
+        sleep 1
+    done
+    echo $status_upgrade_ok >$upgrade_status_path
+    rm $firmware_zip_path
+else
+    echo $status_upgrading >$upgrade_status_path
+    QFirehose -f $firmware_path >$upgrade_log
+    if [[ $? != 0 ]]; then
+        QFirehose -f $firmware_path -p /dev/mhi_DUN >$upgrade_log
+        if [[ $? != 0 ]]; then
+            echo $status_upgrade_failed >$upgrade_status_path
+            rm -rf $firmware_path
+            sync
+            exit
+        fi
+    fi
+fi
+
+echo $status_upgrade_ok >$upgrade_status_path
+rm -rf $firmware_path
+sleep 5
+reboot
+

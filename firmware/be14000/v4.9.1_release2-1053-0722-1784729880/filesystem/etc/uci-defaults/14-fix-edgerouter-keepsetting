@@ -1,0 +1,7 @@
+#!/bin/sh
+
+[ -z "$(uci -q get edgerouter.wandhcp)" ] && {
+    cp /rom/etc/config/edgerouter /etc/config/edgerouter
+}
+
+exit 0

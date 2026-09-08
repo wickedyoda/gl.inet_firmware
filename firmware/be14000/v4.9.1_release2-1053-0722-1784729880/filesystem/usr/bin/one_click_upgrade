@@ -1,0 +1,252 @@
+#!/bin/sh
+
+# shellcheck disable=SC3014
+
+firmware_path="$1"
+firmware_sha256sum="$2"
+keepconfig_option="$3"
+keepipk_option="$4"
+use_mirror_dl="$5"
+id="$6"
+size="$7"
+
+[ -f /tmp/one_click_upgrade_pid -a "$use_mirror_dl" = 1 ] && {
+        logger -t one_click_upgrade "Only one one_click_upgrade process is allowed, exit......"
+        exit 0
+}
+
+# kill one_click_upgrade if it is executing
+[ -f /tmp/one_click_upgrade_pid ] && {
+        cat /tmp/one_click_upgrade_pid | xargs kill -9
+        ps | grep "curl -Ls --connect-timeout 5" | grep -v grep | xargs kill -9
+        sleep 1
+}
+echo $$ > /tmp/one_click_upgrade_pid
+
+. /usr/share/libubox/jshn.sh
+. /lib/functions/gl_util.sh
+
+# 1.downloading
+# 2.download_failed
+# 3.download_ok
+# 4.verify_ok
+# 5.verify_failed
+# 6.upgrading
+# 7.upgrade_failed
+# 8.local_upgrade
+# 9.verify firmware signature fail
+
+download_ok=20008001
+download_failed=20008002
+download_timeout=20008003
+hash_ok=20008004
+hash_failed=20008005
+hash_timeout=20008006
+sign_ok=20008007
+sign_failed=20008008
+sign_timeout=20008009
+
+send_cloud() {
+    if [ -n $1 ]; then
+        ubus send gl-cloud "{\"feature\":\"ota\",\"events\":{\"upgrade_status_changed\":{\"id\":\"$1\", \"status\":$2}}}"
+    fi
+}
+
+model=$(get_model)
+echo $model
+if [ "$keepipk_option" == "1"  ]; then
+    keepipk_option="-k"
+else
+    keepipk_option=""
+fi
+
+[ "$keepconfig_option" == "1"  ] && keepconfig_option=""
+[ "$keepconfig_option" == "0"  ] && keepconfig_option="-n"
+
+echo '1' > /tmp/upgrade_status
+logger -t one_click_upgrade "Begin download firmware......"
+
+(while true; do
+    sleep 5
+    perc=$(du -a /tmp/firmware.img | awk '{print $1}')
+
+    sleep 25
+    perc_s=$(du -a /tmp/firmware.img | awk '{print $1}')
+
+    if [ "$perc" -eq "$perc_s" ]; then
+        if [ -f /tmp/download_ok ]; then
+            rm -f /tmp/download_ok
+            exit 0
+        fi
+        ps | grep "curl -Ls --connect-timeout 5" | grep -v grep | awk '{print $1}' |xargs kill -9
+        echo '2' > /tmp/upgrade_status
+        rm /tmp/one_click_upgrade_pid
+        logger -t one_click_upgrade "Download firmware timeout,exit,please try again!"
+        send_cloud $id $download_timeout
+        break;
+    fi
+done) &
+
+if [ "$use_mirror_dl" = 1 ]; then
+    /usr/bin/mirror_downloader $firmware_path
+    while [ "$firmware_sha256sum" != "$(sha256sum /tmp/firmware.img |awk '{print $1}')"  ]; do
+        /usr/bin/mirror_downloader $firmware_path
+        sleep 5
+    done
+else
+    firmware_name=$(basename "$firmware_path")
+    curl -Ls --connect-timeout 5 $firmware_path -o /tmp/firmware.img >> /dev/null
+fi
+
+### Check firmware
+if [ "$size" != "0" ]; then
+    download_size="$size"
+else
+    download_size=$(grep "$firmware_name" /tmp/firmware_list | awk '{print $NF}')
+fi
+
+actual_size=$(ls -l /tmp/firmware.img | awk '{print $5}')
+
+if [ "$download_size" -eq "$actual_size" ]; then
+    echo '3' > /tmp/upgrade_status
+    touch /tmp/download_ok
+    logger -t one_click_upgrade "Download firmware success."
+    send_cloud $id $download_ok
+else
+    echo '2' > /tmp/upgrade_status
+    rm /tmp/one_click_upgrade_pid
+    logger -t one_click_upgrade "Download firmware failed,exit,please try again!"
+    send_cloud $id $download_failed
+    if [ -n "$id" ]; then
+        rm /tmp/firmware.img
+    fi
+    exit 0
+fi
+
+#echo '3' > /tmp/upgrade_status
+#logger -t one_click_upgrade "Download firmware success."
+
+### check sha256sum
+sha256sum=$(timeout 30 sha256sum /tmp/firmware.img |awk '{print $1}')
+
+if [ $? -eq 0 ]; then
+    if [ "$firmware_sha256sum" != "$sha256sum"  ]; then
+        echo '5' > /tmp/upgrade_status
+        rm /tmp/one_click_upgrade_pid
+        logger -t one_click_upgrade "Check the firmware sha256sum failed,exit,please try again!"
+        send_cloud $id $hash_failed
+        exit 0
+    else
+        echo '4' > /tmp/upgrade_status
+        logger -t one_click_upgrade "Check the firmware sha256sum ok."
+        send_cloud $id $hash_ok
+    fi
+elif [ $? -eq 124 ]; then
+    echo '5' > /tmp/upgrade_status
+    rm /tmp/one_click_upgrade_pid
+    logger -t one_click_upgrade "Check the firmware sha256sum timeout,exit,please try again!"
+    send_cloud $id $hash_timeout
+    exit 0
+else
+    echo '5' > /tmp/upgrade_status
+    rm /tmp/one_click_upgrade_pid
+    logger -t one_click_upgrade "Check the firmware sha256sum failed,exit,please try again!"
+    send_cloud $id $hash_failed
+    exit 0
+fi
+
+### verify firmware signature
+if [ -e "/etc/key-build.pub" ]; then
+    timeout 30 /usr/bin/fwtool -t -s /tmp/firmware.sig /tmp/firmware.img
+    if [ $? -eq 0 ]; then
+        timeout 30 usign -V -p /etc/key-build.pub -x /tmp/firmware.sig -m /tmp/firmware.img -q
+        if [ $? -eq 0 ]; then
+            logger -t one_click_upgrade "Check the firmware signature ok."
+            send_cloud $id $sign_ok
+        elif [ $? -eq 124 ]; then
+            echo '9' > /tmp/upgrade_status
+            rm /tmp/one_click_upgrade_pid
+            logger -t one_click_upgrade "Check the firmware signatrue timeout, exit."
+            send_cloud $id $sign_timeout
+            exit 0
+        else
+            echo '9' > /tmp/upgrade_status
+            rm /tmp/one_click_upgrade_pid
+            logger -t one_click_upgrade "Check the firmware signatrue failed, exit."
+            send_cloud $id $sign_failed
+            exit 0
+        fi
+   elif [ $? -eq 124 ]; then
+        echo '9' > /tmp/upgrade_status
+        rm /tmp/one_click_upgrade_pid
+        logger -t one_click_upgrade "Check the firmware signatrue timeout, exit."
+        send_cloud $id $sign_timeout
+        exit 0
+   else
+        echo '9' > /tmp/upgrade_status
+        rm /tmp/one_click_upgrade_pid
+        logger -t one_click_upgrade "Check the firmware signatrue failed, exit."
+        send_cloud $id $sign_failed
+        exit 0
+   fi
+fi
+
+### Upgrading
+echo '6' > /tmp/upgrade_status
+logger -t one_click_upgrade "Begin to upgrading......"
+sleep 5
+/usr/bin/flashleds &
+
+current_version=`cat /etc/glversion`
+
+json_load "$(cat /tmp/sysupgrade.meta)"                                                 
+json_select version
+json_get_var new_version release
+echo $new_version
+
+json_select ..
+json_select upgrade_control
+json_select not_keep_config
+json_get_var version_not_keep_config  version
+echo $version_not_keep_config
+
+json_select ..
+json_get_var     version_sup  supported_version 
+echo $version_sup
+
+if json_is_a not_keep_config_part  array
+then
+    json_select  not_keep_config_part
+    idx=1
+    while json_is_a ${idx} object  
+    do
+        json_select $idx 
+        json_get_var path1 path
+        rm $path1
+        json_select ..
+        idx=$(( idx + 1  ))
+    done
+fi
+
+uci set upgrade.general.prompt='1'
+uci commit upgrade
+
+[ -d /sys/fs/pstore ] && rm -f /sys/fs/pstore/*
+[ -e /proc/mtd ] && cat /proc/mtd | grep -q "\"log\"" && mtd erase log
+ubus call gl-session call '{"module": "upgrade", "func":"report_upgrade_method", "params":{}}'
+
+if [ "$model" = "e5800" ]; then
+    mv /tmp/firmware.img /cache/ufs/update.zip
+    fotainfo -p update.zip
+    abfota_update start-fota $keepipk_option
+else
+    /sbin/sysupgrade $keepipk_option $keepconfig_option /tmp/firmware.img
+fi
+
+### If you run here, the upgrade failed.
+echo '7' > /tmp/upgrade_status
+logger -t one_click_upgrade "Upgrade failed, exit."
+ps | grep flashleds | grep -v grep | cut -d ' ' -f1 | xargs kill -9
+/etc/init.d/led restart
+rm /tmp/one_click_upgrade_pid
+

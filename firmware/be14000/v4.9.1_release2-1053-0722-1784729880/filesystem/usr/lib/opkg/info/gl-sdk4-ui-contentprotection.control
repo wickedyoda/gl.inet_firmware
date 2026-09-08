@@ -1,0 +1,10 @@
+Package: gl-sdk4-ui-contentprotection
+Version: git-2026.140.10893-13e5d03-1
+Depends: libc
+Source: feeds/glinet/gl-ui4.0/module/contentprotection
+SourceName: gl-sdk4-ui-contentprotection
+Section: base
+SourceDateEpoch: 1779246093
+Architecture: aarch64_cortex-a53
+Installed-Size: 24426
+Description:  gl-sdk4-ui-contentprotection

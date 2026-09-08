@@ -1,0 +1,2 @@
+/etc/modules.d/rtl8261x
+/lib/modules/5.4.281/rtl8261x-mdio.ko

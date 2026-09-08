@@ -1,0 +1,10 @@
+Package: gl-sdk4-offline-docs
+Version: git-2025.015.31230-18881cb-1
+Depends: libc
+Source: feeds/glinet/gl-sdk4-offline-docs
+SourceName: gl-sdk4-offline-docs
+Section: base
+SourceDateEpoch: 1736930430
+Architecture: aarch64_cortex-a53
+Installed-Size: 496041
+Description:  gl UI offline docs

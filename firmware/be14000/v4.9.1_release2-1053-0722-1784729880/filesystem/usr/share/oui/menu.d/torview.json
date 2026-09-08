@@ -1,0 +1,20 @@
+{
+    "index": 106,
+    "view": "torview",
+    "title": "Tor",
+    "level": 2,
+    "parent": "applications",
+    "parent_icon": "application",
+    "parent_index": 55,
+    "lang_hide": [
+        "zh-cn"
+    ],
+    "show_mode": [
+        "router"
+    ],
+    "disables": [
+        "portal",
+        "sdwan",
+        "taps2s"
+    ]
+}

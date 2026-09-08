@@ -1,0 +1,5 @@
+#!/bin/sh
+
+. /lib/functions/gl_util.sh
+fix_ax1800_upgrade_url
+exit 0

@@ -1,0 +1,71 @@
+#!/bin/sh
+# /etc/hotplug.d/iface/99-vlan-port-map
+# Regenerate /tmp/vlan_port_map when network interfaces change (bridge, wifi, wired).
+# Shell-only via /etc/init.d/gl-vlan-port-map sync (no oui-httpd / RPC).
+
+BOOT_WINDOW_SEC=90
+DEBOUNCE_SEC=3
+LOCK_FILE=/var/run/gl-vlan-port-map.debounce.lock
+INITD=/etc/init.d/gl-vlan-port-map
+
+case "$ACTION" in
+	ifup|add)
+		;;
+	*)
+		exit 0
+		;;
+esac
+
+case "$DEVICE" in
+	wlan*)
+		;;
+	br-lan|br-guest|br-iot)
+		;;
+	br-vlan*)
+		;;
+	eth*)
+		;;
+	lan*)
+		;;
+	*)
+		case "$INTERFACE" in
+			lan|guest|iot|wlan*|vlan*)
+				;;
+			*)
+				exit 0
+				;;
+		esac
+		;;
+esac
+
+# Early boot: skip custom vlan ifup; br-lan/lan triggers full UCI-based sync.
+boot_sec=$(cut -d. -f1 /proc/uptime 2>/dev/null || echo 999)
+if [ "$boot_sec" -lt "$BOOT_WINDOW_SEC" ]; then
+	case "$DEVICE" in
+		br-vlan*)
+			exit 0
+			;;
+	esac
+	case "$INTERFACE" in
+		vlan*)
+			exit 0
+			;;
+	esac
+fi
+
+priority=0
+[ "$DEVICE" = "br-lan" ] && priority=1
+[ "$INTERFACE" = "lan" ] && priority=1
+
+if [ "$priority" = 1 ]; then
+	"$INITD" sync &
+	exit 0
+fi
+
+(
+	flock -n 9 || exit 0
+	sleep "$DEBOUNCE_SEC"
+	"$INITD" sync
+) 9>"$LOCK_FILE" &
+
+exit 0

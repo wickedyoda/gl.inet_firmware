@@ -1,0 +1,8 @@
+
+config service 'hardware'
+
+
+config switch 'switch'
+
+
+config network 'network'

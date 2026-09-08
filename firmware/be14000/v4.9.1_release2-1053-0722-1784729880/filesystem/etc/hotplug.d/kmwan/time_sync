@@ -1,0 +1,143 @@
+#!/bin/sh
+
+. /lib/functions.sh
+. /usr/share/libubox/jshn.sh
+
+NTP_RETRY_COUNT=30
+
+log() {
+    echo "$1" | logger -t timesync
+}
+
+is_ntp_valid() {
+    [ -f "/var/state/ntp-valid" ]
+}
+
+chronyc_available() {
+    [ -f "/usr/bin/chronyc" ]
+}
+
+restart_dnsmasq_if_needed() {
+    if /etc/init.d/dnsmasq enabled; then
+        initscript=dnsmasq
+        . /lib/functions/procd.sh
+        procd_send_signal dnsmasq '*' INT
+    fi
+}
+
+add_nts_server() {
+    local name=$1
+    local hostname=$2
+    uci set chrony.$name='server'
+    uci set chrony.$name.hostname="$hostname"
+    uci set chrony.$name.iburst='yes'
+    uci set chrony.$name.nts='yes'
+}
+
+handle_chrony_sync() {
+    local LOCK_FILE="/var/run/kmwan_chrony_sync.lock"
+
+    if [ -f "$LOCK_FILE" ]; then
+        log "NTP sync already running, exiting"
+        return 0
+    fi
+    # avoid portal set dns to 192.168.8.1
+    local current_inited=$(uci -q get oui-httpd.main.inited)
+    if [ "$current_inited" != "1" ]; then
+        while [ "$(uci -q get oui-httpd.main.inited)" != "1" ]; do
+            sleep 1
+        done
+        model=""
+        if [ -s "/proc/gl-hw-info/model" ]; then
+            model=$(cat /proc/gl-hw-info/model )
+        fi
+        if [ "$model" = "e750" ]; then
+            sleep 6
+        else
+            sleep 2
+        fi
+    fi
+    touch "$LOCK_FILE"
+
+    retry_count=0
+    fail_count=0
+    while [ $retry_count -lt $NTP_RETRY_COUNT ]; do
+        if is_ntp_valid; then
+            rm -f "$LOCK_FILE"
+            return 0
+        fi
+        current_server=$(uci -q get chrony.@pool[0].hostname)
+        country_code=""
+        if [ -r "/proc/gl-hw-info/country_code" ]; then
+            country_code=$(cat /proc/gl-hw-info/country_code)
+        fi
+        if [ "$current_server" != "time.cloudflare.com" ] && [ "$country_code" != "CN" ]; then
+            uci set chrony.@pool[0].nts='yes'
+            uci set chrony.@pool[0].hostname='time.cloudflare.com'
+            # add other nts server to avoid cloudflare dump
+            add_nts_server time_nl 'ntppool1.time.nl'
+            add_nts_server netnod 'nts.netnod.se'
+            add_nts_server ptb 'ptbtime1.ptb.de'
+            add_nts_server dfm 'time.dfm.dk'
+            add_nts_server cifelli 'time.cifelli.xyz'
+            uci commit chrony
+            /etc/init.d/chronyd restart
+            sleep 1
+        fi
+
+        tracking_output=$(chronyc tracking 2>&1)
+        tracking_exitcode=$?
+
+        if [ $tracking_exitcode -eq 0 ]; then
+            if echo "$tracking_output" | grep -q "Leap status[[:space:]]*:[[:space:]]*Normal\|Leap status[[:space:]]*:[[:space:]]*Insert second\|Leap status[[:space:]]*:[[:space:]]*Delete second"; then
+                system_time_line=$(echo "$tracking_output" | grep "System time")
+                if [ -n "$system_time_line" ]; then
+                    offset_str=$(echo "$system_time_line" | sed -E 's/.* ([0-9]+\.[0-9]+) seconds (slow|fast).*/\1/')
+                    [ -z "$offset_str" ] && offset_str="0.0"
+
+                    if awk "BEGIN {exit ($offset_str > 5.0)}"; then
+                        echo "kmwan set success" > /var/state/ntp-valid
+                        echo "kmwan set success" > /var/state/dnsmasqsec
+                        touch /tmp/modem-ntp-valid
+                        restart_dnsmasq_if_needed
+                        log "time sync success via chrony"
+                        ubus send ntp.valid
+                        rm -f "$LOCK_FILE"
+                        return 0
+                    else
+                        log "time offset too large: ${offset_str}s"
+                    fi
+                fi
+            else
+                fail_count=$((fail_count + 1))
+            fi
+        else
+            fail_count=$((fail_count + 1))
+            log "chronyc command failed"
+        fi
+        if [ $((fail_count % 5)) -eq 0 ]; then
+            log "Restarting chronyd due to repeated failures."
+            /etc/init.d/chronyd restart
+        fi
+        retry_count=$((retry_count + 1))
+        if [ $retry_count -lt $NTP_RETRY_COUNT ]; then
+            sleep 5
+        fi
+    done
+    rm -f "$LOCK_FILE"
+    log "chrony sync failed after $NTP_RETRY_COUNT attempts"
+}
+
+main() {
+    if [ "$STATUS" = "online" ]; then
+        if ! is_ntp_valid; then
+            if chronyc_available; then
+                handle_chrony_sync &
+            else
+                log "chronyc command not found at /usr/bin/chronyc"
+            fi
+        fi
+    fi
+}
+
+main

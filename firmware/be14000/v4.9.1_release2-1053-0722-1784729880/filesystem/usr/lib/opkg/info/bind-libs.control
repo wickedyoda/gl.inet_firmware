@@ -1,0 +1,14 @@
+Package: bind-libs
+Version: 9.18.16-1
+Depends: libc, libopenssl1.1, zlib, libpthread, libatomic1, libuv1, libnghttp2-14
+Source: feeds/packages/net/bind
+SourceName: bind-libs
+License: MPL-2.0
+LicenseFiles: LICENSE
+Section: libs
+SourceDateEpoch: 1687754271
+CPE-ID: cpe:/a:isc:bind
+Maintainer: Noah Meyerhans <frodo@morgul.net>
+Architecture: aarch64_cortex-a53
+Installed-Size: 1225609
+Description:  bind shared libraries

@@ -1,0 +1,822 @@
+#!/bin/sh  /etc/rc.common
+
+# shellcheck disable=SC3043
+
+. /lib/functions.sh
+. /lib/functions/network.sh
+. /lib/functions/gl_util.sh
+
+START=13
+
+EXTRA_COMMANDS="$EXTRA_COMMANDS reload_wan"
+
+kernel_ipv6_config="/etc/sysctl.d/99-disable-ipv6.conf"
+
+hnat_settnig()
+{
+    # stop shortcut-fe before enabling ipv6
+    [ -f /etc/init.d/shortcut-fe ] && /etc/init.d/shortcut-fe restart
+
+    # qsdk/wlan-ap qca-nss-ecm not support nat6
+    local mode=`uci get glipv6.lan.mode`
+    if [ -e /sys/kernel/debug/ecm/gl_front_end_ipv6_stop ];then
+        if [ "$mode" = "nat6" -o "$mode" = "static" ];then
+            echo 1 > /sys/kernel/debug/ecm/gl_front_end_ipv6_stop
+        else
+            echo 0 > /sys/kernel/debug/ecm/gl_front_end_ipv6_stop
+        fi
+    fi
+
+    # execute "echo 0 > /sys/kernel/debug/hnat/hnat_setting" to know what hnat_seting means
+    [ ! -e /sys/kernel/debug/hnat/hnat_setting ] && return
+
+    # mt7987/7988 hnat v5 already support nat6
+    if [ -f /sys/firmware/devicetree/base/soc_netsys/hnat@15000000/compatible ]; then
+        hnat_version=`cat /sys/firmware/devicetree/base/soc_netsys/hnat@15000000/compatible`
+        [ "$hnat_version" = "mediatek,mtk-hnat_v5" ] && return
+    fi
+
+    # mt798x hnat no support nat6 and guest always use nat6, so disable guest hnat after ipv6 was enabled
+    local enabled=`uci get glipv6.globals.enabled`
+    if [ "$enabled" = "1" ];then
+        echo "9 0" > /sys/kernel/debug/hnat/hnat_setting
+    else
+        echo "9 1" > /sys/kernel/debug/hnat/hnat_setting
+    fi
+
+    # mt798x hnat no support nat6, so disable hnat ipv6 when mode is nat6/static
+    if [ "$mode" = "nat6" -o "$mode" = "static" ];then
+        echo "8 0" > /sys/kernel/debug/hnat/hnat_setting
+    else
+        echo "8 1" > /sys/kernel/debug/hnat/hnat_setting
+    fi
+}
+
+delete_old_modem_v6_config(){
+
+    iface_list=$(uci show network | grep 'modem.*_6=interface' | cut -d'.' -f2)
+    
+    for iface in $iface_list
+    do
+        interface=$(echo $iface | cut -d "=" -f1)
+        [ -n $interface ] && [ $interface != "$1" ] && uci -q delete network.$interface 2>/dev/null && uci commit network
+    done
+}
+
+set_modem_v6_status()
+{
+    local enabled=`uci -q get glipv6.globals.enabled 2>/dev/null`
+    if [ -n "${enabled}" -a "${enabled}" = "1" ];then
+        uci set network.${1}_6.disabled='0'
+    else
+        uci set network.${1}_6.disabled='1'
+    fi
+}
+
+_get_modem_iface()
+{
+    if [ -e "/lib/functions/modem.sh" ]; then
+        . /lib/functions/modem.sh
+        bus=$(get_modem_bus)
+        local modem_iface=""
+        if [ -n "$bus" ]; then
+            if [ -n "$(echo $bus | grep '-')" ]; then
+                modem_iface="modem_$(echo $bus | sed 's/-/_/g' | sed 's/\./_/g')"
+            else
+                modem_iface="modem_$(echo ${bus%%:*})"
+            fi
+       
+            if [ -e /proc/gl-hw-info/build-in-modem ];then
+                if [ -n "$modem_iface" -a -z $(uci -q get network.${modem_iface}_6) ]; then
+                    uci set network.${modem_iface}_6='interface'
+                    uci set network.${modem_iface}_6.ifname="@${modem_iface}"
+                    uci set network.${modem_iface}_6.proto='dhcpv6'
+                    [ -z "$(uci -q get network.${modem_iface}_6.disabled)" ] && set_modem_v6_status ${modem_iface}
+                    uci commit network
+                fi
+            else
+                if [ -n "$modem_iface" ];then
+                    if [ -d /tmp/usbnode/$bus ];then                    
+                        delete_old_modem_v6_config "${modem_iface}_6"
+                        modem_iface_exist=$(uci -q get network.${modem_iface}_6.ifname | grep ${modem_iface})
+                        if [ -z $modem_iface_exist ];then
+                           uci set network.${modem_iface}_6='interface'
+                           uci set network.${modem_iface}_6.ifname="@${modem_iface}"
+                           uci set network.${modem_iface}_6.proto='dhcpv6'
+                           [ -z "$(uci -q get network.${modem_iface}_6.disabled)" ] && set_modem_v6_status ${modem_iface}
+                           uci commit network
+                        fi
+                    else
+                        uci -q delete network.${modem_iface}_6 2>/dev/null
+                        uci commit network
+                    fi
+                fi
+            fi
+        fi
+        
+        if [ ! -d /tmp/usbnode/$bus -a ! -e /proc/gl-hw-info/build-in-modem ];then
+            echo ""
+        else
+            echo ${modem_iface}
+        fi 
+    fi
+}
+
+init_modem_ipv6()
+{
+    local modem
+    if [ -e "/lib/functions/modem.sh" ] && [ -e "/usr/bin/cellular_manager" ]; then
+        . /lib/functions/modem.sh
+        modem=$(get_modem_iface_list)
+        for interface in $modem
+        do
+            if [ -z $(uci -q get network.${interface}_6) ]; then
+                uci set network.${interface}_6='interface'
+                uci set network.${interface}_6.ifname="@${interface}"
+                uci set network.${interface}_6.proto='dhcpv6'
+                [ -z "$(uci -q get network.${interface}_6.disabled)" ] && set_modem_v6_status ${interface}
+                uci commit network
+            fi
+        done
+    fi
+}
+
+if [ -e "/lib/functions/modem.sh" ] && [ -e "/usr/bin/cellular_manager" ]; then
+    modem_iface=""
+    init_modem_ipv6
+else
+    modem_iface=$(_get_modem_iface)
+fi
+
+disable_ipv6()
+{
+    echo "net.ipv6.conf.all.disable_ipv6=1" > $kernel_ipv6_config
+    echo "net.ipv6.conf.default.disable_ipv6=1" >> $kernel_ipv6_config
+    echo "net.ipv6.conf.lo.disable_ipv6=0" >> $kernel_ipv6_config
+    uci set network.wan.ipv6='0' 2>/dev/null
+    uci set network.wan6.disabled='1' 2>/dev/null
+    uci set network.wwan6.disabled='1' 2>/dev/null
+    uci set network.tethering6.disabled='1' 2>/dev/null
+
+    #support secondwan
+    if [ "$(uci -q get glconfig.general.lan2wan)" = "1" ];then
+        uci set network.secondwan.ipv6='0' 2>/dev/null
+        uci set network.secondwan6.disabled='1' 2>/dev/null
+    fi
+
+    if [ "$(uci -q get glconfig.general.usb_lan2wan)" = "1" ]; then
+        uci set network.usbwan.ipv6='0' 2>/dev/null
+        uci set network.usbwan6.disabled='1' 2>/dev/null
+    fi
+
+    local modem6
+    if [ -e "/lib/functions/modem.sh" ] && [ -e "/usr/bin/cellular_manager" ]; then
+        . /lib/functions/modem.sh
+        modem6=$(get_modem_iface6_list)
+        for interface in $modem6
+        do
+            uci set network.${interface}.disabled='1' 2>/dev/null
+        done
+    fi
+
+    [ -n "$modem_iface" ] && uci set network.${modem_iface}_6.disabled='1' 2>/dev/null
+    uci commit network
+
+    #Disable IPV6 without resolving IPV6 DNS
+    uci set dhcp.@dnsmasq[0].filter_aaaa="1"
+    uci commit dhcp
+
+    /etc/init.d/odhcpd disable
+    /etc/init.d/odhcpd stop
+}
+
+enable_ipv6()
+{
+    echo "net.ipv6.conf.all.disable_ipv6=0" > $kernel_ipv6_config
+    echo "net.ipv6.conf.lo.disable_ipv6=0" >> $kernel_ipv6_config
+    echo "net.ipv6.conf.default.disable_ipv6=0" >> $kernel_ipv6_config
+    echo "net.ipv6.conf.default.forwarding=1" >> $kernel_ipv6_config
+    echo "net.ipv6.conf.all.forwarding=1" >> $kernel_ipv6_config
+    echo "net.ipv6.conf.all.ignore_routes_with_linkdown=1" >> $kernel_ipv6_config
+    confs=$(ls /proc/sys/net/ipv6/conf)
+
+    wan_port=$([ -f "/proc/gl-hw-info/wan" ] && cat /proc/gl-hw-info/wan)
+    wan_proto=$(uci -q get network.wan.proto)
+    for i in $confs
+    do
+        [ "$wan_proto" = "pppoe" ] && [ "$i" = "$wan_port" ] && continue
+        echo "net.ipv6.conf.$i.accept_ra=2" >> $kernel_ipv6_config
+    done
+
+    uci set network.wan.ipv6='1' 2>/dev/null
+    uci set network.wan6.disabled='0' 2>/dev/null
+    uci set network.wwan6.disabled='0' 2>/dev/null
+    uci set network.tethering6.disabled='0' 2>/dev/null
+
+    #support secondwan
+    if [ "$(uci -q get glconfig.general.lan2wan)" = "1" ];then
+        uci set network.secondwan.ipv6='1' 2>/dev/null
+        uci set network.secondwan6.disabled='0' 2>/dev/null
+    fi
+
+    if [ "$(uci -q get glconfig.general.usb_lan2wan)" = "1" ]; then
+        uci set network.usbwan.ipv6='1' 2>/dev/null
+        uci set network.usbwan6.disabled='0' 2>/dev/null
+    fi
+
+    local modem6
+    if [ -e "/lib/functions/modem.sh" ] && [ -e "/usr/bin/cellular_manager" ]; then
+        . /lib/functions/modem.sh
+        modem6=$(get_modem_iface6_list)
+        for interface in $modem6
+        do
+            uci set network.${interface}.disabled='0' 2>/dev/null
+        done
+    fi
+
+    [ -n "$modem_iface" ] && uci set network.${modem_iface}_6.disabled='0' 2>/dev/null
+    uci commit network
+
+    #Enable IPV6 support for resolving IPV6 DNS
+    uci set dhcp.@dnsmasq[0].filter_aaaa="0"
+    uci commit dhcp
+
+    /etc/init.d/odhcpd start
+    /etc/init.d/odhcpd enable
+}
+
+backup_ula_prefix()
+{
+    local origin_ula_prefix=`uci get glipv6.globals.origin_ula_prefix`
+    if [ -z "$origin_ula_prefix" ];then
+        ula_prefix=`uci get network.globals.ula_prefix`
+        uci set glipv6.globals.origin_ula_prefix="$ula_prefix"
+        lan_ip6addr=`echo "$ula_prefix" | sed s/::.*/::1\\\/64/g 2>/dev/null`
+        uci set glipv6.lan.lan_ip6addr="$lan_ip6addr"
+        uci commit glipv6
+    fi
+}
+
+del_dhcp_modem()
+{
+    echo $1 | grep -q modem && uci del dhcp.$1 2>/dev/null
+}
+
+clear_settings()
+{
+    #清除relay配置
+    uci set dhcp.lan.dhcpv6="disabled" 2>/dev/null
+    uci set dhcp.lan.ra="disabled" 2>/dev/null
+    uci set dhcp.lan.ndp="disabled" 2>/dev/null
+    uci set dhcp.guest.dhcpv6="disabled" 2>/dev/null
+    uci set dhcp.guest.ra="disabled" 2>/dev/null
+    uci set dhcp.lan.ndp="disabled" 2>/dev/null
+    uci delete dhcp.lan.ndp 2>/dev/null
+    uci delete dhcp.wan6 2>/dev/null
+    uci delete dhcp.wwan6 2>/dev/null
+    uci delete dhcp.tethering6 2>/dev/null
+
+    #support secondwan
+    if [ "$(uci -q get glconfig.general.lan2wan)" = "1" ];then
+        uci delete dhcp.secondwan6 2>/dev/null
+    fi
+
+    if [ "$(uci -q get glconfig.general.usb_lan2wan)" = "1" ]; then
+        uci delete dhcp.usbwan6 2>/dev/null
+    fi
+
+    config_load dhcp
+    config_foreach del_dhcp_modem dhcp
+
+    uci commit dhcp
+
+    #清除nat6配置
+    uci delete dhcp.lan.ra_default 2>/dev/null
+    uci delete dhcp.lan.ra_management 2>/dev/null
+    uci delete dhcp.lan.ra_flags 2>/dev/null
+    uci delete dhcp.guest.ra_default 2>/dev/null
+    uci delete dhcp.guest.ra_management 2>/dev/null
+    uci commit firewall
+}
+
+set_wan()
+{   
+    local addrmode=`uci get glipv6.wan.addrmode`
+    if [ "$addrmode" = "auto" ] || [ -z "$addrmode" ];then
+        uci set network.wan6.proto="dhcpv6"
+        uci commit network
+    else
+        uci set network.wan6.proto="static"
+        uci set network.wan6.ip6addr="$(uci get glipv6.wan.ip6addr 2>/dev/null)"
+        uci set network.wan6.ip6gw="$(uci get glipv6.wan.ip6gw 2>/dev/null)"
+        uci commit network
+    fi
+
+    local dnsmode=`uci get glipv6.wan.dnsmode`
+    if [ "$dnsmode" = "auto" ] || [ -z "$dnsmode" ];then
+        uci delete network.wan6.dns 2>/dev/nul
+        uci commit network
+    else
+        local dns1=`uci get glipv6.wan.dns | awk -F# '{print $1}'`
+        local dns2=`uci get glipv6.wan.dns | awk -F# '{print $2}'`
+
+        uci delete network.wan6.dns 2>/dev/null
+        [ -n "$dns1" ] && uci add_list network.wan6.dns="$dns1"
+        [ -n "$dns2" ] && uci add_list network.wan6.dns="$dns2"
+        uci commit network
+    fi
+
+    addrmode=`uci get glipv6.secondwan.addrmode`
+    if [ "$addrmode" = "auto" ] || [ -z "$addrmode" ];then
+        uci set network.secondwan6.proto="dhcpv6"
+        uci commit network
+    else
+        uci set network.secondwan6.proto="static"
+        uci set network.secondwan6.ip6addr="$(uci get glipv6.secondwan.ip6addr 2>/dev/null)"
+        uci set network.secondwan6.ip6gw="$(uci get glipv6.secondwan.ip6gw 2>/dev/null)"
+        uci commit network
+    fi
+
+    dnsmode=`uci get glipv6.secondwan.dnsmode`
+    if [ "$dnsmode" = "auto" ] || [ -z "$dnsmode" ];then
+        uci delete network.secondwan6.dns 2>/dev/nul
+        uci commit network
+    else
+        local dns1=`uci get glipv6.secondwan.dns | awk -F# '{print $1}'`
+        local dns2=`uci get glipv6.secondwan.dns | awk -F# '{print $2}'`
+
+        uci delete network.secondwan6.dns 2>/dev/null
+        [ -n "$dns1" ] && uci add_list network.secondwan6.dns="$dns1"
+        [ -n "$dns2" ] && uci add_list network.secondwan6.dns="$dns2"
+        uci commit network
+    fi
+}
+
+set_lan_dns()
+{
+    local dnsmode=`uci get glipv6.lan.dnsmode`
+    local lanmode=`uci get glipv6.lan.mode`
+    if [ "$dnsmode" = "auto" ] || [ -z "$dnsmode" ];then
+        local ip6prefix=`uci get network.globals.ula_prefix | awk -F "::" '{print $1}'`
+        local ip6hint=`uci get network.lan.ip6hint`
+        local ip6ifaceid=`uci get network.lan.ip6ifaceid | awk -F "::" '{print "aaaa::"$2}'`
+        ip6ifaceid=`sipcalc $ip6ifaceid | awk '{if($1=="Expanded")print $4}' | awk -F : '{print $5":"$6":"$7":"$8}'`
+
+        uci delete dhcp.lan.dns 2>/dev/null
+        [ "$ip6prefix" != "auto" -a "$lanmode" != "native" ] && uci add_list dhcp.lan.dns="$ip6prefix:$ip6hint:$ip6ifaceid"
+    else
+        local dns1=`uci get glipv6.lan.dns | awk -F# '{print $1}'`
+        local dns2=`uci get glipv6.lan.dns | awk -F# '{print $2}'`
+
+        uci delete dhcp.lan.dns 2>/dev/null
+        [ -n "$dns1" ] && uci add_list dhcp.lan.dns="$dns1"
+        [ -n "$dns2" ] && uci add_list dhcp.lan.dns="$dns2"
+    fi
+
+    uci commit dhcp
+}
+
+set_lan_ip6class()
+{
+    local modem6
+    if [ -e "/lib/functions/modem.sh" ]; then
+        . /lib/functions/modem.sh
+        modem6=$(get_modem_iface6_list)
+    fi
+
+    local interface6="wan6 wwan6 tethering6 $modem6"
+     #support secondwan
+    if [ "$(uci -q get glconfig.general.lan2wan)" = "1" ];then
+        interface6="secondwan6 $interface6"
+    fi
+
+    if [ "$(uci -q get glconfig.general.usb_lan2wan)" = "1" ]; then
+        interface6="usbwan6 $interface6"
+    fi
+
+    for interface in $interface6
+    do
+        uci add_list network.lan.ip6class="$interface"
+    done
+    uci commit network
+}
+
+del_guest_forward_to_wan()
+{
+    config_get src $1 src
+    config_get dest $1 dest
+    if [ "$src" = "guest" -a "$dest" = "wan" ];then
+        uci set firewall.$1.family="ipv4"
+    fi
+}
+
+set_lan_native()
+{
+    local ula_prefix=`uci get glipv6.globals.origin_ula_prefix`
+    if [ "$ula_prefix" = "auto" ];then
+        uci set network.globals.ula_prefix="auto"
+    else
+        uci set network.globals.ula_prefix="$ula_prefix"
+    fi
+    uci set network.lan.ip6assign="60"
+    uci set network.lan.ip6hint="0000"
+    uci set network.lan.ip6ifaceid="::1"
+    uci -q delete network.lan.ip6class
+    set_lan_ip6class
+    uci commit network
+
+    uci set dhcp.lan.dhcpv6="server"
+    uci set dhcp.lan.ra="server"
+    uci set dhcp.lan.ndp="disabled"
+    uci set dhcp.lan.ra_management="0"
+    uci -q delete dhcp.lan.ra_flags
+    uci -q delete dhcp.lan.prefix_filter
+    uci add_list dhcp.lan.ra_flags="other-config"
+    uci set dhcp.lan.ra_default="1"
+    uci commit dhcp
+
+    uci -q delete firewall.@zone[1].masq6
+    uci commit firewall
+}
+
+
+set_lan_relay()
+{
+    local ula_prefix=`uci get glipv6.globals.origin_ula_prefix`
+    if [ "$ula_prefix" = "auto" ];then
+        uci set network.globals.ula_prefix="auto"
+    else
+        uci set network.globals.ula_prefix="$ula_prefix"
+    fi
+    uci set network.lan.ip6assign="64"
+    uci set network.lan.ip6hint="0000"
+    uci set network.lan.ip6ifaceid="::1"
+    uci -q delete network.lan.ip6class
+    uci commit network
+
+    uci set dhcp.lan.dhcpv6="relay"
+    uci set dhcp.lan.ra="relay"
+    uci set dhcp.lan.ndp="relay"
+    uci -q delete dhcp.lan.dns
+    uci -q delete dhcp.lan.prefix_filter
+
+    uci set dhcp.wan6="dhcp"
+    uci set dhcp.wan6.interface="wan6"
+    uci set dhcp.wan6.dhcpv6="relay"
+    uci set dhcp.wan6.ra="relay"
+    uci set dhcp.wan6.ndp="relay"
+    uci set dhcp.wan6.master="1"
+
+    uci set dhcp.wwan6="dhcp"
+    uci set dhcp.wwan6.interface="wwan6"
+    uci set dhcp.wwan6.dhcpv6="relay"
+    uci set dhcp.wwan6.ra="relay"
+    uci set dhcp.wwan6.ndp="relay"
+    uci set dhcp.wwan6.master="1"
+
+    uci set dhcp.tethering6="dhcp"
+    uci set dhcp.tethering6.interface="tethering6"
+    uci set dhcp.tethering6.dhcpv6="relay"
+    uci set dhcp.tethering6.ra="relay"
+    uci set dhcp.tethering6.ndp="relay"
+    uci set dhcp.tethering6.master="1"
+
+    #support secondwan
+    if [ "$(uci -q get glconfig.general.lan2wan)" = "1" ]; then
+        uci set dhcp.secondwan6="dhcp"
+        uci set dhcp.secondwan6.interface="secondwan6"
+        uci set dhcp.secondwan6.dhcpv6="relay"
+        uci set dhcp.secondwan6.ra="relay"
+        uci set dhcp.secondwan6.ndp="relay"
+        uci set dhcp.secondwan6.master="1"
+    fi
+
+    if [ "$(uci -q get glconfig.general.usb_lan2wan)" = "1" ]; then
+        uci set dhcp.usbwan6="dhcp"
+        uci set dhcp.usbwan6.interface="usbwan6"
+        uci set dhcp.usbwan6.dhcpv6="relay"
+        uci set dhcp.usbwan6.ra="relay"
+        uci set dhcp.usbwan6.ndp="relay"
+        uci set dhcp.usbwan6.master="1"
+    fi
+
+    local modem6
+    if [ -e "/lib/functions/modem.sh" ] && [ -e "/usr/bin/cellular_manager" ]; then
+        . /lib/functions/modem.sh
+        modem6=$(get_modem_iface6_list)
+        for interface in $modem6
+        do
+            uci set dhcp.${interface}="dhcp"
+            uci set dhcp.${interface}.interface="$interface"
+            uci set dhcp.${interface}.dhcpv6="relay"
+            uci set dhcp.${interface}.ra="relay"
+            uci set dhcp.${interface}.ndp="relay"
+            uci set dhcp.${interface}.master="1"
+        done
+    fi
+
+    if [ -n "$modem_iface" ]; then
+        uci set dhcp.${modem_iface}_6="dhcp"
+        uci set dhcp.${modem_iface}_6.interface="$modem_iface"
+        uci set dhcp.${modem_iface}_6.dhcpv6="relay"
+        uci set dhcp.${modem_iface}_6.ra="relay"
+        uci set dhcp.${modem_iface}_6.ndp="relay"
+        uci set dhcp.${modem_iface}_6.master="1"
+    fi
+
+    local dnsmode=`uci get glipv6.lan.dnsmode`
+    if [ "$dnsmode" = "manual" ];then
+        local dns1=`uci get glipv6.lan.dns | awk -F# '{print $1}'`
+        local dns2=`uci get glipv6.lan.dns | awk -F# '{print $2}'`
+
+        uci delete dhcp.lan.dns 2>/dev/null
+        [ -n "$dns1" ] && uci add_list dhcp.lan.dns="$dns1"
+        [ -n "$dns2" ] && uci add_list dhcp.lan.dns="$dns2"
+    fi
+    uci commit dhcp
+
+    uci -q delete firewall.@zone[1].masq6
+    uci commit firewall
+}
+
+set_lan_nat6()
+{
+    local ula_prefix=`uci get glipv6.globals.origin_ula_prefix`
+    if [ "$ula_prefix" = "auto" ];then
+        uci set network.globals.ula_prefix="auto"
+    else
+        uci set network.globals.ula_prefix="$ula_prefix"
+    fi
+    uci set network.lan.ip6assign="64"
+    uci set network.lan.ip6hint="0000"
+    uci set network.lan.ip6ifaceid="::1"
+    uci -q delete network.lan.ip6class
+    uci set network.lan.ip6class='local'
+    uci commit network
+
+    uci set dhcp.lan.dhcpv6="server"
+    uci set dhcp.lan.ra="server"
+    uci set dhcp.lan.ra_management="1"
+    uci -q delete dhcp.lan.ra_flags
+    uci add_list dhcp.lan.ra_flags="other-config"
+    uci add_list dhcp.lan.ra_flags="managed-config"
+    uci set dhcp.lan.ra_default="1"
+    uci -q delete dhcp.lan.prefix_filter
+    uci commit dhcp
+
+    uci set firewall.@zone[1].masq6="1"
+    uci commit firewall
+}
+
+set_lan_static()
+{
+    local ip6addr=`uci get glipv6.lan.ip6addr`
+    local ip6prefix=`sipcalc $ip6addr | awk '{if($1=="Expanded")print $4}' | awk -F : '{print $1":"$2":"$3"::/48"}'`
+    local ip6hint=`sipcalc $ip6addr | awk '{if($1=="Expanded")print $4}' | awk -F : '{print $4}'`
+    local ip6ifaceid=`sipcalc $ip6addr | awk '{if($1=="Expanded")print $4}' | awk -F : '{print "::"$5":"$6":"$7":"$8}'`
+    local ip6assign=`sipcalc $ip6addr | awk '{if($2=="length")print $4}'`
+
+    [ $ip6assign -lt 48 ] && ip6assign="48"
+    [ $ip6assign -gt 64 ] && ip6assign="64"
+
+    uci set network.globals.ula_prefix="$ip6prefix"
+    uci set network.lan.ip6assign="$ip6assign"
+    uci set network.lan.ip6hint="$ip6hint"
+    uci set network.lan.ip6ifaceid="$ip6ifaceid"
+    uci -q delete network.lan.ip6class
+    uci set network.lan.ip6class='local'
+    uci commit network
+
+    uci set dhcp.lan.dhcpv6="server"
+    uci set dhcp.lan.ra="server"
+    uci set dhcp.lan.ra_management="1"
+    local ip6prefix_filter=`sipcalc $ip6addr | awk '{if($1=="Subnet")print $5}' | sed -e "s/\/.*/\/$ip6assign/g"`
+    uci -q delete dhcp.lan.prefix_filter
+    uci set dhcp.lan.prefix_filter="$ip6prefix_filter"
+    uci -q delete dhcp.lan.ra_flags
+    uci add_list dhcp.lan.ra_flags="other-config"
+    uci add_list dhcp.lan.ra_flags="managed-config"
+    uci set dhcp.lan.ra_default="1"
+    uci commit dhcp
+
+    uci set firewall.@zone[1].masq6="1"
+    uci commit firewall
+}
+
+set_guest_nat6()
+{
+    local ula_prefix=`uci get glipv6.globals.origin_ula_prefix`
+    if [ "$ula_prefix" = "auto" ];then
+        uci set network.guest.ip6prefix="fd08:0001::/48"
+    else
+        uci set network.guest.ip6prefix="$ula_prefix"
+    fi
+    uci set network.guest.ip6assign="64"
+    uci set network.guest.ip6hint="0001"
+    uci set network.guest.ip6ifaceid="::1"
+    uci delete network.guest.ip6class
+    uci set network.guest.ip6class="guest"
+    uci commit network
+
+    local ip6prefix=`uci get network.guest.ip6prefix | awk -F "::" '{print $1}'`
+    local ip6hint=`uci get network.guest.ip6hint`
+    local ip6ifaceid=`uci get network.guest.ip6ifaceid | awk -F "::" '{print "aaaa::"$2}'`
+    ip6ifaceid=`sipcalc $ip6ifaceid | awk '{if($1=="Expanded")print $4}' | awk -F : '{print $5":"$6":"$7":"$8}'`
+
+    uci delete dhcp.guest.dns 2>/dev/null
+    check_err=`sipcalc "$ip6prefix:$ip6hint:$ip6ifaceid" | grep ERR`
+    [ -z "$check_err" ] && uci add_list dhcp.guest.dns="$ip6prefix:$ip6hint:$ip6ifaceid"
+    uci set dhcp.guest.dhcpv6="server"
+    uci set dhcp.guest.ra="server"
+    uci set dhcp.guest.ra_management='1'
+    uci set dhcp.guest.ra_default='1'
+    uci delete dhcp.guest.ra_flags
+    uci add_list dhcp.guest.ra_flags="other-config"
+    uci add_list dhcp.guest.ra_flags="managed-config"
+    uci commit dhcp
+
+    #allow dhcpv6
+    if [ -n "$(which fw4)" ];then
+        config_load firewall
+        config_foreach  del_guest_forward_to_wan forwarding
+        uci set firewall.guest_to_wan6="forwarding"
+        uci set firewall.guest_to_wan6.src="guest"
+        uci set firewall.guest_to_wan6.dest="wan6"
+        uci set firewall.guest_to_wan6.family="ipv6"
+
+        uci -q delete firewall.nat6
+    fi
+    uci set firewall.glipv6_guest_dhcp=rule
+    uci set firewall.glipv6_guest_dhcp.name='Allow-DHCP-IPV6'
+    uci set firewall.glipv6_guest_dhcp.src='guest'
+    uci set firewall.glipv6_guest_dhcp.target='ACCEPT'
+    uci set firewall.glipv6_guest_dhcp.proto='udp'
+    uci set firewall.glipv6_guest_dhcp.dest_port='546:547'
+    uci set firewall.glipv6_guest_dhcp.family='ipv6'
+    uci set firewall.glipv6_guest_icmp=rule
+    uci set firewall.glipv6_guest_icmp.name='Allow-ICMP-IPV6'
+    uci set firewall.glipv6_guest_icmp.src='guest'
+    uci set firewall.glipv6_guest_icmp.target='ACCEPT'
+    uci set firewall.glipv6_guest_icmp.proto='icmp'
+    uci set firewall.glipv6_guest_icmp.dest_port='58'
+    uci set firewall.glipv6_guest_icmp.family='ipv6'
+
+    uci commit firewall
+}
+
+set_lan()
+{
+    local mode=`uci get glipv6.lan.mode`
+    if [ "$mode" = "native" ];then
+        set_lan_native
+        set_lan_dns
+    fi
+
+    if [ "$mode" = "relay" ];then
+        set_lan_relay
+    fi
+   
+    if [ "$mode" = "nat6" ];then
+        set_lan_nat6
+        set_lan_dns
+    fi
+
+    if [ "$mode" = "static" ];then
+        set_lan_static
+        set_lan_dns
+    fi
+
+    #guest wifi always nat6 mode
+    uci -q get network.guest > /dev/null && set_guest_nat6
+
+    set_fw4_nat6
+}
+
+restart()
+{
+    hnat_settnig
+    backup_ula_prefix
+
+    clear_settings
+    #check enable ipv6
+    local enabled=`uci get glipv6.globals.enabled`
+    if [ "$enabled" != "1" ];then
+        disable_ipv6
+        /etc/init.d/sysctl restart
+        /etc/init.d/dnsmasq restart
+        /etc/init.d/firewall reload
+        return
+    fi
+
+    local mode=`uci -q get glconfig.general.mode`
+    if [ "$mode" != "router" ];then
+        disable_ipv6
+        /etc/init.d/sysctl restart
+        return
+    fi
+
+    enable_ipv6
+    set_wan
+    set_lan
+
+    /etc/init.d/sysctl restart
+    /etc/init.d/firewall reload&
+    /etc/init.d/dnsmasq restart
+    platform_network_restart
+    /etc/init.d/odhcpd restart
+}
+
+reload_wan()
+{
+    set_wan
+}
+
+reload()
+{
+    local enabled=`uci get glipv6.globals.enabled`
+    local mode=`uci -q get glconfig.general.mode`
+    if [ "$enabled" = "1" ];then
+        disable_ipv6
+        if [ "$mode" = "router" ];then
+            enable_ipv6
+        fi
+        /etc/init.d/sysctl restart
+    fi
+}
+
+sync_ipv6(){
+    local ipv6=`uci -q get network.wan.ipv6`
+    if [ "$ipv6" = "" ];then
+        local enabled=`uci -q get glipv6.globals.enabled`
+        [ "$enabled" = "" ] && enabled=0
+
+        uci set network.wan.ipv6=$enabled
+        uci commit network
+    fi
+}
+
+
+start()
+{
+    sync_ipv6
+    hnat_settnig
+    
+    backup_ula_prefix
+
+    #check enable ipv6
+    local enabled=`uci get glipv6.globals.enabled`
+    if [ "$enabled" != "1" ];then
+        disable_ipv6
+        clear_settings
+        /etc/init.d/sysctl restart
+        return                                                                                                      
+    fi     
+
+    local mode=`uci -q get glconfig.general.mode`
+    if [ "$mode" != "router" ];then
+        disable_ipv6
+        /etc/init.d/sysctl restart
+        return
+    fi
+
+    enable_ipv6
+    set_wan
+    set_lan
+    
+    /etc/init.d/sysctl restart
+    /etc/init.d/dnsmasq restart
+    /etc/init.d/firewall reload
+}
+
+stop()
+{                                        
+    disable_ipv6
+    hnat_settnig
+
+    local mode=`uci -q get glconfig.general.mode`
+    if [ "$mode" = "router" ];then
+        clear_settings
+    fi
+
+    /etc/init.d/sysctl restart
+    /etc/init.d/dnsmasq restart
+    /etc/init.d/firewall reload
+    /etc/init.d/network reload
+}
+
+boot()
+{
+    local enabled=`uci get glipv6.globals.enabled`
+    if [ "$enabled" != "1" ];then
+        disable_ipv6
+    else
+        enable_ipv6
+    fi
+    /etc/init.d/sysctl restart
+
+    uci -q get glipv6.globals.origin_ula_prefix 1>/dev/null || {
+        start
+    }
+
+    hnat_settnig
+}

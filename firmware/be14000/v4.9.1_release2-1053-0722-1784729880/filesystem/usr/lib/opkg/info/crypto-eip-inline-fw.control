@@ -1,0 +1,10 @@
+Package: crypto-eip-inline-fw
+Version: 1
+Depends: libc
+Source: feeds/mtk_openwrt_feed/feed/kernel/crypto-eip
+SourceName: crypto-eip-inline-fw
+Section: firmware
+SourceDateEpoch: 1766125924
+Architecture: aarch64_cortex-a53
+Installed-Size: 13612
+Description:  Load firmware for EIP197 inline mode.

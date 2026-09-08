@@ -1,0 +1,10 @@
+Package: gl-sdk4-sms-forward
+Version: git-2026.064.37092-8142aa6-1
+Depends: libc, ssmtp, gl-sdk4-cellular
+Source: feeds/glinet/gl-sdk4-sms-forward
+SourceName: gl-sdk4-sms-forward
+Section: base
+SourceDateEpoch: 1772705892
+Architecture: aarch64_cortex-a53
+Installed-Size: 5149
+Description:  glinet SDK4 system module

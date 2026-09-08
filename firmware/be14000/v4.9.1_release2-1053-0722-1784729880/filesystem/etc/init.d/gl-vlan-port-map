@@ -1,0 +1,154 @@
+#!/bin/sh /etc/rc.common
+# /etc/init.d/gl-vlan-port-map
+# Generate /tmp/vlan_port_map on boot from UCI configuration.
+
+START=99
+EXTRA_COMMANDS="sync"
+EXTRA_HELP="sync  Regenerate port map and register tertf subnets"
+
+. /lib/functions.sh
+
+MAP="/tmp/vlan_port_map"
+TERTF="/proc/oui-tertf/subnet"
+LOCK="/var/run/gl-vlan-port-map.lock"
+
+ensure_iot_vlan_id() {
+	[ "$(uci -q get network.iot)" = "interface" ] || return 0
+	local vid
+	vid=$(uci -q get network.iot.vlan_id)
+	[ -n "$vid" ] && return 0
+	uci -q set network.iot.device='br-iot'
+	uci -q set network.iot.display_name='iot'
+	uci -q set network.iot.vlan_id='10'
+	uci commit network
+}
+
+# $1 = network name -> stdout = bridge name (empty if unknown)
+get_bridge() {
+	case "$1" in
+		lan)   echo "br-lan" ;;
+		guest) echo "br-guest" ;;
+		iot)   echo "br-iot" ;;
+		vlan*) echo "br-$1" ;;
+	esac
+}
+
+# $1 = network name -> stdout = vlan_id
+get_vlan_id() {
+	case "$1" in
+		lan) echo 1 ;;
+		*)
+			local vid
+			vid=$(uci -q get "network.$1.vlan_id")
+			if [ -n "$vid" ]; then
+				echo "$vid"
+			else
+				echo "$1" | sed -n 's/^vlan\([0-9]\+\)$/\1/p'
+			fi
+			;;
+	esac
+}
+
+# Collect wifi ifname->network pairs into /tmp/.vlan_wifi_devs (ifname network)
+collect_wifi_devs() {
+	_wifi_collect_cb() {
+		local ifname network
+		config_get ifname "$1" ifname
+		config_get network "$1" network
+		[ -n "$ifname" ] && [ -n "$network" ] && echo "$ifname $network"
+	}
+	config_load wireless
+	config_foreach _wifi_collect_cb wifi-iface > /tmp/.vlan_wifi_devs
+}
+
+# Check if $1 is a wifi ifname (present in /tmp/.vlan_wifi_devs)
+is_wifi_port() {
+	grep -q "^$1 " /tmp/.vlan_wifi_devs 2>/dev/null
+}
+
+# $1 = bridge name -> stdout = space-separated port list
+get_bridge_ports() {
+	local target="$1"
+	_bridge_ports_cb() {
+		local name
+		config_get name "$1" name
+		[ "$name" = "$target" ] || return
+		local ports
+		config_get ports "$1" ports
+		echo "$ports"
+	}
+	config_load network
+	config_foreach _bridge_ports_cb device
+}
+
+# Collect all subnet names: fixed (lan/guest/iot if exist) + custom (vlanN)
+collect_subnets() {
+	local net
+	for net in lan guest iot; do
+		[ -n "$(uci -q get "network.$net")" ] && echo "$net"
+	done
+	# custom vlanN subnets
+	uci -q show network | sed -n 's/^network\.\(vlan[0-9]\+\)=interface$/\1/p'
+}
+
+generate_port_map() {
+	local subnets bridge vid ports port net ifname wnet
+
+	collect_wifi_devs
+	subnets=$(collect_subnets)
+
+	{
+		echo "# device  network  bridge  vlan_id  conn_type"
+
+		for net in $subnets; do
+			bridge=$(get_bridge "$net")
+			vid=$(get_vlan_id "$net")
+			vid=${vid:-0}
+
+			# wired/wifi ports bound to the bridge
+			if [ -n "$bridge" ]; then
+				ports=$(get_bridge_ports "$bridge")
+				for port in $ports; do
+					if is_wifi_port "$port"; then
+						printf "%-10s%-9s%-10s%-8s%s\n" "$port" "$net" "$bridge" "$vid" "wifi"
+					else
+						printf "%-10s%-9s%-10s%-8s%s\n" "$port" "$net" "$bridge" "$vid" "wired"
+					fi
+				done
+			fi
+
+			# wifi interfaces associated with this network
+			while IFS=' ' read -r ifname wnet; do
+				[ "$wnet" = "$net" ] || continue
+				printf "%-10s%-9s%-10s%-8s%s\n" "$ifname" "$net" "${bridge:-}" "$vid" "wifi"
+			done < /tmp/.vlan_wifi_devs
+		done
+	} > "$MAP"
+
+	rm -f /tmp/.vlan_wifi_devs
+}
+
+sync_tertf() {
+	[ -e "$TERTF" ] || return 0
+	local subnets net bridge
+	echo c > "$TERTF"
+	subnets=$(collect_subnets)
+	for net in $subnets; do
+		bridge=$(get_bridge "$net")
+		[ -n "$bridge" ] && echo "add $bridge" > "$TERTF"
+	done
+}
+
+# Regenerate map + tertf (hotplug / RPC post_subnet_change).
+sync() {
+	(
+		flock -x 200
+		ensure_iot_vlan_id
+		generate_port_map
+		sync_tertf
+	) 200>"$LOCK"
+}
+
+start() {
+	sync
+}

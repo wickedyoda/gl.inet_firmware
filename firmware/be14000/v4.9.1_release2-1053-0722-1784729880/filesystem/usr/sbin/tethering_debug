@@ -1,0 +1,66 @@
+#!/bin/sh
+# shellcheck disable=SC2157
+
+if [ "$1" = "status" ]; then
+    echo "##################### usb tethering status ########################" >> /dev/console
+    otg_support=$(cat /proc/gl-hw-info/usb-otg)
+    if [ "$otg_support" != "true" ]; then
+        echo "usb not support otg, return it" >> /dev/console
+        exit 1
+    fi
+
+    usb_mode=$(cat /sys/devices/platform/soc/a600000.ssusb/mode)
+
+    echo "usb mode: $usb_mode" >> /dev/console
+    
+    if [ "$usb_mode" = 'host' ]; then
+        ports=$(cat /proc/gl-hw-info/usb-port)
+        port=$(echo $ports | cut -d',' -f1)
+        if [ -d "/sys/bus/usb/devices/$port" ]; then
+            product=$(cat /sys/bus/usb/devices/$port/product)
+            manufacturer=$(cat /sys/bus/usb/devices/$port/manufacturer)
+            idProduct=$(cat /sys/bus/usb/devices/$port/idProduct)
+            idVendor=$(cat /sys/bus/usb/devices/$port/idVendor)
+        else
+            port=$(echo $ports | cut -d',' -f2)
+            product=$(cat /sys/bus/usb/devices/$port/product)
+            manufacturer=$(cat /sys/bus/usb/devices/$port/manufacturer)
+            idProduct=$(cat /sys/bus/usb/devices/$port/idProduct)
+            idVendor=$(cat /sys/bus/usb/devices/$port/idVendor)
+        fi
+        
+        if [ -n "$idVendor" ]; then
+            usb_status=true
+        fi
+
+        echo "usb status: $usb_status" >> /dev/console
+        echo "usb manufacturer: $manufacturer  product: $product" >> /dev/console
+        echo "usb idVendor: $idVendor  idProduct: $idProduct" >> /dev/console    
+        if [ "$usb_status" != true ]; then
+            exit 1
+        fi
+
+        tethering_enable=$(uci get network.tethering.disabled)
+        tethering_device=$(uci get network.tethering.ifname)
+        [ "$tethering_enable" = "1" ] || [ -z "$tethering_device" ] && {
+            echo "usb tethering disable" >> /dev/console
+            exit 1
+        }
+        connet_state=$(ubus call network.interface.tethering status | jsonfilter -e '@.up')
+        echo "usb host tethering link up: $connet_state" >> /dev/console
+        if [ "$connet_state" = "true" ]; then
+            tethering_status=$(ubus call network.interface.tethering status)
+            echo "usb host tethering status:" >> /dev/console
+            echo "$tethering_status" >> /dev/console
+        fi
+    else
+        echo "usb device tethering:" >> /dev/console
+        sta_info=$(grep "rndis0" /proc/oui-tertf/term)
+        if [ -z "sta_info" ]; then
+            sta_info=$(grep "ecm0" /proc/oui-tertf/term)
+        fi
+        echo "usb device client: " >> /dev/console
+        echo "$sta_info " >> /dev/console
+    fi
+fi
+

@@ -1,0 +1,10 @@
+Package: gl-sdk4-uci
+Version: git-2025.042.27505-7e5f319-1
+Depends: libc, libuci20130104
+Source: feeds/glinet/gl-sdk4-uci
+SourceName: gl-sdk4-uci
+Section: base
+SourceDateEpoch: 1739259505
+Architecture: aarch64_cortex-a53
+Installed-Size: 5067
+Description:  A warp around libuci, aim to use simple

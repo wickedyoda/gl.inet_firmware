@@ -1,0 +1,10 @@
+Package: gl-sdk4-luci
+Version: git-2026.062.04620-111f643-1
+Depends: libc, gl-oui-rpc
+Source: feeds/glinet/gl-sdk4-luci
+SourceName: gl-sdk4-luci
+Section: base
+SourceDateEpoch: 1772500620
+Architecture: aarch64_cortex-a53
+Installed-Size: 484678
+Description:  Luci for Gl.inet

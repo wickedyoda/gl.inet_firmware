@@ -1,0 +1,10 @@
+Package: kmod-gl-sdk4-fan
+Version: 5.4.281+git-2025.020.35137-beb76bd-1
+Depends: kernel (=5.4.281-1-df4fa332840f56a774a5d60bd140aaf6), kmod-hwmon-pwmfan, libc
+Source: feeds/gl_feed_common/gl-sdk4-fan
+SourceName: kmod-gl-sdk4-fan
+Section: kernel
+SourceDateEpoch: 1737366337
+Architecture: aarch64_cortex-a53
+Installed-Size: 7311
+Description:  glinet SDK4 fan module

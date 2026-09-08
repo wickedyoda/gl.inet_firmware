@@ -1,0 +1,14 @@
+Package: pppoe-discovery
+Version: 2.4.9.git-2021-01-04-3
+Depends: libc, ppp-mod-pppoe
+Source: package/network/services/ppp
+SourceName: pppoe-discovery
+License: BSD-4-Clause
+Section: net
+SourceDateEpoch: 1784728419
+CPE-ID: cpe:/a:samba:ppp
+Maintainer: Felix Fietkau <nbd@nbd.name>
+Architecture: aarch64_cortex-a53
+Installed-Size: 7066
+Description:  This tool performs the same discovery process as pppoe, but does
+ not initiate a session. Can be useful to debug pppoe.

@@ -1,0 +1,10 @@
+Package: gl-sdk4-vpn-policy
+Version: git-2026.036.46899-a0a3c95-1
+Depends: libc, libuci-lua, iptables-mod-extra, sudo, iptables-mod-conntrack-extra
+Source: feeds/glinet/gl-sdk4-vpn-policy
+SourceName: gl-sdk4-vpn-policy
+Section: base
+SourceDateEpoch: 1770296499
+Architecture: aarch64_cortex-a53
+Installed-Size: 4258
+Description:  glinet SDK4 VPN policy module

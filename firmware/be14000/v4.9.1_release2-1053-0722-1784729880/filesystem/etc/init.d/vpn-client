@@ -1,0 +1,18 @@
+#!/bin/sh /etc/rc.common
+
+START=95
+
+start() {
+    rtp2.sh
+}
+
+boot() {
+    mkdir -p /tmp/resolv.conf.d/
+    mkdir -p /tmp/hosts.vpn/
+    touch /tmp/run/vpn-client-booted
+    if [ -f /var/run/first_time_boot ]; then
+        rtp2.sh
+    else
+        rtp2.sh not_reload_network
+    fi
+}

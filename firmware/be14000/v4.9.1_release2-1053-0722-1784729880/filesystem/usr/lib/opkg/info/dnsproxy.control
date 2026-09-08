@@ -1,0 +1,10 @@
+Package: dnsproxy
+Version: 0.79.0-1
+Depends: libc, libuci-lua
+Source: feeds/gl_feed_common/dnsproxy
+SourceName: dnsproxy
+Section: net
+SourceDateEpoch: 1774601340
+Architecture: aarch64_cortex-a53
+Installed-Size: 4180879
+Description:  A lightweight DNS proxy for GL-iNet routers.

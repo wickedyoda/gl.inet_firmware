@@ -1,0 +1,11 @@
+Package: kmod-crypto-lib-poly1305
+Version: 5.4.281-1
+Depends: kernel (=5.4.281-1-df4fa332840f56a774a5d60bd140aaf6), kmod-crypto-hash
+Source: package/kernel/linux
+SourceName: kmod-crypto-lib-poly1305
+License: GPL-2.0
+Section: kernel
+SourceDateEpoch: 1784728420
+Architecture: aarch64_cortex-a53
+Installed-Size: 105
+Description:  Poly1305 library interface

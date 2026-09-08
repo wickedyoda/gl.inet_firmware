@@ -1,0 +1,61 @@
+#!/bin/sh
+
+. /lib/functions/gl_util.sh
+. /lib/functions/system.sh
+. /lib/functions.sh
+# MT3000 MT6000这套type==mtk方案的保留配置兼容 factory_macaddr字段
+fix_mtk_factory_macaddr() {
+    local iface="$1"
+    local device type band mode guest multi_ap factory_macaddr
+    local macaddr guest_mac
+
+    config_get device "$iface" device ""
+    [ -z "$device" ] && return
+
+    config_get type "$device" type ""
+    [ "$type" = "mtk" ] || [ "$type" = "mac80211" ] || return
+
+    config_get mode "$iface" mode ""
+    [ "$mode" != "ap" ] && return
+
+    config_get guest "$iface" guest "0"
+    [ "$guest" = "1" ] && return
+
+    config_get iot "$iface" iot "0"
+    [ "$iot" = "1" ] && return
+
+    config_get multi_ap "$iface" multi_ap ""
+    [ "$multi_ap" = "1" ] && return
+
+    # 已有 factory_macaddr 则跳过
+    config_get factory_macaddr "$iface" factory_macaddr ""
+    [ -n "$factory_macaddr" ] && return
+
+    config_get band "$device" band ""
+
+    [ ! -f /proc/gl-hw-info/device_mac ] && return
+
+    [ "$band" = "2g" ] && macaddr=$(macaddr_add $(cat /proc/gl-hw-info/device_mac) 2)
+    [ "$band" = "5g" ] && macaddr=$(macaddr_add $(cat /proc/gl-hw-info/device_mac) 3)
+
+    [ -z "$macaddr" ] && return
+
+    guest_mac=$(guest_wifi_macaddr_add "$macaddr" 2)
+
+    uci set wireless."$iface".factory_macaddr="$macaddr"
+    local cur_macaddr
+    config_get cur_macaddr "$iface" macaddr ""
+    [ -z "$cur_macaddr" ] && uci set wireless."$iface".macaddr="$macaddr"
+
+    local guest_iface="guest$band"
+    uci -q get wireless."$guest_iface" && {
+        uci set wireless."$guest_iface".factory_macaddr="$guest_mac"
+        local cur_guest_macaddr
+        config_get cur_guest_macaddr "$guest_iface" macaddr ""
+        [ -z "$cur_guest_macaddr" ] && uci set wireless."$guest_iface".macaddr="$guest_mac"
+    }
+}
+
+config_load wireless
+config_foreach fix_mtk_factory_macaddr wifi-iface
+uci commit wireless

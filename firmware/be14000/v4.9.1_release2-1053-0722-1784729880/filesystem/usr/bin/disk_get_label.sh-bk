@@ -1,0 +1,14 @@
+#! /bin/sh
+
+device=$1
+
+s=`/usr/sbin/blkid /dev/$device|sed -n 's/.* TYPE="\([^"]*\)".*/\1/p'`
+label=`/usr/sbin/blkid -d /dev/$device|sed -n 's/.*LABEL="\([^"]*\)".*/\1/p'`
+
+#echo "label=$label"
+echo $label
+
+
+
+
+

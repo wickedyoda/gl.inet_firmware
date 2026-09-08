@@ -1,0 +1,3 @@
+#!/bin/sh
+
+[ -f "/etc/udhcpc.user.d/update_wan_isolate" ] && /etc/udhcpc.user.d/update_wan_isolate&

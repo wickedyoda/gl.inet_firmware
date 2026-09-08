@@ -1,0 +1,120 @@
+#!/bin/sh
+
+. /lib/functions.sh
+
+modify_port_list()
+{
+	config_get name $1 name
+	if [ "$name" = "br-lan" -o "$1" = "lan_dev" ]; then
+		uci $2 network.$1.ports=$3
+	fi
+}
+
+
+disable_wifi_and_network()
+{
+	uci set network.guest.disabled="1"
+	uci set wireless.guest2g.disabled='1'
+	uci set wireless.guest5g.disabled='1'
+	uci set wireless.guest6g.disabled='1'
+	uci set network.iot.disabled="1"
+	uci set wireless.iot2g.disabled='1'
+	uci set wireless.iot5g.disabled='1'
+	uci set wireless.wlanmldguest2g.disabled='1'
+	uci set wireless.wlanmldguest5g.disabled='1'
+	uci set wireless.wlanmldguest6g.disabled='1'
+}
+
+server_tap=$(uci -q get ovpnserver.vpn.dev_type)
+client_tap=$(uci -q get ovpnclient.$(uci -q get network.ovpnclient.config).mode)
+server_disable=$(uci -q get network.ovpnserver.disabled)
+client_disable=$(uci -q get network.ovpnclient.disabled)
+
+if [ "$server_tap" = "tap-s2s" ]; then
+	server_tap=tap
+fi
+
+lan_ifname="$(uci -q get network.lan.ifname)"
+uci set dhcp.lan.ignore=0
+
+if [ "$1" = "client" -o "$1" = "client_ifdown" ]; then
+	touch /tmp/run/toggle_ovpn_client
+	if [ "$client_tap" = tap-s2s -a "$client_disable" = 0 -a "$1" != "client_ifdown" ]; then
+		uci set network.lan_dhcp=interface
+		uci set network.lan_dhcp.device='@lan'
+		[ -n "$lan_ifname" ] && uci set network.lan_dhcp.ifname='@lan'
+		uci set network.lan_dhcp.proto='dhcp'
+		uci set network.lan_dhcp.metric='1000'
+
+		disable_wifi_and_network
+
+		board_type=""
+		for i in 0 1 2; do
+			board_type=$(uci -q get wireless.@wifi-device[$i].type)
+			[ -n "$board_type" ] && break
+		done
+
+		case $board_type in
+			mtkwifi)
+				guest_mlo=""
+				for band in 2g 5g 6g; do
+					guest_mlo=$(uci -q get wireless.wlanmldguest$band.mld)
+					[ -n "$guest_mlo" ] && break
+				done
+				uci set wireless.$guest_mlo.disabled="1"
+				uci set mlo.mld1.disabled="1"
+				;;
+			*)
+				mlo_list="$(uci -q get wireless.wlanmldguest2g.mld) \
+				$(uci -q get wireless.wlanmldguest5g.mld) \
+				$(uci -q get wireless.wlanmldguest6g.mld)"
+
+				for mld in $(echo $mlo_list | tr ' ' '\n' | sort -u | grep -v '^$'); do
+					uci delete wireless.$mld
+				done
+				;;
+		esac
+
+		uci -q rename network.lan.ipaddr=ipaddr_old
+		uci set gl-black_white_list.global.enable='0'
+		uci commit gl-black_white_list
+		/etc/init.d/gl-black_white_list reload
+	else
+		ifdown lan_dhcp
+		uci -q delete network.lan_dhcp
+		uci -q rename network.lan.ipaddr_old=ipaddr
+		/etc/init.d/dnsmasq restart
+		uci set gl-black_white_list.global.enable='1'
+		uci commit gl-black_white_list
+		/etc/init.d/gl-black_white_list reload
+	fi
+fi
+
+if [ -n "$lan_ifname" ]; then
+	lan_ifname_clean=$(echo "$lan_ifname" | sed 's/ ovpnserver//g' | sed 's/ ovpnclient//g')
+	if [ "$server_tap" = tap -a "$server_disable" = 0 ]; then
+		lan_ifname_clean="$lan_ifname_clean ovpnserver"
+	fi
+	if [ "$client_tap" = tap-s2s -a "$client_disable" = 0 -a "$1" != "client_ifdown" ]; then
+		lan_ifname_clean="$lan_ifname_clean ovpnclient"
+	fi
+	uci set network.lan.ifname="$lan_ifname_clean"
+else
+	config_load network
+	config_foreach modify_port_list device del_list ovpnserver
+	config_foreach modify_port_list device del_list ovpnclient
+	if [ "$server_tap" = tap -a "$server_disable" = 0 ]; then
+		config_foreach modify_port_list device add_list ovpnserver
+	fi
+	if [ "$client_tap" = tap-s2s -a "$client_disable" = 0 -a "$1" != "client_ifdown" ]; then
+		config_foreach modify_port_list device add_list ovpnclient
+	fi
+fi
+
+uci commit network
+uci commit dhcp
+uci commit wireless
+
+if [ "$1" = "client" -a "$client_tap" = tap-s2s -a "$client_disable" = 0 ]; then
+	ifup lan_dhcp
+fi

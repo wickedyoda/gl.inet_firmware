@@ -1,0 +1,12 @@
+#!/bin/sh
+
+[ "$ACTION" = "ifdown" ] || exit 0
+
+case "$INTERFACE" in
+	wgclient*|ovpnclient[0-9]*) ;;
+	*) exit 0 ;;
+esac
+
+[ -x /usr/bin/vpn-failover-trigger.sh ] || exit 0
+
+/usr/bin/vpn-failover-trigger.sh trigger "$INTERFACE" hotplug ifdown

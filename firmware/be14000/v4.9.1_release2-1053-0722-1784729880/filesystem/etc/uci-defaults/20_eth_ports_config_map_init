@@ -1,0 +1,18 @@
+#!/bin/sh
+
+ETH_MAP_CONFIG_LOCK="/var/run/eth_map_config.lock"
+
+exec 6>"$ETH_MAP_CONFIG_LOCK"
+flock 6
+
+[ -f /usr/lib/lua/libcable.lua ] || exit 1
+
+[ "$(uci -q get glconfig.general.inited 2>/dev/null)" = "1" ] && [ -s /etc/config/eth_ports_config_map ] && exit 0
+
+[ -f /tmp/eth_map_config_init_done ] && rm -f /tmp/eth_map_config_init_done && exit 0
+
+if [ ! -f /etc/config/eth_ports_config_map ]; then
+	touch /etc/config/eth_ports_config_map
+fi
+
+lua -e "local m=require'libcable'; os.exit(m.init_eth_ports_config_map())"

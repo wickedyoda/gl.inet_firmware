@@ -1,0 +1,6 @@
+/tmp/log_feedback/.+%.jpg$
+/tmp/log_feedback/.+%.JPG$
+/tmp/log_feedback/.+%.jpeg$
+/tmp/log_feedback/.+%.JPEG$
+/tmp/log_feedback/.+%.png$
+/tmp/log_feedback/.+%.PNG$

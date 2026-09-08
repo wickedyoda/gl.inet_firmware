@@ -1,0 +1,10 @@
+Package: gl-sdk4-firewall
+Version: git-2026.175.37801-3313014-1
+Depends: libc, lua, kmod-ipt-conntrack, kmod-nf-nat, kmod-nf-nathelper, iptables-mod-fullconenat, kmod-ipt-fullconenat, ipset
+Source: feeds/glinet/gl-sdk4-firewall
+SourceName: gl-sdk4-firewall
+Section: base
+SourceDateEpoch: 1782297001
+Architecture: aarch64_cortex-a53
+Installed-Size: 30698
+Description:  Firewall API for Gl.inet with Port Forwarding

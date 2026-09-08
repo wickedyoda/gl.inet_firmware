@@ -1,0 +1,17 @@
+{
+    "index": 30,
+    "view": "ovpnserver",
+    "level": 2,
+    "parent": "vpn",
+    "parent_icon": "vpn",
+    "parent_index": 40,
+    "lang_hide": [
+        "zh-cn"
+    ],
+    "show_mode": [
+        "router"
+    ],
+    "disables": [
+        "taps2s"
+    ]
+}

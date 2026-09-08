@@ -1,0 +1,4 @@
+/etc/config/cellular/sms_forward.json
+/etc/forward
+/usr/lib/oui-httpd/rpc/sms-forward
+/usr/share/gl-validator.d/sms-forward.lua

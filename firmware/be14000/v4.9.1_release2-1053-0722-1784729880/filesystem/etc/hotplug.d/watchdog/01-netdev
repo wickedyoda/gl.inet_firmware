@@ -1,0 +1,7 @@
+if [ "$IFNAME" == "eth0" -o "$IFNAME" == "eth1" ];then
+    if [ "$ACTION" == "timeout" ];then
+        ifconfig $IFNAME down
+        sleep 1
+        ifconfig $IFNAME up
+    fi
+fi

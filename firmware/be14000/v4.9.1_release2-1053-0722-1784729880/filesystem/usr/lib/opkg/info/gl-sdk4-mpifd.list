@@ -1,0 +1,3 @@
+/etc/uci-defaults/set_mpifd
+/usr/bin/mpifd
+/etc/init.d/mpifd

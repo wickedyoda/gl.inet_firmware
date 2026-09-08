@@ -1,0 +1,10 @@
+Package: gl-line-graph
+Version: git-2026.118.41385-d118f62-1
+Depends: libc
+Source: feeds/glinet/gl-line-graph
+SourceName: gl-line-graph
+Section: base
+SourceDateEpoch: 1777375785
+Architecture: aarch64_cortex-a53
+Installed-Size: 1051316
+Description:  gl UI line graph

@@ -1,0 +1,13 @@
+/usr/bin/gl-vlan-info
+/usr/lib/oui-httpd/rpc/vlan_subnet
+/etc/gl-reset-network.d/50-vlan-subnet
+/etc/init.d/gl-vlan-port-map
+/usr/bin/gl-vlan-lifecycle
+/etc/hotplug.d/iface/97-update_wan_isolate
+/etc/udhcpc.user.d/update_wan_isolate
+/etc/uci-defaults/10_gl-vlan-subnet
+/usr/share/gl-validator.d/vlan_subnet.lua
+/etc/ap_isolate_config.lua
+/usr/lib/lua/gl/vlan_subnet.lua
+/etc/hotplug.d/iface/99-vlan-port-map
+/lib/upgrade/99-migrate-downgrade.sh

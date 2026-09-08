@@ -1,0 +1,53 @@
+#!/bin/sh
+
+# shellcheck disable=SC3057
+
+# Will exit if autoupdate is disabled
+enabled=$(uci get upgrade.general.auto_upgrade)
+[ -z "$enabled" -o "$enabled" = "0" ] && return
+
+# Debug mode
+debug=$(uci get upgrade.general.debug)
+if [ "$debug" = "1" ]; then
+	interval=$((60))
+else
+	interval=$((600))
+fi
+
+firmware_path=$(uci get upgrade.general.url)
+
+version=$(cat /etc/glversion)
+
+keep_package=$(uci get upgrade.general.keep_package)
+keep_config=$(uci get upgrade.general.keep_config)
+
+preset_time=$(uci get upgrade.general.time) #e.g. 04:00
+
+version_list=$(curl -f -Ls --connect-timeout 5 "${firmware_path}/list-sha256.txt -o /tmp/firmware_list")
+
+if [ -f /tmp/firmware_list ]; then
+    file=$(awk 'NR==1 {print $2}' /tmp/firmware_list)
+else
+    logger -t glautoupdater "get firmware list fail,exit!"
+    return
+fi
+
+while [ true ]
+do
+    now_time=$(date +'%T')  #e.g. 17:39:29
+
+    #we only compare hours, yes, it is time to update
+    if [ ${preset_time:0:2} = ${now_time:0:2} -o "$debug" = "1" ]; then
+
+        #the time up or debug,will upgrade firmware 
+        logger -t glautoupdater "'-----------------------------------------"
+        logger -t glautoupdater "'-------will upgrade firmware-------------"
+        logger -t glautoupdater "'-----------------------------------------"
+        sleep 5
+        /usr/bin/one_click_upgrade $firmware_path_url/$file $keep_config $keep_package  &
+        return
+    else
+        sleep $interval
+    fi 
+
+done

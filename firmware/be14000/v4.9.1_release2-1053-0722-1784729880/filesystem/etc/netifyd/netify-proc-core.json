@@ -1,0 +1,34 @@
+{
+    "format": "json",
+    "compressor": "none",
+    "sinks": {
+        "sink-http": {
+            "legacy": {
+                "enable": true,
+                "types": [ "legacy-http" ],
+                "format": "json",
+                "compressor": "gz"
+            }
+        },
+        "sink-socket": {
+            "default": {
+                "enable": false,
+                "types": [ "legacy-socket" ]
+            },
+            "websocket": {
+                "enable": false,
+                "types": [ "stream-flows", "stream-stats" ]
+            }
+        },
+        "sink-mqtt": {
+            "flows": {
+                "enable": false,
+                "types": [ "stream-flows" ]
+            },
+            "stats": {
+                "enable": false,
+                "types": [ "stream-stats" ]
+            }
+        }
+    }
+}

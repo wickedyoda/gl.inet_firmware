@@ -1,0 +1,113 @@
+#!/bin/sh
+# filepath: /work4/run/copilt/gl-sdk4-vlan-subnet/files/50-vlan-subnet
+# Network reset: remove all custom VLAN subnets, restore guest/iot defaults.
+
+. /lib/functions.sh
+
+vlan_ifaces=""
+config_load network
+config_foreach __collect interface
+__collect() { case "$1" in vlan[0-9]*) vlan_ifaces="$vlan_ifaces $1" ;; esac; }
+config_foreach __collect interface
+
+if [ -n "$vlan_ifaces" ]; then
+    for iface in $vlan_ifaces; do
+        # network: interface + bridge device
+        uci -q delete "network.$iface"
+        uci -q show network | grep "\.name='br-${iface}'" | \
+            cut -d. -f2 | cut -d= -f1 | while read sid; do
+                uci -q delete "network.$sid"
+            done
+
+        # firewall: zone / forwarding / rule
+        uci -q show firewall | grep -E "\.name='${iface}'|\.src='${iface}'|\.dest='${iface}'" | \
+            cut -d. -f2 | cut -d= -f1 | sort -u | while read sid; do
+                uci -q delete "firewall.$sid"
+            done
+
+        # dhcp + static hosts
+        uci -q show dhcp | grep -E "\.interface='${iface}'|\.network='${iface}'" | \
+            cut -d. -f2 | cut -d= -f1 | sort -u | while read sid; do
+                uci -q delete "dhcp.$sid"
+            done
+
+        # black_white_list
+        uci -q show gl-black_white_list 2>/dev/null | grep "^gl-black_white_list\.${iface}" | \
+            cut -d. -f2 | cut -d= -f1 | sort -u | while read sid; do
+                uci -q delete "gl-black_white_list.$sid"
+            done
+    done
+fi
+
+uci -q set network.guest.vlan_id='9'
+uci -q set network.iot.vlan_id='10'
+uci -q set network.guest.disabled='1'
+uci -q set network.iot.disabled='1'
+
+clear_dhcp_ignore_by_interface() {
+    local net="$1"
+    local sid found=0
+    for sid in $(uci -q show dhcp | sed -n "s/^dhcp\.\([^.]*\)\.interface='${net}'$/\1/p"); do
+        uci -q delete "dhcp.${sid}.ignore"
+        found=1
+    done
+    [ "$found" = "1" ] || uci -q delete "dhcp.${net}.ignore"
+}
+
+clear_dhcp_ignore_by_interface guest
+clear_dhcp_ignore_by_interface iot
+
+for net in guest iot; do
+    found=0
+    for sid in $(uci -q show firewall | sed -n "s/^firewall\.\([^.]*\)\.src='${net}'$/\1/p"); do
+        [ "$(uci -q get firewall.${sid}.dest 2>/dev/null)" = "wan" ] || continue
+        uci -q set firewall.${sid}.enabled='1'
+        found=1
+    done
+    if [ "$found" = "0" ]; then
+        uci -q add firewall forwarding >/dev/null
+        uci -q set firewall.@forwarding[-1].src="${net}"
+        uci -q set firewall.@forwarding[-1].dest='wan'
+        uci -q set firewall.@forwarding[-1].enabled='1'
+    fi
+done
+
+setup_block_lan_mgmt_rules() {
+	_block_one() {
+		local net="$1" ip="$2"
+		local r
+		r=$(uci -q show firewall 2>/dev/null | grep "\.name='Block-LAN-mgmt-${net}'" | head -1 | cut -d. -f2)
+		if [ -n "$r" ]; then
+			uci -q set "firewall.${r}.dest_ip=${ip}"
+			uci -q set "firewall.${r}.dest_port"='80 443 8080 8443'
+			return 0
+		fi
+		uci -q batch <<-EOF
+			add firewall rule
+			set firewall.@rule[-1].name='Block-LAN-mgmt-${net}'
+			set firewall.@rule[-1].src='lan'
+			set firewall.@rule[-1].dest_ip='${ip}'
+			set firewall.@rule[-1].proto='tcp udp'
+			set firewall.@rule[-1].dest_port='80 443 8080 8443'
+			set firewall.@rule[-1].target='REJECT'
+EOF
+	}
+	guest_ip=$(uci -q get network.guest.ipaddr 2>/dev/null)
+	[ -z "$guest_ip" ] && guest_ip=192.168.9.1
+	iot_ip=$(uci -q get network.iot.ipaddr 2>/dev/null)
+	[ -z "$iot_ip" ] && iot_ip=192.168.10.1
+	_block_one guest "$guest_ip"
+	_block_one iot "$iot_ip"
+}
+setup_block_lan_mgmt_rules
+
+uci commit network
+uci commit firewall
+uci commit dhcp
+uci -q commit gl-black_white_list
+
+lua -e "local m=require('libcable'); print(m.reset_ports_to_factory())"
+#/etc/init.d/network restart
+
+rm -f /tmp/vlan_port_map
+return 0 2>/dev/null

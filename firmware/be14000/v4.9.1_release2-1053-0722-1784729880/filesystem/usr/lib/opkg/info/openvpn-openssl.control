@@ -1,0 +1,13 @@
+Package: openvpn-openssl
+Version: 2.6.12-1
+Depends: libc, kmod-tun, libcap-ng, liblzo2, liblz4-1, libnl-genl200, kmod-ovpn-dco-v2, libopenssl1.1
+Provides: openvpn, openvpn-crypto
+Source: feeds/gl_vpn_extra/openvpn
+SourceName: openvpn-openssl
+License: GPL-2.0
+Section: net
+SourceDateEpoch: 1757657832
+CPE-ID: cpe:/a:openvpn:openvpn
+Architecture: aarch64_cortex-a53
+Installed-Size: 267226
+Description:  Open source VPN solution using OpenSSL

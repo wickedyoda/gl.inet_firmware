@@ -1,0 +1,10 @@
+{
+  "index": 40,
+  "view": "flowstatistics",
+  "level": 2,
+  "parent": "flowcontrol",
+  "parent_icon": "smartinternet",
+  "parent_index": 49,
+  "show_mode": ["router"],
+  "disables": ["taps2s"]
+}

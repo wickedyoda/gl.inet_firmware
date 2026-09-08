@@ -1,0 +1,29 @@
+#!/bin/sh  /etc/rc.common
+
+START=99
+STOP=10
+
+start() {
+    config_load gl_dpi_flow_statistics
+    if ! pgrep -f "monitor_dpi_stats" > /dev/null; then
+        eco /etc/monitor_dpi_stats.lua &
+    fi
+
+    local enable
+    config_get enable "global" "enable"
+    [ "$enable" = "0" ] && return
+
+    sqlite3 /etc/netifyd/traffic_data.db ".backup /tmp/traffic_data.db"
+    eco /etc/monitor_traffic.lua &
+}
+
+stop() {
+    PID=$(ps | grep "monitor_traffic.lua" | grep -v grep | awk '{print $1}')
+    if [ ! -z "$PID" ]; then
+        kill -9 $PID
+        sleep 1
+        sqlite3 /tmp/traffic_data.db ".backup /etc/netifyd/traffic_data.db"
+    fi
+    cp /tmp/qos_stats /etc/netifyd/qos_stats
+    cp /tmp/content_protection_stats /etc/netifyd/content_protection_stats
+}

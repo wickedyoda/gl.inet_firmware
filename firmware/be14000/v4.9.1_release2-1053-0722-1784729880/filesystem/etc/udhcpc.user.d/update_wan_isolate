@@ -1,0 +1,97 @@
+#!/bin/sh
+# Refresh firewall dest_ip for WAN private isolation rules when WAN IPv4 changes.
+# Migrated from gl-sdk4-lan; extended for vlan_subnet: usbwan, modem_*, custom vlanN.
+. /lib/functions/gl_util.sh
+
+NETWORKS="guest iot"
+for n in $(uci -X show network 2>/dev/null | sed -n 's/^network\.\(vlan[0-9][0-9]*\)=interface$/\1/p'); do
+    NETWORKS="$NETWORKS $n"
+done
+
+# Align with vlan_subnet.lua build_wan_logical_interface_list
+build_wan_ifnames() {
+    WAN_IFS="wan wwan tethering secondwan usbwan"
+    for m in $(uci -X show network 2>/dev/null | sed -n 's/^network\.\(modem_[^=]*\)=interface$/\1/p'); do
+        proto=$(uci -q get network.$m.proto)
+        [ "$proto" = "dhcpv6" ] && continue
+        if [ "$proto" = "qcm" ] || [ "$proto" = "qmi" ]; then
+            WAN_IFS="$WAN_IFS ${m}_4"
+        else
+            WAN_IFS="$WAN_IFS $m"
+        fi
+    done
+}
+
+# gl-black_white_list.<net>.wan_isolate=1 (lan.set_config), or isolate rules from vlan_subnet wan_access_mode=1
+should_process_network() {
+    local network="$1"
+    [ "$(uci -q get gl-black_white_list.$network.wan_isolate)" = "1" ] && return 0
+    local i
+    for i in $WAN_IFS; do
+        uci -q get firewall.${i}_${network}_isolate >/dev/null 2>&1 && return 0
+    done
+    return 1
+}
+
+build_wan_ifnames
+
+FIREWALL_RELOAD=0
+
+for network in $NETWORKS; do
+    should_process_network "$network" || continue
+
+    need_reload=0
+    for ifname in $WAN_IFS; do
+        wan_info=$(ubus call network.interface.$ifname status 2>/dev/null)
+        wan_ip=$(echo $wan_info | jsonfilter -e '@["ipv4-address"][0].address' 2>/dev/null)
+        wan_mask=$(echo $wan_info | jsonfilter -e '@["ipv4-address"][0].mask' 2>/dev/null)
+
+        section="${ifname}_${network}_isolate"
+        rule_exist=$(uci -q get firewall.$section)
+
+        if [ -n "$wan_ip" ] && [ -n "$wan_mask" ]; then
+            ip=$(ipcalc_network $wan_ip $wan_mask | awk -F= '/NETWORK/{print $2}')
+            prefix=$(ipcalc_network $wan_ip $wan_mask | awk -F= '/PREFIX/{print $2}')
+            old_dest_ip=$(uci -q get firewall.$section.dest_ip 2>/dev/null)
+            new_dest_ip="$ip/$prefix"
+
+            is_private_ip=$(echo "$ip" | grep -E "^10\.|172\.(1[6-9]|2[0-9]|3[01])\.|192\.168\.")
+
+            if [ -n "$is_private_ip" ]; then
+                if [ -n "$rule_exist" ] && [ "$old_dest_ip" = "$new_dest_ip" ]; then
+                    continue
+                elif [ -n "$rule_exist" ] && [ "$old_dest_ip" != "$new_dest_ip" ]; then
+                    uci set firewall.$section.dest_ip="$new_dest_ip"
+                    need_reload=1
+                else
+                    uci -q delete firewall.$section
+                    uci set firewall.$section=rule
+                    uci set firewall.$section.src="$network"
+                    uci set firewall.$section.dest="wan"
+                    uci set firewall.$section.proto="all"
+                    uci set firewall.$section.target="REJECT"
+                    uci set firewall.$section.name="isolate $network and $ifname"
+                    uci set firewall.$section.dest_ip="$new_dest_ip"
+                    need_reload=1
+                fi
+            else
+                [ -n "$rule_exist" ] && {
+                    uci delete firewall.$section
+                    need_reload=1
+                }
+            fi
+        else
+            [ -n "$rule_exist" ] && {
+                uci delete firewall.$section
+                need_reload=1
+            }
+        fi
+    done
+
+    [ $need_reload = 1 ] && {
+        uci commit firewall
+        FIREWALL_RELOAD=1
+    }
+done
+
+[ $FIREWALL_RELOAD = 1 ] && /etc/init.d/firewall reload

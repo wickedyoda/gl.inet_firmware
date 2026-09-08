@@ -1,0 +1,15 @@
+Package: lua-eco
+Version: 3.16.0-0
+Depends: libc, libev, liblua5.4-5.4
+Source: feeds/gl_feed_common/lua-eco
+SourceName: lua-eco
+License: MIT
+LicenseFiles: LICENSE
+Section: lang
+SourceDateEpoch: 1774447581
+Maintainer: Jianhui Zhao <zhaojh329@gmail.com>
+Architecture: aarch64_cortex-a53
+Installed-Size: 27868
+Description:  Lua-eco is a Lua interpreter with a built-in event loop for scheduling
+ lightweight coroutines automatically, enabling efficient concurrency in
+ Lua. Build high-performance, scalable applications.

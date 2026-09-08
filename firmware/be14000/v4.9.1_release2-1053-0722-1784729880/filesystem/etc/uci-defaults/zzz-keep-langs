@@ -1,0 +1,32 @@
+#!/bin/sh
+
+target_dir="/www/i18n/"
+bak_dir="/etc/config/langs_bak/"
+
+if [ -e "/etc/config/gl_langs" ]; then
+    uci show gl_langs | grep "path=" | awk -F= '{print $2}' | sed "s/'//g" | while read -r line; do
+        line_lang=$(echo "$line" | sed -E 's/.*\.(.*)\.json/\1/')
+        if [ "$line_lang" = "cn" ]; then
+            line_lang="zh-cn"
+        elif [ "$line_lang" = "tw" ]; then
+            line_lang="zh-tw"
+        fi
+        found=0
+
+        for file in "$target_dir"*.json; do
+            file_list=$(echo "$file" | sed -E 's/.*\.(.*)\.json/\1/')
+            if [ "$line_lang" = "$file_list" ]; then
+                found=1
+                break
+            fi
+        done
+
+        if [ $found -eq 0 ]; then
+            cp "$bak_dir""release.${line_lang}.json" "$target_dir"
+        fi
+
+        if [ $found -eq 1 ]; then
+            rm "$bak_dir""release.${line_lang}.json"
+        fi
+    done
+fi

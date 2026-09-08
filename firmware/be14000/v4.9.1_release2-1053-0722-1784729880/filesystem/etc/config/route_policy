@@ -1,0 +1,21 @@
+
+config policy 'global'
+    option enabled '0'
+    option mode '0'
+
+config default
+    option type 'default'
+    option via 'novpn'
+    option name 'last sort default policy'
+    option from_type 'device'
+    option tunnel_id '100'
+    option enabled '1'
+    option mark '0x8000'
+
+config rule_process 'gl_process'
+    option name 'process policy'
+    option from_type 'process_gid'
+    list from '10000'
+    option tunnel_id '201'
+    option enabled '1'
+

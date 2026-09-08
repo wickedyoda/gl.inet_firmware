@@ -1,0 +1,16 @@
+Package: liblz4-1
+Version: 1.9.3-1
+Depends: libc
+Provides: liblz4
+Source: feeds/packages/libs/liblz4
+SourceName: liblz4
+License: BSD-2-Clause
+LicenseFiles: LICENSE lib/LICENSE
+Section: libs
+SourceDateEpoch: 1606180899
+ABIVersion: -1
+Maintainer: Darik Horn <dajhorn@vanadac.com>
+Architecture: aarch64_cortex-a53
+Installed-Size: 51886
+Description:  LZ4 is a compression codec that features a very fast encoder and an
+ even faster decoder. This package provides the liblz4 shared library.

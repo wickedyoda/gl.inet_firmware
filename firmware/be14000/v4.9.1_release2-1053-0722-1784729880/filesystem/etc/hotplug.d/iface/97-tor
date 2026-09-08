@@ -1,0 +1,30 @@
+#!/bin/sh
+[ "$(uci -q get tor.global.enable)" = "0" ] && exit 0
+[ "$(uci -q get glconfig.general.mode)" != "router" ] && exit 0
+
+mask2cdr ()
+{
+	local x=${1##*255.}
+	set -- 0^^^128^192^224^240^248^252^254^ $(( (${#1} - ${#x})*2 )) ${x%%.*}
+	x=${1%%$3*}
+	echo $(( $2 + (${#x}/4) ))
+}
+
+org_ip="$(cat /etc/tor/torrc |grep TransPort|awk -F '[ :]' '{print $2}')"
+new_ip="$(uci get network.lan.ipaddr)"
+if [ "$org_ip" = "$new_ip" ]; then
+    exit 0
+else
+    sed  -i -e  "s/$org_ip/$new_ip/g" /etc/tor/torrc
+    netmask="$(uci get network.lan.netmask)"
+    [ -n "$netmask" ] && {
+		mask=$(mask2cdr $netmask)
+	}
+
+    uci set firewall.tor_allow_http.src_ip="$new_ip/$mask"
+    uci set firewall.tor_allow_http.src_dip="$new_ip"
+    uci set firewall.tor_allow_ssh.src_ip="$new_ip/$mask"
+    uci set firewall.tor_allow_ssh.src_dip="$new_ip"
+    uci commit
+    /etc/init.d/firewall reload
+fi

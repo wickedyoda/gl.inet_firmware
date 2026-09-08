@@ -1,0 +1,16 @@
+#!/bin/sh
+
+ecm_enabled=$(uci -q get ecm.global.enabled)
+sqm_enable=$(uci -q get sqm.eth1.enabled)
+prio_enable=$(uci -q get gl_dpi_qos.qos.prio_enable)
+
+[ "$ecm_enabled" = "1" -o "$sqm_enable" = "1" -o "$prio_enable" = "1" ] && exit 0
+
+if [ "$INTERFACE" = "lan" -o "$INTERFACE" = "guest"  ];then
+        if [ "$ACTION" = "ifup" ];then
+                already_restart=`ps | grep -v grep | grep "gl_eqos delay"`
+                if [ -z "$already_restart" ];then
+                        /etc/init.d/gl_eqos delay_restart &
+                fi
+        fi
+fi

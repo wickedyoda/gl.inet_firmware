@@ -1,0 +1,6 @@
+/tmp/wg_upload/.+%.zip$
+/tmp/wg_upload/.+%.tar$
+/tmp/wg_upload/.+%.gz$
+/tmp/wg_upload/.+%.conf$
+/tmp/wg_upload/.+%.txt$
+

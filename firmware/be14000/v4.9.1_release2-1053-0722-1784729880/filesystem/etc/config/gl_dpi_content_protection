@@ -1,0 +1,5 @@
+config dpi content_protection
+    option enabled '0'
+    list category 'gambling'
+    list category 'adult'
+    list category 'malware'

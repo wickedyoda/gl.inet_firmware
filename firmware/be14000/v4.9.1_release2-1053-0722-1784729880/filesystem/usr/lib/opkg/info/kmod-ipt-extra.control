@@ -1,0 +1,16 @@
+Package: kmod-ipt-extra
+Version: 5.4.281-1
+Depends: kernel (=5.4.281-1-df4fa332840f56a774a5d60bd140aaf6), kmod-ipt-core
+Source: package/kernel/linux
+SourceName: kmod-ipt-extra
+License: GPL-2.0
+Section: kernel
+SourceDateEpoch: 1784728420
+Architecture: aarch64_cortex-a53
+Installed-Size: 4983
+Description:  Other Netfilter (IPv4) kernel modules
+ Includes:
+ - addrtype
+ - owner
+ - pkttype
+ - quota

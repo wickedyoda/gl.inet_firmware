@@ -1,0 +1,7 @@
+#!/bin/sh
+. /lib/functions/gl_util.sh
+
+model=$(get_model)
+if [ "$ACTION" = "up" ] && [ -n "$PORT" ] && [ "$model" = "sf1200" ];then
+    echo rwMMDReg $PORT 0x1f01e4 0x70 > /sys/kernel/debug/esw_debug
+fi

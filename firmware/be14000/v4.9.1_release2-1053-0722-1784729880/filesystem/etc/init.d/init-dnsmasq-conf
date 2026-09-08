@@ -1,0 +1,25 @@
+#!/bin/sh /etc/rc.common
+
+START=10
+
+. /lib/functions.sh
+
+set_nodhcp() {
+    ifname=$1
+    [ -n "$(echo "$ifname" | grep -E 'ovpnclient|wgclient')" ] && {
+        mkdir -p /tmp/dnsmasq.d.${ifname}/
+        echo 'no-dhcp-interface=*' >/tmp/dnsmasq.d.${ifname}/no-dhcp
+    }
+}
+
+delete_instance() {
+    uci -q delete dhcp.$1.instance 
+}
+
+start() {
+    config_load dhcp
+    config_foreach set_nodhcp dnsmasq
+    config_foreach delete_instance dhcp
+    uci commit dhcp
+    mkdir -p /tmp/resolv.conf.d/
+}
