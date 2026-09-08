@@ -34,3 +34,9 @@ firmware/*/boot_extraction/_boot.img.extracted/
 
 # MT6000 kernel (large binary)
 mt6000/*/analysis/disassembly/kernel_decompressed
+
+# Exceed GitHub 100MB file limit - actual firmware binaries too large
+firmware/e5800/*/partitions/system.new.dat
+firmware/e5800/*/partitions/NON-HLOS_*.bin
+firmware/e5800/*/partitions/boot.img
+firmware/e5800/*/partitions/boot_kernel.bin
