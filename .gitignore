@@ -17,6 +17,12 @@ kernel_lzma.bin
 
 # Secrets scan
 gitleaks-results.json
+security-report.json
+
+# Scan artifacts
+bandit-results.json
+npm-audit.json
+pip-audit.json
 
 # Ghidra projects
 ghidra_project/

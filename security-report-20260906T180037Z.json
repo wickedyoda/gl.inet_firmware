@@ -1,0 +1,11 @@
+{
+  "repo": "gl.inet_firmware",
+  "timestamp": "2026-09-06T17:59:57Z",
+  "findings": {
+    "secrets": [],
+    "code_vulnerabilities": [],
+    "dependency_issues": [],
+    "supply_chain": []
+  },
+  "summary": { "critical": 0, "high": 0, "medium": 0, "low": 0, "total": 0 }
+}
